@@ -8,10 +8,10 @@
 	<string>$(DEVELOPMENT_LANGUAGE)</string>
 	<key>CFBundleDisplayName</key>
 	<string>OUI-SPY</string>
-	<key>CFBundleIconName</key>
-	<string>AppIcon</string>
 	<key>CFBundleExecutable</key>
 	<string>$(EXECUTABLE_NAME)</string>
+	<key>CFBundleIconName</key>
+	<string>AppIcon</string>
 	<key>CFBundleIdentifier</key>
 	<string>$(PRODUCT_BUNDLE_IDENTIFIER)</string>
 	<key>CFBundleInfoDictionaryVersion</key>
@@ -38,6 +38,8 @@
 	<string>OUI-SPY needs background location access for geofence alerts and continuous wardriving sessions.</string>
 	<key>NSLocationWhenInUseUsageDescription</key>
 	<string>OUI-SPY needs your location to tag detections with GPS coordinates for wardriving.</string>
+	<key>NSSupportsLiveActivities</key>
+	<true/>
 	<key>UIApplicationSceneManifest</key>
 	<dict>
 		<key>UIApplicationSupportsMultipleScenes</key>
@@ -59,8 +61,6 @@
 			</array>
 		</dict>
 	</dict>
-	<key>NSSupportsLiveActivities</key>
-	<true/>
 	<key>UIApplicationSupportsIndirectInputEvents</key>
 	<true/>
 	<key>UIBackgroundModes</key>
