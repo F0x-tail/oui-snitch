@@ -451,7 +451,14 @@ class _FeedScreenState extends ConsumerState<FeedScreen> {
                           label: preset.label,
                           selected:
                               preset.matches(_activeFilters, _activeRadio),
-                          color: AppTheme.accent,
+                          color: switch (preset) {
+                            FilterPreset.all => kPillAll,
+                            FilterPreset.ble => kPillBle,
+                            FilterPreset.wifi => kPillWifi,
+                            FilterPreset.flock => AppTheme.flockWifi,
+                            FilterPreset.drones => AppTheme.skySpy,
+                            FilterPreset.alerts => AppTheme.error,
+                          },
                           onTap: () => apply(() => setState(() {
                                 _activeFilters = preset.resolve();
                                 _activeRadio = preset.radio;
@@ -467,15 +474,15 @@ class _FeedScreenState extends ConsumerState<FeedScreen> {
                       spacing: gap,
                       runSpacing: gap,
                       children: [
-                        for (final (id, label) in <(String?, String)>[
+                        for (final (i, (id, label)) in <(String?, String)>[
                           (null, 'ALL'),
                           ('', 'LOCAL'),
                           ...sourceNodes.map((n) => (n, labelForNode(n))),
-                        ])
+                        ].indexed)
                           CommandChip(
                             label: label,
                             selected: _selectedNode == id,
-                            color: AppTheme.warning,
+                            color: pillColor(i),
                             onTap: () => apply(
                                 () => setState(() => _selectedNode = id)),
                           ),
@@ -574,7 +581,7 @@ class _FeedScreenState extends ConsumerState<FeedScreen> {
                       CommandChip(
                         label: m.label,
                         selected: _sortMetric == m,
-                        color: AppTheme.accent,
+                        color: pillColor(m.index),
                         onTap: () {
                           setState(() {
                             if (_sortMetric == m) {

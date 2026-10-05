@@ -547,7 +547,11 @@ class _DetectionsTabState extends ConsumerState<_DetectionsTab> {
                         CommandChip(
                           label: label,
                           selected: _radioFilter == sel,
-                          color: AppTheme.accent,
+                          color: switch (sel) {
+                            _RadioSel.all => kPillAll,
+                            _RadioSel.ble => kPillBle,
+                            _RadioSel.wifi => kPillWifi,
+                          },
                           onTap: () => apply(
                               () => setState(() => _radioFilter = sel)),
                         ),

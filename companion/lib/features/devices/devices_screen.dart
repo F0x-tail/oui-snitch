@@ -116,7 +116,11 @@ class _DevicesScreenState extends ConsumerState<DevicesScreen> {
                         CommandChip(
                           label: _sourceLabel(s),
                           selected: _source == s,
-                          color: AppTheme.accent,
+                          color: switch (s) {
+                            'esp32' => AppTheme.warning,
+                            'phone' => AppTheme.skySpy,
+                            _ => kPillAll,
+                          },
                           onTap: () async {
                             if (s == 'phone' && !await _ensurePhoneScan(ctx)) return;
                             apply(() => _source = s);
@@ -135,7 +139,7 @@ class _DevicesScreenState extends ConsumerState<DevicesScreen> {
                         CommandChip(
                           label: r == null ? 'ALL' : (r == RadioKind.ble ? 'BLE' : 'WIFI'),
                           selected: _radio == r,
-                          color: AppTheme.accent,
+                          color: r == null ? kPillAll : (r == RadioKind.ble ? kPillBle : kPillWifi),
                           onTap: () => apply(() => _radio = r),
                         ),
                     ],
@@ -162,7 +166,7 @@ class _DevicesScreenState extends ConsumerState<DevicesScreen> {
                             label: k.label.toUpperCase(),
                             count: counts[k],
                             selected: _class == k,
-                            color: AppTheme.accent,
+                            color: pillColor(k.index + 1),
                             onTap: () => apply(() {
                               _unclassifiedOnly = false;
                               _class = k;
@@ -215,7 +219,7 @@ class _DevicesScreenState extends ConsumerState<DevicesScreen> {
                       CommandChip(
                         label: _sortLabel(s),
                         selected: _sort == s,
-                        color: AppTheme.accent,
+                        color: pillColor(s.index),
                         onTap: () {
                           setState(() {
                             if (_sort == s) {
