@@ -158,6 +158,8 @@ class UnipwnExtension with _$UnipwnExtension {
       _$UnipwnExtensionFromJson(json);
 }
 
+final wardriveAdvRaw = Expando<List<int>>('wardriveAdvRaw');
+
 @freezed
 class WardriveExtension with _$WardriveExtension {
   const factory WardriveExtension({

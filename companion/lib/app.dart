@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:oui_spy/features/config/config_menu_state.dart';
 import 'package:oui_spy/features/config/device_config.dart';
+import 'package:oui_spy/features/devices/devices_screen.dart';
 import 'package:oui_spy/features/config/widgets/config_nav.dart'
     show kConfigSectionSheetRoute;
 import 'package:oui_spy/features/engines/detector_screen.dart';
@@ -43,6 +44,12 @@ final routerProvider = Provider<GoRouter>((ref) {
             path: '/feed',
             pageBuilder: (context, state) => const NoTransitionPage(
               child: FeedScreen(),
+            ),
+          ),
+          GoRoute(
+            path: '/devices',
+            pageBuilder: (context, state) => const NoTransitionPage(
+              child: DevicesScreen(),
             ),
           ),
           GoRoute(
@@ -233,8 +240,8 @@ class AppShell extends ConsumerStatefulWidget {
 }
 
 class _AppShellState extends ConsumerState<AppShell> {
-  static const _routes = ['/home', '/feed', '/wardrive', '/config'];
-  static const _configIndex = 3;
+  static const _routes = ['/home', '/feed', '/devices', '/wardrive', '/config'];
+  static const _configIndex = 4;
 
   /// The section sheet lives on the shell navigator, which sits below this
   /// widget's context — reach it by key, not by Navigator.of(context).
@@ -276,6 +283,10 @@ class _AppShellState extends ConsumerState<AppShell> {
           BottomNavigationBarItem(
             icon: Icon(Icons.list_alt),
             label: 'FEED',
+          ),
+          BottomNavigationBarItem(
+            icon: Icon(Icons.devices_other),
+            label: 'DEVICES',
           ),
           BottomNavigationBarItem(
             icon: Icon(Icons.drive_eta),

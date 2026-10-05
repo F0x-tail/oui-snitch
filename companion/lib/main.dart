@@ -7,6 +7,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:oui_spy/app.dart';
 import 'package:oui_spy/core/app_state.dart';
 import 'package:oui_spy/core/ble/ble_manager.dart';
+import 'package:oui_spy/core/classify/device_registry.dart';
 import 'package:oui_spy/core/wardrive_state.dart';
 import 'package:oui_spy/core/debug_log.dart';
 import 'package:oui_spy/core/notifications/live_activity_service.dart';
@@ -52,6 +53,7 @@ void main() async {
 
   container.read(appStateProvider);
   container.read(wardriveProvider);
+  container.read(deviceRegistryProvider);
 
   runApp(UncontrolledProviderScope(
     container: container,

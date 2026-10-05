@@ -546,11 +546,18 @@ class BleProtocol {
     final ssid = _extractString(ext, 0, 33);
     final authMode = ext.length > 33 ? ext[33] : 0;
     final deviceName = ext.length > 34 ? _extractString(ext, 34, 21) : '';
-    return WardriveExtension(
+    var advRaw = const <int>[];
+    if (ext.length > 55) {
+      final n = ext[55];
+      if (n > 0 && ext.length >= 56 + n) advRaw = List<int>.unmodifiable(ext.sublist(56, 56 + n));
+    }
+    final out = WardriveExtension(
       ssid: ssid,
       authMode: authMode,
       deviceName: deviceName,
     );
+    if (advRaw.isNotEmpty) wardriveAdvRaw[out] = advRaw;
+    return out;
   }
 
   static String _extractString(Uint8List data, int offset, int maxLen) {

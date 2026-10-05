@@ -1,0 +1,269 @@
+import 'package:flutter_test/flutter_test.dart';
+import 'package:oui_spy/core/classify/co_travel.dart';
+import 'package:oui_spy/core/classify/flood.dart';
+import 'package:oui_spy/core/classify/observation.dart';
+
+String _bleMac(int n) => '02:00:00:00:00:${n.toRadixString(16).padLeft(2, '0').toUpperCase()}';
+
+Observation _ble(
+  int n, {
+  int rssi = -48,
+  String name = '',
+  List<MfgRecord> mfg = const [],
+  List<ServiceDataRecord> sd = const [],
+}) => Observation(
+  key: 'BLE:${_bleMac(n)}',
+  kind: RadioKind.ble,
+  mac: _bleMac(n),
+  name: name,
+  rssi: rssi,
+  mfgRecords: mfg,
+  serviceData: sd,
+);
+
+Observation _prox(int n, {int rssi = -48}) => _ble(n, rssi: rssi, mfg: const [MfgRecord(0x004C, '070100')]);
+
+Observation _ap(int n, String name, {int rssi = -34, int channel = 6}) {
+  String b(int v) => (v & 0xFF).toRadixString(16).padLeft(2, '0').toUpperCase();
+  final mac = '02:${b(n >> 24)}:${b(n >> 16)}:${b(n >> 8)}:${b(n)}:01';
+  return Observation(
+    key: 'WIFI:$mac',
+    kind: RadioKind.wifi,
+    mac: mac,
+    name: name,
+    rssi: rssi,
+    channel: channel,
+    hiddenSsid: name.isEmpty,
+  );
+}
+
+int _at(int step) => 1000000 + step * 30000;
+Observation _anchor() => _ap(1, 'FrontDesk', rssi: -50, channel: 11);
+List<Observation> _spam({int start = 100, int count = 15}) => [
+  for (var i = 0; i < count; i++) _ap(start + i, 'Spam${start + i}'),
+];
+
+void main() {
+  group('PairingFlood', () {
+    test('nine popups stay quiet', () {
+      final f = PairingFlood();
+      for (var i = 0; i < 9; i++) {
+        f.consider(_prox(i), 0);
+      }
+      expect(f.notice, isNull);
+    });
+
+    test('ten clustered popups open the dialog', () {
+      final f = PairingFlood();
+      for (var i = 0; i < 10; i++) {
+        f.consider(_prox(i), 0);
+      }
+      final n = f.notice!;
+      expect(n.showDialog, isTrue);
+      expect(n.title(), 'Pairing flood');
+      expect(n.popupCount, 10);
+      expect(n.families, ['Apple proximity pairing']);
+      expect(n.medianRssi, -48);
+      expect(n.line(), 'Pairing flood · 10 new addresses · about -48 dBm');
+      f.consider(_prox(10), 1000);
+      expect(f.notice!.popupCount, 11);
+    });
+
+    test('mixed popup families share one counter', () {
+      final f = PairingFlood();
+      f.consider(_prox(0), 0);
+      f.consider(_prox(1), 0);
+      f.consider(_ble(2, mfg: const [MfgRecord(0x004C, '0F0100')]), 0);
+      f.consider(_ble(3, mfg: const [MfgRecord(0x004C, '0F0100')]), 0);
+      f.consider(_ble(4, sd: const [ServiceDataRecord('FE2C', '000006')]), 0);
+      for (var i = 0; i < 4; i++) {
+        f.consider(_prox(10 + i), 0);
+      }
+      expect(f.notice, isNull);
+      f.consider(_ble(5, mfg: const [MfgRecord(0x0006, '0109')]), 0);
+      expect(f.notice!.popupCount, 10);
+      expect(f.notice!.families, ['Apple proximity pairing', 'Apple Nearby Action', 'Fast Pair', 'Swift Pair']);
+    });
+
+    test('same address counted once', () {
+      final f = PairingFlood();
+      for (var i = 0; i < 8; i++) {
+        f.consider(_prox(1), i * 100);
+      }
+      expect(f.notice, isNull);
+    });
+
+    test('window expires', () {
+      final f = PairingFlood();
+      for (var i = 0; i < 10; i++) {
+        f.consider(_prox(i), 0);
+      }
+      f.tick(PairingFlood.windowMs);
+      expect(f.notice, isNotNull);
+      f.tick(PairingFlood.windowMs + 1);
+      expect(f.notice, isNull);
+    });
+
+    test('name flood needs randomized named addresses', () {
+      final f = PairingFlood();
+      for (var i = 0; i < 15; i++) {
+        f.consider(_ble(i, name: 'Radio $i', rssi: -55), 0);
+      }
+      expect(f.notice!.title(), 'Name flood');
+      final g = PairingFlood();
+      for (var i = 0; i < 20; i++) {
+        g.consider(
+          Observation(
+            key: 'k$i',
+            kind: RadioKind.ble,
+            mac: '00:11:22:33:44:${i.toRadixString(16).padLeft(2, '0')}',
+            name: 'X$i',
+          ),
+          0,
+        );
+      }
+      expect(g.notice, isNull);
+    });
+  });
+
+  group('WifiBeaconFlood', () {
+    test('first scan stays quiet when crowd leaves', () {
+      final f = WifiBeaconFlood();
+      f.scan([_anchor(), ..._spam(count: 20)], _at(0));
+      f.scan([_anchor()], _at(1));
+      expect(f.notice, isNull);
+    });
+
+    test('burst that vanishes next scan is a flood', () {
+      final f = WifiBeaconFlood();
+      f.scan([_anchor()], _at(0));
+      f.scan([_anchor(), ..._spam()], _at(1));
+      expect(f.notice, isNull);
+      f.scan([_anchor()], _at(2));
+      expect(f.notice!.wifi, isTrue);
+      expect(f.notice!.popupCount, 15);
+      expect(f.notice!.line(), 'Wi-Fi beacon flood · 15 new names · about -34 dBm');
+    });
+
+    test('mesh, guest suffix, hidden stay out', () {
+      final mesh = WifiBeaconFlood()
+        ..scan([_anchor()], _at(0))
+        ..scan([_anchor(), for (var i = 0; i < 20; i++) _ap(300 + i, 'BuildingMesh')], _at(1))
+        ..scan([_anchor()], _at(2));
+      expect(mesh.notice, isNull);
+      final hidden = WifiBeaconFlood()
+        ..scan([_anchor()], _at(0))
+        ..scan([_anchor(), for (var i = 0; i < 20; i++) _ap(400 + i, '')], _at(1))
+        ..scan([_anchor()], _at(2));
+      expect(hidden.notice, isNull);
+      final known = [
+        for (var i = 1; i <= 15; i++) _ap(10 + i, 'Net${i.toString().padLeft(2, '0')}', rssi: -60, channel: 1),
+      ];
+      const suffixes = [
+        'Guest',
+        '5G',
+        'ext',
+        '2.4',
+        '5GHz',
+        'extender',
+        'guests',
+        '6G',
+        '2.4GHz',
+        '6GHz',
+        'guest',
+        '5g',
+        'EXT',
+        '2.4g',
+        'Guests',
+      ];
+      final guests = [
+        for (var i = 0; i < 15; i++) _ap(200 + i, 'Net${(i + 1).toString().padLeft(2, '0')}-${suffixes[i]}'),
+      ];
+      final g = WifiBeaconFlood()
+        ..scan([_anchor(), ...known], _at(0))
+        ..scan([_anchor(), ...guests], _at(1))
+        ..scan([_anchor()], _at(2));
+      expect(g.notice, isNull);
+    });
+
+    test('cluster that stays is not a flood', () {
+      final batch = [_anchor(), ..._spam()];
+      final f = WifiBeaconFlood()
+        ..scan([_anchor()], _at(0))
+        ..scan(batch, _at(1))
+        ..scan(batch, _at(2))
+        ..scan(batch, _at(3));
+      expect(f.notice, isNull);
+    });
+
+    test('short list stays out', () {
+      final f = WifiBeaconFlood()
+        ..scan([_anchor()], _at(0))
+        ..scan([_anchor(), ..._spam(count: 14)], _at(1))
+        ..scan([_anchor()], _at(2));
+      expect(f.notice, isNull);
+    });
+  });
+
+  group('CoTravel', () {
+    List<GpsSample> walk(int n, {int rssi = -60}) => [
+      for (var i = 0; i < n; i++) GpsSample(i * 10000, i * 0.0002, 0.0, rssi),
+    ];
+
+    test('loud tag along a moving path is with you', () {
+      final path = walk(6);
+      final tag = Observation(
+        key: 'BLE:t',
+        kind: RadioKind.ble,
+        mac: '7A:00:00:00:00:01',
+        rssi: -60,
+        lastSeenMs: 50000,
+        gpsTrail: walk(6),
+      );
+      expect(CoTravel.withYou(tag, CoTravelCtx.of(path), 50000), isTrue);
+    });
+
+    test('wifi, quiet, or stationary is not with you', () {
+      final ctx = CoTravelCtx.of(walk(6));
+      final wifi = Observation(
+        key: 'W',
+        kind: RadioKind.wifi,
+        mac: '00:11:22:33:44:55',
+        rssi: -50,
+        lastSeenMs: 50000,
+        gpsTrail: walk(6),
+      );
+      expect(CoTravel.withYou(wifi, ctx, 50000), isFalse);
+      final quiet = Observation(
+        key: 'Q',
+        kind: RadioKind.ble,
+        mac: '7A:00:00:00:00:02',
+        rssi: -60,
+        lastSeenMs: 50000,
+        gpsTrail: walk(6, rssi: -90),
+      );
+      expect(CoTravel.withYou(quiet, ctx, 50000), isFalse);
+      final still = Observation(
+        key: 'S',
+        kind: RadioKind.ble,
+        mac: '7A:00:00:00:00:03',
+        rssi: -60,
+        lastSeenMs: 50000,
+        gpsTrail: [walk(1).first, walk(1).first],
+      );
+      expect(CoTravel.withYou(still, ctx, 50000), isFalse);
+      expect(CoTravel.withYou(still, CoTravelCtx.none, 50000), isFalse);
+    });
+
+    test('find my payload is a finder', () {
+      const o = Observation(
+        key: 'f',
+        kind: RadioKind.ble,
+        mac: '7A:00:00:00:00:04',
+        mfgRecords: [MfgRecord(0x004C, '1219')],
+      );
+      expect(TrackerMatch.kind(o, const []), TrackerKind.finder);
+      expect(TrackerMatch.kind(_ble(5, rssi: -90), const ['Minew']), TrackerKind.beacon);
+    });
+  });
+}

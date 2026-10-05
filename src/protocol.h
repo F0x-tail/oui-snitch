@@ -260,9 +260,15 @@ typedef struct __attribute__((packed)) {
             char    ssid[33];
             uint8_t auth_mode;     // 0=open,1=WEP,2=WPA,3=WPA2,4=WPA_WPA2,5=WPA2_ENT,6=WPA3
             char    device_name[21];
+            uint8_t adv_len;
+            uint8_t adv[62];
         } wardrive;
     } ext;
 } DetectionEvent;
+
+#ifdef __cplusplus
+static_assert(sizeof(DetectionEvent) == 163, "DetectionEvent size is part of queue/spool/mesh layout");
+#endif
 
 // ============================================================================
 // GPS Data — received from phone app via BLE

@@ -579,6 +579,21 @@ class WardriveAdvCallbacks : public NimBLEAdvertisedDeviceCallbacks {
         evt.timestamp_ms = now;
         evt.method = METHOD_BLE_ADV;
         strncpy(evt.ext.wardrive.device_name, name.c_str(), 20);
+        {
+#ifdef OUISPY_NIMBLE2_API
+            const std::vector<uint8_t>& pl = dev->getPayload();
+            size_t plLen = pl.size();
+            const uint8_t* plData = pl.data();
+#else
+            size_t plLen = dev->getPayloadLength();
+            const uint8_t* plData = dev->getPayload();
+#endif
+            if (plData && plLen) {
+                if (plLen > sizeof(evt.ext.wardrive.adv)) plLen = sizeof(evt.ext.wardrive.adv);
+                memcpy(evt.ext.wardrive.adv, plData, plLen);
+                evt.ext.wardrive.adv_len = (uint8_t)plLen;
+            }
+        }
         pushDetection(&evt);
 
         // Dispatch to other active engines that went passive

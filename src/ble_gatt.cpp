@@ -2479,6 +2479,13 @@ static size_t packDetection(const DetectionEvent* evt, uint8_t* buf) {
             buf[52] = evt->ext.wardrive.auth_mode;
             memcpy(buf + 53, evt->ext.wardrive.device_name, 21);
             len = 74;
+            if (evt->method == METHOD_BLE_ADV && evt->ext.wardrive.adv_len) {
+                uint8_t n = evt->ext.wardrive.adv_len;
+                if (n > sizeof(evt->ext.wardrive.adv)) n = sizeof(evt->ext.wardrive.adv);
+                buf[74] = n;
+                memcpy(buf + 75, evt->ext.wardrive.adv, n);
+                len = 75 + n;
+            }
             break;
         default:
             break;
