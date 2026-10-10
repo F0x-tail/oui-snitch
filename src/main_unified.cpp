@@ -255,10 +255,37 @@ static void playNotes(const BuzzNote* n, size_t count) {
     ledcDetachPin(PIN_BUZZER);
 }
 
-#define CHIME_REQ_TARGET 1
-#define CHIME_REQ_AXON   2
 #define AXON_LOST_MS        25000
 #define AXON_HEARTBEAT_MS   2000
+
+static uint8_t melPreview[1 + MELODY_MAX_NOTES * 3];
+static portMUX_TYPE melPreviewMux = portMUX_INITIALIZER_UNLOCKED;
+
+static void playMidi(uint8_t n, const uint8_t notes[][3]) {
+    if (!hwBuzzerEnabled || hwBuzzerVolume == 0) return;
+    for (uint8_t i = 0; i < n; i++) {
+        uint8_t m = notes[i][0];
+        if (m) {
+            ledcSetup(0, (uint32_t)(440.0f * powf(2.0f, ((int)m - 69) / 12.0f)), 8);
+            ledcAttachPin(PIN_BUZZER, 0);
+            ledcWrite(0, hwBuzzerVolume);
+        }
+        delay((uint32_t)notes[i][1] * 10);
+        ledcWrite(0, 0);
+        delay((uint32_t)notes[i][2] * 10);
+    }
+    ledcDetachPin(PIN_BUZZER);
+}
+
+static bool playAssigned(uint8_t engine, uint8_t method) {
+    uint8_t n = 0, notes[MELODY_MAX_NOTES][3];
+    if (!melodyLookup(engine, method, &n, notes)) return false;
+    playMidi(n, notes);
+    return true;
+}
+
+struct ChimeReq { uint8_t engine; uint8_t method; };
+#define CHIME_ENGINE_PREVIEW 0xFD
 
 static QueueHandle_t chimeQueue = NULL;
 static volatile uint32_t axonLastSeenMs = 0;
@@ -270,31 +297,40 @@ static void axonPresenceTick(bool& tracking, uint32_t& nextBeat) {
     if ((uint32_t)(now - axonLastSeenMs) > AXON_LOST_MS) {
         tracking = false;
         Serial.println("[AXON] lost");
-        if (!hwAlertsSuppressed) playNotes(AXON_LOST, sizeof(AXON_LOST) / sizeof(AXON_LOST[0]));
+        if (!hwAlertsSuppressed && !playAssigned(MELODY_ENGINE_AXON, MELODY_AXON_LOST))
+            playNotes(AXON_LOST, sizeof(AXON_LOST) / sizeof(AXON_LOST[0]));
         return;
     }
     if ((int32_t)(now - nextBeat) >= 0) {
         int r = constrain((int)axonLastRssi, -90, -40);
         nextBeat = now + (uint32_t)map(r, -90, -40, AXON_HEARTBEAT_MS, 250);
-        if (!hwAlertsSuppressed)
+        if (!hwAlertsSuppressed && !playAssigned(MELODY_ENGINE_AXON, MELODY_AXON_HEARTBEAT))
             playNotes(AXON_HEARTBEAT, sizeof(AXON_HEARTBEAT) / sizeof(AXON_HEARTBEAT[0]));
     }
 }
 
 static void chimeTaskFn(void* param) {
-    uint8_t req;
+    ChimeReq req;
     bool axonTracking = false;
     uint32_t axonNextBeat = 0;
     for (;;) {
         if (xQueueReceive(chimeQueue, &req, pdMS_TO_TICKS(250)) == pdTRUE) {
-            if (req == CHIME_REQ_AXON) {
+            if (req.engine == CHIME_ENGINE_PREVIEW) {
+                uint8_t n = 0, notes[MELODY_MAX_NOTES][3];
+                portENTER_CRITICAL(&melPreviewMux);
+                n = melPreview[0] > MELODY_MAX_NOTES ? MELODY_MAX_NOTES : melPreview[0];
+                memcpy(notes, melPreview + 1, (size_t)n * 3);
+                portEXIT_CRITICAL(&melPreviewMux);
+                playMidi(n, notes);
+            } else if (req.engine == ENGINE_DETECTOR && req.method == METHOD_DET_AXON) {
                 if (!axonTracking) {
                     axonTracking = true;
                     Serial.println("[AXON] tracking");
-                    playNotes(AXON_DETECT, sizeof(AXON_DETECT) / sizeof(AXON_DETECT[0]));
+                    if (!playAssigned(ENGINE_DETECTOR, METHOD_DET_AXON))
+                        playNotes(AXON_DETECT, sizeof(AXON_DETECT) / sizeof(AXON_DETECT[0]));
                     axonNextBeat = millis() + AXON_HEARTBEAT_MS;
                 }
-            } else {
+            } else if (!playAssigned(req.engine, req.method)) {
                 detectionChime();
             }
         }
@@ -302,28 +338,36 @@ static void chimeTaskFn(void* param) {
     }
 }
 
+void melodyPreview(const uint8_t* d, size_t len) {
+    if (!chimeQueue || len < 1) return;
+    uint8_t n = d[0] > MELODY_MAX_NOTES ? MELODY_MAX_NOTES : d[0];
+    if (len < 1 + (size_t)n * 3) n = (uint8_t)((len - 1) / 3);
+    portENTER_CRITICAL(&melPreviewMux);
+    melPreview[0] = n;
+    memcpy(melPreview + 1, d + 1, (size_t)n * 3);
+    portEXIT_CRITICAL(&melPreviewMux);
+    ChimeReq req = { CHIME_ENGINE_PREVIEW, 0 };
+    xQueueSend(chimeQueue, &req, 0);
+}
+
 static void axonPresenceSeen(int8_t rssi) {
     axonLastSeenMs = millis();
     axonLastRssi = rssi;
     if (!chimeQueue || hwAlertsSuppressed) return;
-    uint8_t req = CHIME_REQ_AXON;
+    ChimeReq req = { ENGINE_DETECTOR, METHOD_DET_AXON };
     xQueueSend(chimeQueue, &req, 0);
 }
 
-// Coalesce beeps: one chime per hit, not per detection event. A single device
-// often fires multiple alertable detections in a burst (e.g. a Flock cam seen
-// on BLE and WiFi = two different MACs the per-MAC dedup can't merge). Gate the
-// chime on a short global cooldown so the swarm beeps once.
 #define CHIME_DEDUP_MS 1500
 static volatile uint32_t lastChimeMs = 0;
-static void requestChime(void) {
+static void requestChime(uint8_t engine, uint8_t method) {
     if (!chimeQueue) return;
     if (hwAlertsSuppressed) return;
     uint32_t now = millis();
     if (lastChimeMs != 0 && (uint32_t)(now - lastChimeMs) < CHIME_DEDUP_MS) return;
     lastChimeMs = now;
-    uint8_t one = 1;
-    xQueueSend(chimeQueue, &one, 0);
+    ChimeReq req = { engine, method };
+    xQueueSend(chimeQueue, &req, 0);
 }
 
 // ============================================================================
@@ -570,7 +614,7 @@ static void detectionNotifyTask(void* param) {
             // Audible + visual feedback only for target engines
             if (isAlertableEngine(evt.engine_id)) {
                 Serial.printf("[CHIME] engine=%d\n", evt.engine_id);
-                if (!evtIsAxon) requestChime();
+                if (!evtIsAxon) requestChime(evt.engine_id, evt.method);
 #ifndef OUISPY_DONGLE
                 if (hwLedEnabled) {
                     g_ledOffAtMs = millis() + 80;
@@ -1434,6 +1478,7 @@ void setup() {
 
     // Load hardware config (buzzer/LED/neopixel) from NVS
     loadHardwareConfig();
+    melodyInit();
     ignoreListInit();
 
     // Create FreeRTOS queues
@@ -1449,7 +1494,7 @@ void setup() {
 #else
     engineCmdQueue = xQueueCreate(8, sizeof(EngineCommand));
 #endif
-    chimeQueue = xQueueCreate(1, sizeof(uint8_t));
+    chimeQueue = xQueueCreate(1, sizeof(ChimeReq));
 
     if (detectionQueue == NULL || engineCmdQueue == NULL || chimeQueue == NULL) {
         Serial.println("[FATAL] Queue creation failed!");

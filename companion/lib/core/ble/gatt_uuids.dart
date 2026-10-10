@@ -41,6 +41,8 @@ class GattUuids {
   /// READ, WRITE: per-node radio role (WiFi/BLE/Both) for wardrive slicing
   static final nodeRadio = Guid('00000024-$_base');
 
+  static final melody = Guid('00000025-$_base');
+
   /// READ, NOTIFY: chunked session data download
   static final sessionSync = Guid('00000030-$_base');
 

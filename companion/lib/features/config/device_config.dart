@@ -31,6 +31,7 @@ import 'package:oui_spy/features/config/widgets/config_widgets.dart';
 import 'package:oui_spy/features/config/config_menu_state.dart';
 import 'package:oui_spy/features/config/widgets/config_nav.dart';
 import 'package:oui_spy/features/config/ota_progress_stepper.dart';
+import 'package:oui_spy/features/config/alert_sounds_screen.dart';
 import 'package:oui_spy/features/engines/detection_rules.dart';
 import 'package:oui_spy/features/pcap/pcap_library_screen.dart';
 import 'package:oui_spy/features/notifications/notification_settings_screen.dart';
@@ -620,6 +621,16 @@ class _DeviceConfigScreenState extends ConsumerState<DeviceConfigScreen>
               setState(() => _buzzerVolume = v.round());
               _writeHardwareConfig();
             },
+          ),
+        if (hasBuzzer && _buzzerEnabled)
+          ConfigActionRow(
+            icon: Icons.music_note,
+            label: 'Alert sounds',
+            subtitle: 'Compose melodies and assign them to detections',
+            color: const Color(0xFFFFB84A),
+            onTap: () => Navigator.of(context).push(MaterialPageRoute(
+              builder: (_) => const AlertSoundsScreen(),
+            )),
           ),
 
         if (hasBuzzer) const SizedBox(height: 16),

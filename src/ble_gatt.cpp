@@ -1239,6 +1239,13 @@ void bleGattRebroadcastConfigs(void) {
     if (mgrFoxCfgLen)   meshBroadcastConfig(MESH_CFG_KIND_FOXHUNTER, mgrFoxCfg, mgrFoxCfgLen);
     if (mgrSigCfgLen)   meshBroadcastConfig(MESH_CFG_KIND_SIGMASK, mgrSigCfg, mgrSigCfgLen);
     if (mgrBandCfgLen)  meshBroadcastConfig(MESH_CFG_KIND_WIFIBAND, mgrBandCfg, mgrBandCfgLen);
+    static uint8_t melIdx = 0;
+    if (melodyCount()) {
+        uint8_t op[4 + MELODY_MAX_NOTES * 3];
+        if (melIdx >= melodyCount()) melIdx = 0;
+        size_t l = melodyGetEntryOp(melIdx++, op);
+        if (l) meshBroadcastConfig(MESH_CFG_KIND_MELODY, op, l);
+    }
 
     uint8_t m = mgrCommandedMask;
     if (m & ENGINE_BITMASK(ENGINE_FLOCK_WIFI)) mgrBroadcastNodeRadioConfig(ENGINE_FLOCK_WIFI);
@@ -1355,6 +1362,27 @@ class IgnoreListCallbacks : public NimBLECharacteristicCallbacks {
     }
 };
 static IgnoreListCallbacks ignoreListCb;
+
+class MelodyCallbacks : public NimBLECharacteristicCallbacks {
+    void onWrite(NimBLECharacteristic* chr) override {
+        std::string val = chr->getValue();
+        const uint8_t* d = (const uint8_t*)val.data();
+        size_t len = val.length();
+        if (len < 1) return;
+        if (d[0] == MELODY_OP_PREVIEW) {
+#ifndef OUISPY_ROLE_MANAGER
+            melodyPreview(d + 1, len - 1);
+#endif
+            return;
+        }
+        melodyApply(d, len);
+#ifdef OUISPY_ROLE_MANAGER
+        if (meshIsEnabled()) meshBroadcastConfig(MESH_CFG_KIND_MELODY, d, len);
+#endif
+        Serial.printf("[BLE] Melody op=%u -> %u assignments\n", d[0], melodyCount());
+    }
+};
+static MelodyCallbacks melodyCb;
 
 class NodeRadioCallbacks : public NimBLECharacteristicCallbacks {
     void onWrite(NimBLECharacteristic* chr) override {
@@ -2299,6 +2327,8 @@ void bleGattInit(void) {
         NIMBLE_PROPERTY::READ | NIMBLE_PROPERTY::WRITE
     );
     chrIgnoreList->setCallbacks(&ignoreListCb);
+
+    svc->createCharacteristic(CHR_MELODY, NIMBLE_PROPERTY::WRITE)->setCallbacks(&melodyCb);
 
     // -- Node Radio Role (WRITE) — per-node WiFi/BLE/Both for wardrive slicing --
     chrNodeRadio = svc->createCharacteristic(

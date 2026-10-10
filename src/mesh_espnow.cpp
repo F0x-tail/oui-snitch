@@ -941,6 +941,7 @@ static void meshProcessRxPacket(const uint8_t* macAddr, const uint8_t* data, int
         else if (cp.cfg_kind == MESH_CFG_KIND_FOXHUNTER) foxhunterConfigApply(cp.data, n);
         else if (cp.cfg_kind == MESH_CFG_KIND_SIGMASK) { if (n >= 1) detectorSetSigMask(cp.data[0]); }
         else if (cp.cfg_kind == MESH_CFG_KIND_WIFIBAND) { if (n >= 1) engineApplyWifiBand(cp.data[0]); }
+        else if (cp.cfg_kind == MESH_CFG_KIND_MELODY) melodyApply(cp.data, n);
 #ifndef OUISPY_ROLE_MANAGER
         else if (cp.cfg_kind == MESH_CFG_KIND_ENGINE) {
             if (!bleGattIsConnected()) engineStateConfigApply(cp.data, n);

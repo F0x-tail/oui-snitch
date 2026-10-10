@@ -60,6 +60,7 @@ class BleManager {
   BluetoothCharacteristic? _hardwareConfig;
   BluetoothCharacteristic? _alertConfig;
   BluetoothCharacteristic? _ignoreList;
+  BluetoothCharacteristic? _melody;
   BluetoothCharacteristic? _nodeRadio;
   BluetoothCharacteristic? _foxhunterRssi;
   BluetoothCharacteristic? _unipwnCommand;
@@ -626,6 +627,7 @@ class BleManager {
       if (c.uuid == GattUuids.hardwareConfig) _hardwareConfig = c;
       if (c.uuid == GattUuids.alertConfig) _alertConfig = c;
       if (c.uuid == GattUuids.ignoreList) _ignoreList = c;
+      if (c.uuid == GattUuids.melody) _melody = c;
       if (c.uuid == GattUuids.nodeRadio) _nodeRadio = c;
       if (c.uuid == GattUuids.foxhunterRssi) _foxhunterRssi = c;
       if (c.uuid == GattUuids.unipwnCommand) _unipwnCommand = c;
@@ -901,6 +903,20 @@ class BleManager {
   Future<void> setIgnoreList(List<int> bytes) async {
     if (_ignoreList == null) return;
     await _ignoreList!.write(bytes, withoutResponse: false);
+  }
+
+  bool get hasMelodySupport => _melody != null;
+
+  Future<void> writeMelodyOps(List<List<int>> ops) async {
+    final c = _melody;
+    if (c == null) return;
+    try {
+      for (final op in ops) {
+        await c.write(op, withoutResponse: false);
+      }
+    } catch (e) {
+      DebugLog.log('BLE: melody write failed: $e');
+    }
   }
 
   Future<void> setNodeRadioRoles(Map<String, int> roles) async {

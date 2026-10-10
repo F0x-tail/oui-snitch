@@ -319,6 +319,29 @@ extern volatile bool    hwLedEnabled;
 extern volatile uint8_t hwNeopixelBrightness;
 extern volatile bool    hwAlertsSuppressed;  // set by phone (inside geofence) / relayed from manager
 
+#define MELODY_MAX_NOTES      8
+#define MELODY_MAX_ENTRIES    24
+#define MELODY_ANY            0xFF
+#define MELODY_ENGINE_AXON    0xFE
+#define MELODY_AXON_HEARTBEAT 1
+#define MELODY_AXON_LOST      2
+#define MELODY_OP_SET         0x01
+#define MELODY_OP_CLEAR       0x02
+#define MELODY_OP_CLEAR_ALL   0x03
+#define MELODY_OP_PREVIEW     0x04
+typedef struct __attribute__((packed)) {
+    uint8_t engine;
+    uint8_t method;
+    uint8_t n;
+    uint8_t notes[MELODY_MAX_NOTES][3];
+} MelodyEntry;
+void   melodyInit(void);
+void   melodyApply(const uint8_t* data, size_t len);
+void   melodyPreview(const uint8_t* data, size_t len);
+size_t melodyGetEntryOp(uint8_t idx, uint8_t* out);
+uint8_t melodyCount(void);
+bool   melodyLookup(uint8_t engine, uint8_t method, uint8_t* n, uint8_t notes[][3]);
+
 // ============================================================================
 // GATT UUIDs
 // ============================================================================
@@ -345,6 +368,7 @@ extern volatile bool    hwAlertsSuppressed;  // set by phone (inside geofence) /
 #define CHR_WIFI_CONFIG      "00000040-" UUID_BASE
 #define CHR_IGNORE_LIST      "00000023-" UUID_BASE
 #define CHR_NODE_RADIO       "00000024-" UUID_BASE
+#define CHR_MELODY           "00000025-" UUID_BASE
 // PCAP engine
 #define CHR_PCAP_CONTROL     "00000160-" UUID_BASE
 #define CHR_PCAP_STATS       "00000161-" UUID_BASE
@@ -522,6 +546,7 @@ typedef struct __attribute__((packed)) {
 #define MESH_CFG_KIND_ENGINE 5
 #define MESH_CFG_KIND_SIGMASK 6
 #define MESH_CFG_KIND_WIFIBAND 7   // data[0] = WIFI_BAND_* mask (bit0=2.4, bit1=5)
+#define MESH_CFG_KIND_MELODY 8
 #define MESH_CONFIG_MAX     32
 typedef struct __attribute__((packed)) {
     uint8_t  pkt_type;          // MESH_PKT_CONFIG
