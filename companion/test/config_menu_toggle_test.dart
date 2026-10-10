@@ -89,7 +89,7 @@ void main() {
     showConfigSectionSheet(_ctx, _controller);
     await tester.pumpAndSettle();
 
-    await tester.tap(find.text('FIRMWARE').last);
+    await tester.tap(find.text('DATA').last);
     await tester.pumpAndSettle();
 
     expect(find.text('SECTION'), findsNothing);

@@ -23,18 +23,15 @@ void main() {
 
   test('local bit with group bit is not a factory address', () {
     const ble = Observation(key: 'BLE:5B:AF:C8:11:22:33', kind: RadioKind.ble, mac: '5B:AF:C8:11:22:33');
-    final text = DeviceExplain.addressExplain(ble, addressType: 'Public');
-    expect(text.toLowerCase(), contains('local bit'));
-    expect(text.contains('Public factory'), isFalse);
+    expect(DeviceExplain.addressExplain(ble, addressType: 'Public'), 'Custom · fixed');
     const pub = Observation(key: 'BLE:00:00:0C:11:22:33', kind: RadioKind.ble, mac: '00:00:0C:11:22:33');
-    expect(DeviceExplain.addressExplain(pub, addressType: 'Public'), 'Public factory address (stable, IEEE-assigned).');
+    expect(DeviceExplain.addressExplain(pub, addressType: 'Public'), 'Factory · fixed');
   });
 
   test('wifi local-bit bssid is not a rotating privacy mac', () {
     final text = DeviceExplain.addressExplain(_wifi('02:0A:F5:86:56:DD', 'PS-CRADLEPOINT'));
-    expect(text, contains('Locally administered BSSID'));
-    expect(text.toLowerCase().contains('privacy'), isFalse);
-    expect(text.toLowerCase().contains('can change'), isFalse);
+    expect(text, 'Custom · fixed');
+    expect(text.contains('changes'), isFalse);
   });
 
   test('rssi 127 is not available', () {

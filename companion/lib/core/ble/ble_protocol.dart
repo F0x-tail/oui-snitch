@@ -565,7 +565,8 @@ class BleProtocol {
     final slice = data.sublist(offset, end);
     final nullIndex = slice.indexOf(0);
     final trimmed = nullIndex >= 0 ? slice.sublist(0, nullIndex) : slice;
-    return String.fromCharCodes(trimmed);
+    return String.fromCharCodes(
+        trimmed.where((b) => b >= 0x20 && (b < 0x7f || b > 0x9f)));
   }
 
   // -- Orchestration --

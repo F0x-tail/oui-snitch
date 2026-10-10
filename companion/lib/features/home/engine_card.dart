@@ -6,9 +6,11 @@ import 'package:go_router/go_router.dart';
 import 'package:oui_spy/core/app_state.dart';
 import 'package:oui_spy/core/ble/ble_manager.dart';
 import 'package:oui_spy/core/debug_log.dart';
+import 'package:oui_spy/core/engine_control.dart';
 import 'package:oui_spy/core/models/engine.dart';
 import 'package:oui_spy/core/wardrive_state.dart';
 import 'package:oui_spy/features/pcap/pcap_stats.dart';
+import 'package:oui_spy/features/wardrive/session_launch.dart';
 import 'package:oui_spy/theme/app_theme.dart';
 
 enum CardSize { hero, medium, compact }
@@ -84,32 +86,11 @@ class _EngineCardState extends ConsumerState<EngineCard>
 
   void _toggleEngine(bool value) {
     if (widget.engine == Engine.wardrive) {
-      final wd = ref.read(wardriveProvider);
       if (value) {
-        wd.startSession();
-        // Sync wardrive to peers with channel split
-        _syncToPeers(value);
+        unawaited(startWardriveSession(context, ref));
       } else {
-        wd.stopSession();
-        _syncToPeers(value);
+        ref.read(wardriveProvider).stopSession();
       }
-      return;
-    }
-
-    final wd = ref.read(wardriveProvider);
-    final ownedByWardrive = wd.isActive &&
-        (wd.activeEngines.contains(widget.engine) ||
-            (wd.includesFlock &&
-                (widget.engine == Engine.flockBle ||
-                    widget.engine == Engine.flockWifi)));
-    if (!value && ownedByWardrive) {
-      setState(() => _optimisticValue = false);
-      _optimisticTimer?.cancel();
-      wd.stopOwnedEngine(widget.engine).catchError((e) {
-        DebugLog.log('ENGINE: home stopOwned ${widget.engine.name} FAILED: $e');
-        if (mounted) setState(() => _optimisticValue = null);
-      });
-      DebugLog.log('ENGINE: home stop ${widget.engine.name} via wardrive session');
       return;
     }
 
@@ -127,20 +108,11 @@ class _EngineCardState extends ConsumerState<EngineCard>
       return;
     }
 
-    final ble = ref.read(bleManagerProvider);
-    final targetNode = (widget.engine == Engine.foxhunter)
-        ? appState.foxhunterTargetNodeId
-        : null;
     setState(() => _optimisticValue = value);
     _optimisticTimer?.cancel();
-    final fut = value
-        ? ble.enableEngine(widget.engine, targetNodeId: targetNode,
-            radio: appState.engineRadio[widget.engine])
-        : ble.disableEngine(widget.engine, targetNodeId: targetNode);
-    if (widget.engine == Engine.foxhunter && !value) {
-      appState.endFoxhuntLiveActivity();
-    }
-    fut.catchError((e) {
+    setEngineEnabled(ref, widget.engine, value,
+            targetNodeId: widget.engine == Engine.foxhunter ? appState.foxhunterTargetNodeId : null)
+        .catchError((Object e) {
       DebugLog.log('ENGINE: toggle ${widget.engine.name} -> $value FAILED: $e');
       if (!mounted) return;
       setState(() => _optimisticValue = null);
@@ -148,12 +120,7 @@ class _EngineCardState extends ConsumerState<EngineCard>
         SnackBar(content: Text('${widget.engine.label} ${value ? "enable" : "disable"} failed: $e')),
       );
     });
-    _syncToPeers(value);
     DebugLog.log('ENGINE: toggle ${widget.engine.name} -> $value');
-  }
-
-  void _syncToPeers(bool enable) {
-    // Mesh orchestration removed — single node only for now
   }
 
   void _cycleRadio() {
@@ -168,13 +135,10 @@ class _EngineCardState extends ConsumerState<EngineCard>
       0x02 => 0x03,
       _ => 0x01,
     };
-    appState.setEngineRadio(widget.engine, next);
     if (widget.engine == Engine.wardrive) {
-      ref.read(wardriveProvider).setRadio(switch (next) {
-        0x01 => WardriveRadio.wifi,
-        0x02 => WardriveRadio.ble,
-        _ => WardriveRadio.both,
-      });
+      setWardriveRadio(ref, next);
+    } else {
+      appState.setEngineRadio(widget.engine, next);
     }
   }
 
@@ -204,12 +168,11 @@ class _EngineCardState extends ConsumerState<EngineCard>
   }
 
   String get _engineDescription {
-    if (widget.engine == Engine.wardrive) {
-      final wd = ref.read(wardriveProvider);
-      if (wd.isActive) {
-        return '${wd.activeLabel} \u2022 ${wd.radio.label}';
-      }
+    final wd = ref.read(wardriveProvider);
+    if (widget.engine == Engine.wardrive && wd.isActive) {
+      return '${wd.activeLabel} \u2022 ${wd.radio.label}';
     }
+    if (wd.ownsEngine(widget.engine)) return 'Running in wardrive session';
     if (widget.engine == Engine.foxhunter) {
       final appState = ref.read(appStateProvider);
       final target = appState.foxhunterTarget;

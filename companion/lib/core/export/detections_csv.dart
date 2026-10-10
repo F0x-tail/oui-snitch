@@ -126,11 +126,17 @@ class DetectionsCsv {
 
   static String _num(double? v) => v == null ? '' : v.toString();
 
-  static String _escape(String value) {
-    if (value.isEmpty) return '';
-    if (value.contains(',') || value.contains('"') || value.contains('\n') || value.contains('\r')) {
-      return '"${value.replaceAll('"', '""')}"';
-    }
-    return value;
+  static String _escape(String value) => csvCell(value);
+}
+
+String csvCell(String value) {
+  if (value.isEmpty) return '';
+  final v = RegExp(r'^[=+@\t\r]').hasMatch(value) ||
+          (value.startsWith('-') && num.tryParse(value) == null)
+      ? "'$value"
+      : value;
+  if (v.contains(',') || v.contains('"') || v.contains('\n') || v.contains('\r')) {
+    return '"${v.replaceAll('"', '""')}"';
   }
+  return v;
 }

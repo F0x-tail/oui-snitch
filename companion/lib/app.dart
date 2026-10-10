@@ -3,7 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:oui_spy/features/config/config_menu_state.dart';
 import 'package:oui_spy/features/config/device_config.dart';
-import 'package:oui_spy/features/devices/devices_screen.dart';
+import 'package:oui_spy/features/detections/detections_screen.dart';
 import 'package:oui_spy/features/config/widgets/config_nav.dart'
     show kConfigSectionSheetRoute;
 import 'package:oui_spy/features/engines/detector_screen.dart';
@@ -11,7 +11,6 @@ import 'package:oui_spy/features/engines/foxhunter_screen.dart';
 import 'package:oui_spy/features/engines/skyspy_screen.dart';
 import 'package:oui_spy/features/engines/unipwn_screen.dart';
 import 'package:oui_spy/features/export/export_screen.dart';
-import 'package:oui_spy/features/feed/feed_screen.dart';
 import 'package:oui_spy/features/home/home_screen.dart';
 import 'package:oui_spy/features/onboarding/scan_screen.dart';
 import 'package:oui_spy/features/pcap/pcap_screen.dart';
@@ -41,15 +40,9 @@ final routerProvider = Provider<GoRouter>((ref) {
             ),
           ),
           GoRoute(
-            path: '/feed',
+            path: '/detections',
             pageBuilder: (context, state) => const NoTransitionPage(
-              child: FeedScreen(),
-            ),
-          ),
-          GoRoute(
-            path: '/devices',
-            pageBuilder: (context, state) => const NoTransitionPage(
-              child: DevicesScreen(),
+              child: DetectionsScreen(),
             ),
           ),
           GoRoute(
@@ -240,8 +233,8 @@ class AppShell extends ConsumerStatefulWidget {
 }
 
 class _AppShellState extends ConsumerState<AppShell> {
-  static const _routes = ['/home', '/feed', '/devices', '/wardrive', '/config'];
-  static const _configIndex = 4;
+  static const _routes = ['/home', '/detections', '/wardrive', '/config'];
+  static const _configIndex = 3;
 
   /// The section sheet lives on the shell navigator, which sits below this
   /// widget's context — reach it by key, not by Navigator.of(context).
@@ -281,20 +274,16 @@ class _AppShellState extends ConsumerState<AppShell> {
             label: 'HOME',
           ),
           BottomNavigationBarItem(
-            icon: Icon(Icons.list_alt),
-            label: 'FEED',
+            icon: Icon(Icons.radar),
+            label: 'DETECTIONS',
           ),
           BottomNavigationBarItem(
-            icon: Icon(Icons.devices_other),
-            label: 'DEVICES',
-          ),
-          BottomNavigationBarItem(
-            icon: Icon(Icons.drive_eta),
-            label: 'WARDRIVE',
+            icon: Icon(Icons.map),
+            label: 'MAP',
           ),
           BottomNavigationBarItem(
             icon: Icon(Icons.settings),
-            label: 'CONFIG',
+            label: 'SETTINGS',
           ),
         ],
       ),

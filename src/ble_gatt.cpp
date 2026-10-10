@@ -2479,7 +2479,7 @@ static size_t packDetection(const DetectionEvent* evt, uint8_t* buf) {
             buf[52] = evt->ext.wardrive.auth_mode;
             memcpy(buf + 53, evt->ext.wardrive.device_name, 21);
             len = 74;
-            if (evt->method == METHOD_BLE_ADV && evt->ext.wardrive.adv_len) {
+            if ((evt->method == METHOD_BLE_ADV || evt->method == METHOD_WIFI_AP) && evt->ext.wardrive.adv_len) {
                 uint8_t n = evt->ext.wardrive.adv_len;
                 if (n > sizeof(evt->ext.wardrive.adv)) n = sizeof(evt->ext.wardrive.adv);
                 buf[74] = n;
@@ -2534,6 +2534,31 @@ void bleGattSpoolFlushPump(void) {
 }
 
 void bleGattNotifyDetection(const DetectionEvent* evt) {
+#ifdef OUISPY_IE_E2E
+    if (evt && (evt->engine_id & 0x7F) == ENGINE_DETECTOR) {
+        static uint8_t det = 0;
+        if (det < 10) {
+            det++;
+            uint8_t b[200];
+            size_t l = packDetection(evt, b);
+            Serial.print("[DET-E2E] ");
+            for (size_t i = 0; i < l; i++) Serial.printf("%02x", b[i]);
+            Serial.println();
+        }
+    }
+    if (evt && evt->engine_id == ENGINE_WARDRIVE && evt->method == METHOD_WIFI_AP) {
+        static uint16_t withIe = 0, withoutIe = 0;
+        uint16_t& n = evt->ext.wardrive.adv_len ? withIe : withoutIe;
+        if (n < (evt->ext.wardrive.adv_len ? 60 : 5)) {
+            n++;
+            uint8_t b[200];
+            size_t l = packDetection(evt, b);
+            Serial.print("[IE-E2E] ");
+            for (size_t i = 0; i < l; i++) Serial.printf("%02x", b[i]);
+            Serial.println();
+        }
+    }
+#endif
     if (!phoneConnected) {
 #ifndef OUISPY_ROLE_MANAGER
         if (offlineScanEnabled && evt && engineSpoolable(evt->engine_id) &&

@@ -54,7 +54,6 @@ class CommandBarAction {
     required this.label,
     required this.onTap,
     this.active = false,
-    this.badge = 0,
     this.color,
   });
 
@@ -62,7 +61,6 @@ class CommandBarAction {
   final String label;
   final VoidCallback? onTap;
   final bool active;
-  final int badge;
   final Color? color;
 }
 
@@ -338,10 +336,7 @@ class CommandBarButton extends StatelessWidget {
         ? t.textDim.withValues(alpha: 0.4)
         : (action.active ? tint : t.textSecondary);
     final iconSize = barIconSize(context);
-    final glyph = action.badge > 0
-        ? _BadgedIcon(
-            icon: action.icon, size: iconSize, color: fg, count: action.badge)
-        : Icon(action.icon, size: iconSize, color: fg);
+    final glyph = Icon(action.icon, size: iconSize, color: fg);
     return CommandBarTap(
       onTap: action.onTap,
       padScale: padScale,
@@ -366,53 +361,6 @@ class CommandBarButton extends StatelessWidget {
   }
 }
 
-class _BadgedIcon extends StatelessWidget {
-  const _BadgedIcon({
-    required this.icon,
-    required this.size,
-    required this.color,
-    required this.count,
-  });
-
-  final IconData icon;
-  final double size;
-  final Color color;
-  final int count;
-
-  @override
-  Widget build(BuildContext context) {
-    final t = AppTheme.of(context);
-    final base = Theme.of(context).textTheme.labelSmall ?? const TextStyle();
-    return Stack(
-      clipBehavior: Clip.none,
-      children: [
-        Icon(icon, size: size, color: color),
-        Positioned(
-          right: -size * 0.25,
-          top: -size * 0.25,
-          child: Container(
-            padding: EdgeInsets.symmetric(
-              horizontal: size * 0.2,
-              vertical: size * 0.05,
-            ),
-            decoration: BoxDecoration(
-              color: AppTheme.accent,
-              borderRadius: BorderRadius.circular(size),
-            ),
-            child: Text(
-              '$count',
-              style: base.copyWith(
-                color: t.background,
-                fontWeight: FontWeight.w800,
-                height: 1.1,
-              ),
-            ),
-          ),
-        ),
-      ],
-    );
-  }
-}
 
 class CommandSheet extends StatelessWidget {
   const CommandSheet({
@@ -688,6 +636,103 @@ class CommandActiveChip extends StatelessWidget {
             ],
           ),
         ),
+      ),
+    );
+  }
+}
+
+Future<void> showSortSheet<T>({
+  required BuildContext context,
+  required List<T> options,
+  required String Function(T) label,
+  required T Function() current,
+  required bool Function() ascending,
+  required void Function(T) onPick,
+  required VoidCallback onToggleDirection,
+  String Function()? hint,
+}) {
+  return showCommandSheet<void>(
+    context: context,
+    builder: (ctx) => StatefulBuilder(
+      builder: (ctx, setSheet) => CommandSheet(
+        title: 'SORT',
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            CommandSheetGroup(
+              label: 'ORDER BY',
+              child: Wrap(
+                spacing: barGap(ctx),
+                runSpacing: barGap(ctx),
+                children: [
+                  for (var i = 0; i < options.length; i++)
+                    CommandChip(
+                      label: label(options[i]),
+                      selected: current() == options[i],
+                      color: pillColor(i),
+                      onTap: () {
+                        onPick(options[i]);
+                        setSheet(() {});
+                      },
+                    ),
+                ],
+              ),
+            ),
+            const Divider(height: 1),
+            CommandSheetTile(
+              icon: ascending() ? Icons.arrow_upward : Icons.arrow_downward,
+              label: ascending() ? 'ASCENDING' : 'DESCENDING',
+              subtitle: hint?.call(),
+              color: AppTheme.accent,
+              onTap: () {
+                onToggleDirection();
+                setSheet(() {});
+              },
+            ),
+          ],
+        ),
+      ),
+    ),
+  );
+}
+
+class CommandHeader extends StatelessWidget {
+  const CommandHeader({
+    super.key,
+    required this.title,
+    required this.count,
+    this.chips = const [],
+    this.indicators = const [],
+  });
+
+  final String title;
+  final String count;
+  final List<Widget> chips;
+  final List<Widget> indicators;
+
+  @override
+  Widget build(BuildContext context) {
+    final t = AppTheme.of(context);
+    final gap = barGap(context);
+    final style = Theme.of(context).textTheme.titleSmall;
+    return Padding(
+      padding: EdgeInsets.fromLTRB(gap * 2, gap * 1.5, gap * 2, gap * 1.5),
+      child: Row(
+        children: [
+          Text(title, style: style?.copyWith(letterSpacing: 3, color: t.textDim, fontWeight: FontWeight.w700)),
+          SizedBox(width: gap),
+          Expanded(
+            child: SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              child: Row(spacing: gap * 0.75, children: chips),
+            ),
+          ),
+          for (final i in indicators) ...[i, SizedBox(width: gap * 0.5)],
+          Text(
+            count,
+            style: style?.copyWith(color: AppTheme.accent, fontFamily: 'monospace', fontWeight: FontWeight.w700),
+          ),
+        ],
       ),
     );
   }

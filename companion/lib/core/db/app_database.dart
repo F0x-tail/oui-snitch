@@ -58,7 +58,7 @@ class AppDatabase extends _$AppDatabase {
   AppDatabase.forTesting(super.e);
 
   @override
-  int get schemaVersion => 7;
+  int get schemaVersion => 8;
 
   @override
   MigrationStrategy get migration {
@@ -67,6 +67,8 @@ class AppDatabase extends _$AppDatabase {
         await m.createAll();
         await customStatement(
             'CREATE INDEX IF NOT EXISTS idx_detections_session ON detections (session_id)');
+        await customStatement(
+            'CREATE INDEX IF NOT EXISTS idx_detections_mac ON detections (mac_address)');
       },
       onUpgrade: (Migrator m, int from, int to) async {
         if (from < 2) {
@@ -92,6 +94,10 @@ class AppDatabase extends _$AppDatabase {
         if (from < 7) {
           await customStatement(
               'CREATE INDEX IF NOT EXISTS idx_detections_session ON detections (session_id)');
+        }
+        if (from < 8) {
+          await customStatement(
+              'CREATE INDEX IF NOT EXISTS idx_detections_mac ON detections (mac_address)');
         }
       },
     );
@@ -361,6 +367,16 @@ class AppDatabase extends _$AppDatabase {
   }
 
   /// Get all distinct MACs seen across all sessions for stalking detection.
+  Future<List<int>> sightingTimesForMac(String mac) async {
+    final ts = detections.appTimestamp;
+    final rows = await (selectOnly(detections)
+          ..addColumns([ts])
+          ..where(detections.macAddress.equals(mac.toUpperCase()) |
+              detections.macAddress.equals(mac.toLowerCase())))
+        .get();
+    return [for (final r in rows) r.read(ts)!];
+  }
+
   Future<List<String>> macSeenInMultipleSessions(int minSessions) async {
     final mac = detections.macAddress;
     final sessionCount = detections.sessionId.count(distinct: true);

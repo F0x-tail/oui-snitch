@@ -9,6 +9,10 @@ import 'package:oui_spy/core/ble/ble_manager.dart';
 import 'package:oui_spy/core/debug_log.dart';
 import 'package:oui_spy/core/gps/gps_provider.dart';
 import 'package:oui_spy/core/models/detection.dart';
+import 'package:oui_spy/core/oui/oui_lookup_service.dart';
+import 'package:oui_spy/core/notifications/notification_service.dart';
+import 'package:oui_spy/core/classify/bt_sig_registry.dart';
+import 'package:oui_spy/core/classify/vendor_class.dart';
 import 'package:oui_spy/core/radio_classifier.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -88,7 +92,9 @@ Observation observationFromDetection(Detection d) {
   final ble = d.isBleDetection;
   final mac = MacUtil.normalize(d.macAddress);
   final at = d.appTimestamp.millisecondsSinceEpoch;
-  final adv = parseAdvStructures((d.wardrive == null ? null : wardriveAdvRaw[d.wardrive!]) ?? const []);
+  final raw = (d.wardrive == null ? null : wardriveAdvRaw[d.wardrive!]) ?? const <int>[];
+  final adv = parseAdvStructures(ble ? raw : const []);
+  final ieOuis = ble ? const <String>[] : [for (var i = 0; i + 3 <= raw.length; i += 3) _hexBytes(raw.sublist(i, i + 3))];
   final name = d.ssid.isNotEmpty ? d.ssid : (d.deviceName.isNotEmpty ? d.deviceName : adv.name);
   return Observation(
     serviceUuids: adv.serviceUuids,
@@ -103,6 +109,8 @@ Observation observationFromDetection(Detection d) {
     firstSeenMs: at,
     lastSeenMs: at,
     channel: ble ? 0 : d.channel,
+    hiddenSsid: !ble && d.method == 'wifi_ap' && d.ssid.trim().isEmpty,
+    vendorIeOuis: ieOuis,
     gpsTrail: d.latitude != null && d.longitude != null && !d.approxGps
         ? [GpsSample(at, d.latitude!, d.longitude!, d.rssi)]
         : const [],
@@ -205,10 +213,11 @@ class ClassifiedDevice {
   final Observation obs;
   final List<Signature> signatures;
   final Set<String> sources;
-  const ClassifiedDevice(this.obs, this.signatures, this.sources);
+  final String? vendor;
+  const ClassifiedDevice(this.obs, this.signatures, this.sources, {this.vendor});
 
   List<String> get signatureNames => [for (final s in signatures) s.name];
-  Guess get guess => DeviceExplain.guess(obs, signatureNames);
+  Guess get guess => DeviceExplain.guess(obs, signatureNames, vendor: vendor);
   SignatureClass? get primaryClass => signatures.isEmpty ? null : signatures.first.kind;
 }
 
@@ -218,7 +227,10 @@ class DeviceRegistry extends ChangeNotifier {
   static const _trailCap = 48;
   static const phoneScanPref = 'phoneBleScanEnabled';
 
-  DeviceRegistry({SignatureEngine? engine}) : _engine = engine;
+  DeviceRegistry({SignatureEngine? engine, this.vendorOf}) : _engine = engine;
+
+  final String? Function(String mac)? vendorOf;
+  void Function(ClassifiedDevice)? onClassified;
 
   SignatureEngine? _engine;
   final _devices = <String, ClassifiedDevice>{};
@@ -238,7 +250,13 @@ class DeviceRegistry extends ChangeNotifier {
     if (_engine != null) return;
     try {
       _engine = SignatureEngine(Signature.parseCatalog(await rootBundle.loadString(catalogAsset)));
-      DebugLog.log('CLASSIFY: catalog ${_engine!.signatures.length} signatures');
+      BtSigRegistry.load(
+        await rootBundle.loadString(BtSigRegistry.companyAsset),
+        await rootBundle.loadString(BtSigRegistry.memberAsset),
+      );
+      VendorClass.loadTable([for (final a in VendorClass.tableAssets) await rootBundle.loadString(a)]);
+      DebugLog.log('CLASSIFY: catalog ${_engine!.signatures.length} signatures, '
+          'SIG ${BtSigRegistry.companies.length} companies / ${BtSigRegistry.memberUuids.length} member UUIDs');
       notifyListeners();
     } on Exception catch (e) {
       DebugLog.log('CLASSIFY: catalog load failed: $e');
@@ -269,8 +287,25 @@ class DeviceRegistry extends ChangeNotifier {
       trail = appendTrail(trail, s, _trailCap);
     }
     final merged = (prev == null ? o : prev.obs.merge(o)).withTrail(trail);
-    final sigs = _engine?.match(merged) ?? const <Signature>[];
-    _devices[o.key] = ClassifiedDevice(merged, sigs, {...?prev?.sources, if (source.isNotEmpty) source});
+    final engine = _engine;
+    final sigs = [
+      ...?engine?.match(merged),
+      if (engine != null && engine.hasClusters)
+        ...engine.clusterMatch(merged, [for (final d in _devices.values) d.obs], now),
+    ];
+    final dev = ClassifiedDevice(
+      merged,
+      sigs,
+      {...?prev?.sources, if (source.isNotEmpty) source},
+      vendor: prev?.vendor ?? (merged.mac.isEmpty ? null : vendorOf?.call(merged.mac)),
+    );
+    _devices[o.key] = dev;
+    if (prev == null ||
+        prev.signatures.length != sigs.length ||
+        prev.obs.mfgRecords.length != merged.mfgRecords.length ||
+        prev.obs.serviceUuids.length != merged.serviceUuids.length) {
+      onClassified?.call(dev);
+    }
     if (_devices.length > maxDevices) _evictOldest();
     _dirty = true;
   }
@@ -350,7 +385,9 @@ final phoneBleSourceProvider = Provider<PhoneBleSource>((ref) {
 });
 
 final deviceRegistryProvider = ChangeNotifierProvider<DeviceRegistry>((ref) {
-  final reg = DeviceRegistry();
+  final oui = ref.read(ouiLookupProvider);
+  final reg = DeviceRegistry(vendorOf: oui.lookup)
+    ..onClassified = ref.read(notificationServiceProvider).onClassified;
   reg.loadCatalog();
   reg.attach(EspDetectionSource(ref.read(bleManagerProvider).detections));
   reg.attach(ref.read(phoneBleSourceProvider));

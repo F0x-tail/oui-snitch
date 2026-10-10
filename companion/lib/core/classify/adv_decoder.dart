@@ -87,11 +87,11 @@ class AdvPayloadDecoder {
                   ),
                 );
               } else {
-                out.add(const RoleHint('beacon', 'an iBeacon', 'Apple iBeacon payload.', 7));
+                out.add(const RoleHint('beacon', 'an iBeacon', 'It broadcasts an Apple iBeacon signal.', 7));
               }
             }
           case 0x05:
-            out.add(const RoleHint('phone', 'an iPhone or iPad offering AirDrop', 'Apple AirDrop advertisement.', 5));
+            out.add(const RoleHint('phone', 'an iPhone or iPad offering AirDrop', 'It is offering AirDrop, which Apple phones and Macs do.', 5));
           case 0x07:
             final model = _airPodsModel(tlv.data);
             out.add(
@@ -103,11 +103,11 @@ class AdvPayloadDecoder {
               ),
             );
           case 0x08:
-            out.add(const RoleHint('siri', 'an Apple device that just heard “Hey Siri”', 'Hey Siri advertisement.', 6));
+            out.add(const RoleHint('siri', 'an Apple device that just heard “Hey Siri”', 'It sends the signal Apple devices use to coordinate "Hey Siri".', 6));
           case 0x09:
-            out.add(const RoleHint('audio-speaker', 'an AirPlay speaker or Apple TV', 'AirPlay advertisement.', 5));
+            out.add(const RoleHint('audio-speaker', 'an AirPlay speaker or Apple TV', 'It announces itself as an AirPlay target.', 5));
           case 0x0B:
-            out.add(const RoleHint('phone', 'an Apple device doing Handoff', 'Handoff advertisement.', 4));
+            out.add(const RoleHint('phone', 'an Apple device doing Handoff', 'It sends Apple Handoff signals, which an iPhone, iPad or Mac in use does.', 4));
           case 0x0C:
             out.add(
               const RoleHint(
@@ -180,7 +180,7 @@ class AdvPayloadDecoder {
               ),
             );
           } else {
-            out.add(const RoleHint('beacon', 'an Eddystone beacon', 'Eddystone service data.', 6));
+            out.add(const RoleHint('beacon', 'an Eddystone beacon', 'It broadcasts a Google Eddystone beacon signal.', 6));
           }
       }
     }

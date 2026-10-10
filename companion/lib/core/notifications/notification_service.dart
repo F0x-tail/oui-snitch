@@ -7,6 +7,9 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:oui_spy/core/debug_log.dart';
 import 'package:oui_spy/core/models/detection.dart';
 import 'package:oui_spy/core/models/engine.dart';
+import 'package:oui_spy/core/classify/device_registry.dart';
+import 'package:oui_spy/core/notifications/class_alerts.dart';
+import 'package:oui_spy/features/feed/detection_row.dart' show detectorTitle, methodLabel;
 
 /// Notification channels for Android grouping.
 class NotifChannel {
@@ -37,6 +40,8 @@ class NotificationService extends ChangeNotifier {
   bool droneEnabled = true;
   bool foxhuntEnabled = false; // foxhunt is high-frequency, off by default
   bool wardriveStatusEnabled = true;
+  Set<ClassAlert> classAlerts = ClassAlert.values.toSet();
+  final _classAlerted = <String>{};
 
   // Cooldown per MAC to avoid repeat alerts (seconds)
   int cooldownSeconds = 300; // 5 minutes
@@ -181,7 +186,39 @@ class NotificationService extends ChangeNotifier {
     _fireDetectionNotification(det);
   }
 
-  /// Fire a wardrive milestone notification 
+  void onClassified(ClassifiedDevice d) {
+    if (!_initialized || !_permissionGranted) return;
+    final alert = ClassAlert.of(d);
+    if (alert == null || !classAlerts.contains(alert)) return;
+    final key = d.obs.mac.isNotEmpty ? d.obs.mac : d.obs.key;
+    if (_classAlerted.contains(key) || _isRateLimited()) return;
+    _classAlerted.add(key);
+    _recordRateLimit();
+    final (title, body) = classNotificationText(d, alert);
+    _fireNotification(
+      id: _notifId(NotifChannel.detector),
+      channel: NotifChannel.detector,
+      title: title,
+      body: body,
+      groupKey: NotifChannel.detector,
+    );
+  }
+
+  static (String, String) classNotificationText(ClassifiedDevice d, ClassAlert alert) {
+    final named = d.signatures.where((s) => alert.kinds.contains(s.kind)).map((s) => s.name).firstOrNull;
+    final what = named ??
+        d.guess.headline.replaceFirst(RegExp(r'^(Most likely|Probably|Could be) '), '');
+    final id = d.obs.mac.isNotEmpty ? _formatMac(d.obs.mac) : (d.obs.name.isNotEmpty ? d.obs.name : 'BLE');
+    return (what, '${alert.label} · $id · ${d.obs.rssi}dBm');
+  }
+
+  void setClassAlert(ClassAlert a, bool on) {
+    on ? classAlerts.add(a) : classAlerts.remove(a);
+    notifyListeners();
+    _savePrefs();
+  }
+
+  /// Fire a wardrive milestone notification
   void onWardriveUpdate({required int uniqueCount}) {
     if (!_initialized || !_permissionGranted) return;
     if (!milestoneAlertsEnabled) return;
@@ -276,7 +313,21 @@ class NotificationService extends ChangeNotifier {
   }
 
   void _fireDetectionNotification(Detection det) {
-    final (title, body, channel) = switch (det.engine) {
+    final (title, body, channel) = detectionNotificationText(det);
+
+    if (title == null || body == null || channel == null) return;
+
+    _fireNotification(
+      id: _notifId(channel),
+      channel: channel,
+      title: title,
+      body: body,
+      groupKey: channel,
+    );
+  }
+
+  static (String?, String?, String?) detectionNotificationText(Detection det) {
+    return switch (det.engine) {
       Engine.flockBle || Engine.flockWifi => (
           'Flock Camera Detected',
           det.engine == Engine.flockBle
@@ -285,8 +336,8 @@ class NotificationService extends ChangeNotifier {
           NotifChannel.flock,
         ),
       Engine.detector => (
-          'Watchlist Hit',
-          '${det.deviceName.isNotEmpty ? det.deviceName : _formatMac(det.macAddress)} ${det.rssi}dBm',
+          detectorTitle(det),
+          '${det.deviceName.isNotEmpty ? '${det.deviceName} ' : ''}${_formatMac(det.macAddress)} · ${det.rssi}dBm · ${methodLabel(det.method)}',
           NotifChannel.detector,
         ),
       Engine.skySpy => (
@@ -301,16 +352,6 @@ class NotificationService extends ChangeNotifier {
         ),
       _ => (null, null, null),
     };
-
-    if (title == null || body == null || channel == null) return;
-
-    _fireNotification(
-      id: _notifId(channel),
-      channel: channel,
-      title: title,
-      body: body,
-      groupKey: channel,
-    );
   }
 
   void _fireMilestoneNotification(int count) {
@@ -404,6 +445,10 @@ class NotificationService extends ChangeNotifier {
     maxPerMinute = p.getInt('notif_max_per_min') ?? 10;
     soundEnabled = p.getBool('notif_sound') ?? true;
     vibrationEnabled = p.getBool('notif_vibration') ?? true;
+    final ca = p.getStringList('notif_class_alerts');
+    if (ca != null) {
+      classAlerts = {for (final n in ca) ...ClassAlert.values.where((a) => a.name == n)};
+    }
     notifyListeners();
   }
 
@@ -419,6 +464,7 @@ class NotificationService extends ChangeNotifier {
     p.setInt('notif_max_per_min', maxPerMinute);
     p.setBool('notif_sound', soundEnabled);
     p.setBool('notif_vibration', vibrationEnabled);
+    p.setStringList('notif_class_alerts', [for (final a in classAlerts) a.name]);
   }
 
   void setFlockEnabled(bool v) {

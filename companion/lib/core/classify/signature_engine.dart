@@ -108,6 +108,11 @@ class Signature {
   final List<MatchRule> rules;
   final String notes;
   final String attentionNote;
+  final int minPeers;
+  final int peerWindowSec;
+  final bool clusterByOui;
+  final bool sequentialMac;
+  final Map<String, dynamic>? decode;
 
   const Signature({
     required this.id,
@@ -118,7 +123,14 @@ class Signature {
     this.rules = const [],
     this.notes = '',
     this.attentionNote = '',
+    this.minPeers = 0,
+    this.peerWindowSec = 60,
+    this.clusterByOui = false,
+    this.sequentialMac = false,
+    this.decode,
   });
+
+  bool get cluster => minPeers > 0 || clusterByOui || sequentialMac;
 
   static Signature fromJson(Map<String, dynamic> j) => Signature(
     id: j['id'] as String,
@@ -129,6 +141,11 @@ class Signature {
     rules: [for (final r in (j['rules'] as List? ?? const [])) ?MatchRule.fromJson(r as Map<String, dynamic>)],
     notes: j['notes'] as String? ?? '',
     attentionNote: j['attentionNote'] as String? ?? '',
+    minPeers: (j['minPeers'] as num?)?.toInt() ?? 0,
+    peerWindowSec: (j['peerWindowSec'] as num?)?.toInt() ?? 60,
+    clusterByOui: j['clusterByOui'] as bool? ?? false,
+    sequentialMac: j['sequentialMac'] as bool? ?? false,
+    decode: j['decode'] as Map<String, dynamic>?,
   );
 
   static List<Signature> parseCatalog(String json) {
@@ -173,6 +190,7 @@ class SignatureEngine {
   final _plans = <_Plan>[];
   final _wifiPlans = <int>[];
   final _blePlans = <int>[];
+  final _clusterPlans = <int>[];
   final _bssidWifi = <String, List<int>>{};
   final _bssidBle = <String, List<int>>{};
   final _vendorIe = <String, List<int>>{};
@@ -197,6 +215,10 @@ class SignatureEngine {
         }
       }
       _plans.add(_Plan(sig, active, other));
+      if (sig.enabled && sig.cluster) {
+        _clusterPlans.add(idx);
+        continue;
+      }
       switch (_radioScope(active)) {
         case RadioKind.wifi:
           _wifiPlans.add(idx);
@@ -207,6 +229,39 @@ class SignatureEngine {
           _blePlans.add(idx);
       }
     }
+  }
+
+  bool get hasClusters => _clusterPlans.isNotEmpty;
+
+  List<Signature> clusterMatch(Observation a, Iterable<Observation> devices, int now) {
+    if (_clusterPlans.isEmpty) return const [];
+    final out = <Signature>[];
+    final aOui = _ouiHits(a);
+    for (final idx in _clusterPlans) {
+      final plan = _plans[idx];
+      final s = plan.sig;
+      final windowMs = (s.peerWindowSec <= 0 ? 60 : s.peerWindowSec) * 1000;
+      if (now - a.lastSeenMs > windowMs) continue;
+      final eligible = plan.rules.isEmpty ||
+          _fleetHits(a, plan, aOui.contains(idx)) ||
+          (s.clusterByOui && (a.name.trim().isEmpty || a.randomized));
+      if (!eligible) continue;
+      var peers = 1;
+      for (final b in devices) {
+        if (b.key == a.key || now - b.lastSeenMs > windowMs) continue;
+        if (s.clusterByOui && a.oui != b.oui) continue;
+        if (s.sequentialMac && (_last16(a.mac) - _last16(b.mac)).abs() > 64) continue;
+        if (plan.rules.isNotEmpty && !s.clusterByOui && !_fleetHits(b, plan, _ouiHits(b).contains(idx))) continue;
+        peers++;
+      }
+      if (peers >= (s.minPeers <= 0 ? 3 : s.minPeers)) out.add(s);
+    }
+    return out;
+  }
+
+  static int _last16(String mac) {
+    final h = hexOnly(mac);
+    return h.length < 4 ? 0 : int.parse(h.substring(h.length - 4), radix: 16);
   }
 
   List<Signature> match(Observation o) {

@@ -25,11 +25,14 @@ import 'package:oui_spy/core/ota/ota_service.dart';
 import 'package:oui_spy/core/oui/oui_lookup_service.dart';
 import 'package:oui_spy/core/ignore_list_state.dart';
 import 'package:oui_spy/core/watchlist_state.dart';
+import 'package:oui_spy/core/export/detections_csv.dart' show DetectionsCsv;
 import 'package:oui_spy/core/export/wigle_csv_import.dart';
 import 'package:oui_spy/features/config/widgets/config_widgets.dart';
 import 'package:oui_spy/features/config/config_menu_state.dart';
 import 'package:oui_spy/features/config/widgets/config_nav.dart';
 import 'package:oui_spy/features/config/ota_progress_stepper.dart';
+import 'package:oui_spy/features/engines/detection_rules.dart';
+import 'package:oui_spy/features/pcap/pcap_library_screen.dart';
 import 'package:oui_spy/features/notifications/notification_settings_screen.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -106,12 +109,17 @@ class _DeviceConfigScreenState extends ConsumerState<DeviceConfigScreen>
   void initState() {
     super.initState();
     final prefs = ref.read(sharedPreferencesProvider);
+    final requested = kConfigSections.indexWhere((s) => s.label == ref.read(configSectionRequestProvider));
     _tabController = TabController(
       length: kConfigSections.length,
       vsync: this,
-      initialIndex: (prefs.getInt(_keyLastTab) ?? 0)
-          .clamp(0, kConfigSections.length - 1),
+      initialIndex: requested >= 0
+          ? requested
+          : (prefs.getInt(_keyLastTab) ?? 0).clamp(0, kConfigSections.length - 1),
     );
+    if (requested >= 0) {
+      WidgetsBinding.instance.addPostFrameCallback((_) => ref.read(configSectionRequestProvider.notifier).state = null);
+    }
     _tabController.addListener(_persistTab);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted && ref.read(configMenuWantedProvider)) _syncSectionSheet(true);
@@ -271,14 +279,32 @@ class _DeviceConfigScreenState extends ConsumerState<DeviceConfigScreen>
                   controller: _tabController,
                   children: [
                     _section(_buildAppTab()),
-                    _section(const _WardriveConfigTab()),
-                    const _DetectionsTab(),
-                    _section(const _PcapInlineSection(standalone: true)),
-                    _section(const _IgnoreListTab()),
+                    _section(_buildScanTab()),
+                    _section(const Column(
+                      children: [
+                        Flexible(
+                          child: SingleChildScrollView(
+                            child: Column(
+                              children: [WatchlistPanel(), Divider(height: 1), SignaturesPanel(), Divider(height: 1)],
+                            ),
+                          ),
+                        ),
+                        Expanded(child: _IgnoreListTab()),
+                      ],
+                    )),
                     _section(_buildAlertsTab()),
-                    _section(_buildHardwareTab()),
-                    _section(_buildMeshTab()),
-                    _section(_buildFirmwareTab()),
+                    _section(_Segmented(
+                      labels: const ['HARDWARE', 'MESH', 'FIRMWARE'],
+                      builders: [_buildHardwareTab, _buildMeshTab, _buildFirmwareTab],
+                    )),
+                    _section(_Segmented(
+                      labels: const ['ACCOUNTS', 'PCAPS', 'EXPORT'],
+                      builders: [
+                        () => const _WardriveConfigTab(),
+                        () => const PcapLibraryScreen(embedded: true),
+                        _buildExportTab,
+                      ],
+                    )),
                   ],
                 ),
               ),
@@ -304,7 +330,6 @@ class _DeviceConfigScreenState extends ConsumerState<DeviceConfigScreen>
     final isImperial = unitSystem == UnitSystem.imperial;
     final use24Hour = ref.watch(use24HourTimeProvider);
     final t = AppTheme.of(context);
-    final isC5 = ref.watch(bleManagerProvider).isC5;
 
     return ListView(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
@@ -353,6 +378,25 @@ class _DeviceConfigScreenState extends ConsumerState<DeviceConfigScreen>
         const _AutoConnectToggle(),
 
         const SizedBox(height: 16),
+        const ConfigSectionHeader(label: 'ABOUT'),
+        const _VersionRow(),
+        ConfigActionRow(
+          icon: Icons.code,
+          label: 'Source Code',
+          subtitle: 'github.com/lukeswitz/oui-spy-unified-blue',
+          onTap: () => _launchUrl('https://github.com/lukeswitz/oui-spy-unified-blue'),
+          trailing: Icon(Icons.open_in_new, size: 14, color: t.textDim),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildScanTab() {
+    final t = AppTheme.of(context);
+    final isC5 = ref.watch(bleManagerProvider).isC5;
+    return ListView(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      children: [
         const ConfigSectionHeader(label: 'WARDRIVE — RSSI'),
         Padding(
           padding: const EdgeInsets.only(bottom: 8, left: 2),
@@ -398,12 +442,15 @@ class _DeviceConfigScreenState extends ConsumerState<DeviceConfigScreen>
           ),
         ),
         const _ChannelRangeSlider(),
+      ],
+    );
+  }
 
-        const SizedBox(height: 16),
-        const ConfigSectionHeader(label: 'OUI DATABASE'),
-        const _OuiDatabaseSection(),
-
-        const SizedBox(height: 16),
+  Widget _buildExportTab() {
+    final t = AppTheme.of(context);
+    return ListView(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      children: [
         const ConfigSectionHeader(label: 'DATA & BACKUP'),
         ConfigActionRow(
           icon: Icons.import_export,
@@ -412,17 +459,9 @@ class _DeviceConfigScreenState extends ConsumerState<DeviceConfigScreen>
           onTap: () => context.push('/export'),
           trailing: Icon(Icons.chevron_right, size: 18, color: t.textDim),
         ),
-
         const SizedBox(height: 16),
-        const ConfigSectionHeader(label: 'ABOUT'),
-        const _VersionRow(),
-        ConfigActionRow(
-          icon: Icons.code,
-          label: 'Source Code',
-          subtitle: 'github.com/lukeswitz/oui-spy-unified-blue',
-          onTap: () => _launchUrl('https://github.com/lukeswitz/oui-spy-unified-blue'),
-          trailing: Icon(Icons.open_in_new, size: 14, color: t.textDim),
-        ),
+        const ConfigSectionHeader(label: 'OUI DATABASE'),
+        const _OuiDatabaseSection(),
       ],
     );
   }
@@ -1253,6 +1292,43 @@ class _DeviceConfigScreenState extends ConsumerState<DeviceConfigScreen>
       );
       _readDeviceConfig();
     }
+  }
+}
+
+class _Segmented extends StatefulWidget {
+  const _Segmented({required this.labels, required this.builders});
+  final List<String> labels;
+  final List<Widget Function()> builders;
+
+  @override
+  State<_Segmented> createState() => _SegmentedState();
+}
+
+class _SegmentedState extends State<_Segmented> {
+  int _i = 0;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(12, 8, 12, 0),
+          child: SizedBox(
+            width: double.infinity,
+            child: SegmentedButton<int>(
+              showSelectedIcon: false,
+              segments: [
+                for (var i = 0; i < widget.labels.length; i++)
+                  ButtonSegment(value: i, label: Text(widget.labels[i])),
+              ],
+              selected: {_i},
+              onSelectionChanged: (s) => setState(() => _i = s.first),
+            ),
+          ),
+        ),
+        Expanded(child: widget.builders[_i]()),
+      ],
+    );
   }
 }
 

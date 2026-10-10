@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:oui_spy/core/app_state.dart';
 import 'package:oui_spy/core/ble/ble_manager.dart';
+import 'package:oui_spy/core/engine_control.dart';
 import 'package:oui_spy/core/models/detection.dart';
 import 'package:oui_spy/core/models/engine.dart';
 import 'package:oui_spy/theme/app_theme.dart';
@@ -33,15 +34,10 @@ class _UnipwnScreenState extends ConsumerState<UnipwnScreen> {
   }
 
   void _toggleEngine(bool enable) {
-    final ble = ref.read(bleManagerProvider);
     final st = ref.read(appStateProvider);
     final node = st.isManagerConnected ? _selectedNode : null;
-    if (enable) {
-      if (st.isManagerConnected && node == null) return;
-      ble.enableEngine(Engine.uniPwn, targetNodeId: node);
-    } else {
-      ble.disableEngine(Engine.uniPwn, targetNodeId: node);
-    }
+    if (enable && st.isManagerConnected && node == null) return;
+    setEngineEnabled(ref, Engine.uniPwn, enable, targetNodeId: node);
   }
 
   @override

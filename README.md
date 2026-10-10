@@ -35,7 +35,7 @@ On Android set Location to **Allow all the time**, or scanning stops when the sc
 | **Standalone** | No phone; boards with a screen and buttons | Engines started from the buttons. T-Dongles log to microSD; M5Sticks beep and show hits on screen |
 | **Mesh node** | Board runs under a MANAGER the phone connects to | The manager collects every node's hits; settings from the app reach all nodes |
 
-**Offline scan** (CONFIG → HARDWARE) keeps a board scanning after the phone disconnects. Hits buffer to flash and upload on reconnect; the setting survives a reboot.
+**Offline scan** (SETTINGS → NODE → HARDWARE) keeps a board scanning after the phone disconnects. Hits buffer to flash and upload on reconnect; the setting survives a reboot.
 
 ## Boards
 
@@ -77,19 +77,22 @@ The original M5StickC and the PLUS2 are built without mesh to fit their RAM. The
 | **HIGH** | One strong signal: Raven service UUID, Flock BLE name, or a Flock wildcard probe |
 | **SUSPECTED** | A listed OUI only |
 
-The tier shows on feed rows, in the detail sheet, and in CONFIG → DETECTIONS, which can filter by tier.
+The tier shows on feed rows, in the detail sheet, and in DETECTIONS → HISTORY, which can filter by tier.
 
 ## App
 
-Bottom tabs: **HOME · FEED · WARDRIVE · CONFIG**.
+Bottom tabs: **HOME · DETECTIONS · MAP · SETTINGS**.
 
-- **Home**: one card per engine to start, stop and configure it. Status bar shows link, GPS fix and node count.
-- **Feed**: every detection. Filter by engine or node, sort, search, export WiGLE CSV. Tap a row to foxhunt or map it.
-- **Wardrive**: choose targets (WiGLE / Flock / Drone / Detector) and radio (Wi-Fi / BLE / both), then START. Sessions save as WiGLE CSV, upload to [WiGLE](https://wigle.net) and [WDGWars](https://wdgwars.pl), and replay on the map.
+- **Home**: session bar (targets, radio, START / PAUSE / STOP) and one card per engine. Status bar shows link, GPS fix and node count.
+- **Detections**: LIVE (every hit; filter, sort, search, export), DEVICES (each device classified by vendor, Bluetooth data and signatures), HISTORY (stored log, CSV export). Tap a row to foxhunt or map it.
+- **Classification**: OUI vendor categories, Bluetooth SIG company and service IDs, AntiHunter tables, Fieldwatch signatures. Alerts per class (cameras, law enforcement, drones, glasses, trackers) in SETTINGS → ALERTS.
+- **Notifications**: title is the matched target (watchlist name, signature, probed SSID); body is device, MAC prefix, RSSI, method.
+- **Watchlist**: import and export as CSV or JSON in SETTINGS → RULES.
+- **Map**: choose targets (WiGLE / Flock / Drone / Detector) and radio (Wi-Fi / BLE / both), then START. Sessions save as WiGLE CSV, upload to [WiGLE](https://wigle.net) and [WDGWars](https://wdgwars.pl), and replay on the map.
 - **Map layers**: *MAPPED ALPRs* scores each Flock hit against cameras already on OpenStreetMap (`ON MAP` within 75 m, `UNMAPPED` beyond 250 m). Turning it on sends the visible map area to `overpass-api.de` (fallback `overpass.private.coffee`). *WDG TERRITORY* shows WDGWars territory for a linked account.
 - **Geofences**: inside a zone the app drops detections from the feed, log and notifications, and the board stops beeping. Radios keep scanning; a T-Dongle still writes to its SD card.
-- **PCAP**: capture Wi-Fi or BLE; pause and resume. Auto-PCAP records 3–120 s whenever an engine fires. CONFIG → PCAPS lists saved captures.
-- **CONFIG**: APP, WARDRIVE, DETECTIONS, PCAPS, IGNORE, ALERTS, HARDWARE (buzzer, LED, GPS source, offline scan), MESH, FIRMWARE (version, updates).
+- **PCAP**: capture Wi-Fi or BLE; pause and resume. Auto-PCAP records 3–120 s whenever an engine fires. SETTINGS → DATA → PCAPS lists saved captures.
+- **SETTINGS**: APP, SCANNING, RULES (watchlist, signatures, ignore list), ALERTS, NODE (HARDWARE, MESH, FIRMWARE), DATA (ACCOUNTS, PCAPS, EXPORT).
 - **iOS**: live counts on the Lock Screen and Dynamic Island during a session.
 
 <img width="910" alt="Wardrive map" src="https://github.com/user-attachments/assets/cc0d4cc9-6524-41c7-bb04-9cd01dae58b8" />
@@ -138,12 +141,12 @@ Foxhunt picks, in order: the target set in the app, else the last Detector / Flo
 
 - One MANAGER connects to the phone; up to 6 NODES report to it over ESP-NOW on 2.4 GHz channel 1.
 - Nodes join on their own within about 10 s. Single hop: every node must reach the manager directly, about 200 m line of sight.
-- Default is plaintext broadcast. CONFIG → MESH can switch to AES-256-GCM with a shared key.
+- Default is plaintext broadcast. SETTINGS → NODE → MESH can switch to AES-256-GCM with a shared key.
 - A node silent for 45 s drops off and rejoins when back in range.
 - Buzzer, LED, alert, ignore-list, wardrive-radio and Wi-Fi-band settings set on the manager are pushed to every node.
 - Any mix of node boards works under one manager (e.g. T-Dongle-S3 + T-Dongle-C5 + M5StickC PLUS + XIAO).
 - Each node reports its board to the manager; the app shows it on every node row.
-- Fleet update (CONFIG → FIRMWARE) updates every node over Wi-Fi, and each node downloads the image for its own board. Nodes on firmware older than this release do not report a board and take the image for the board picked in the app.
+- Fleet update (SETTINGS → NODE → FIRMWARE) updates every node over Wi-Fi, and each node downloads the image for its own board. Nodes on firmware older than this release do not report a board and take the image for the board picked in the app.
 
 ## Optional GPS module
 
@@ -182,6 +185,8 @@ cd companion && flutter pub get && flutter build apk --release   # or ipa / maco
 - **Will Greenberg** ([flock-you](https://github.com/wgreenberg/flock-you)): XUNTONG `0x09C8` detection.
 - **@NitekryDPaul / OrdoOuroborous** ([@nitekry](https://github.com/nitekry)): promiscuous Flock OUI set and the addr1 receiver technique.
 - **DeFlockJoplin** ([flock-you](https://github.com/DeflockJoplin/flock-you)): wildcard-probe signature.
+- **OffGridPete** ([Fieldwatch](https://github.com/OffGridPete/Fieldwatch)): device signature catalog and classifier.
+- Company and service IDs: [Bluetooth SIG assigned numbers](https://bitbucket.org/bluetooth-SIG/public).
 - OUI sources: [zmattmanz](https://github.com/zmattmanz), [dougborg/AirHound](https://github.com/dougborg), [VirtuallyScott](https://github.com/VirtuallyScott).
 
 ## Disclaimer

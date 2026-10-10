@@ -72,3 +72,5 @@ managed_components/
 
 .dummy/
 sdkconfig.*
+
+logs/

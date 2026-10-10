@@ -367,6 +367,24 @@ class AppTheme {
           return bd;
         }),
       ),
+      segmentedButtonTheme: SegmentedButtonThemeData(
+        style: ButtonStyle(
+          visualDensity: VisualDensity.compact,
+          backgroundColor: WidgetStateProperty.resolveWith(
+            (s) => s.contains(WidgetState.selected) ? accent.withValues(alpha: 0.18) : sf,
+          ),
+          foregroundColor: WidgetStateProperty.resolveWith(
+            (s) => s.contains(WidgetState.selected) ? accent : ts,
+          ),
+          side: WidgetStateProperty.resolveWith(
+            (s) => BorderSide(color: s.contains(WidgetState.selected) ? accent : bd),
+          ),
+          textStyle: const WidgetStatePropertyAll(
+            TextStyle(fontSize: 11, fontWeight: FontWeight.w700, letterSpacing: 1),
+          ),
+          shape: WidgetStatePropertyAll(RoundedRectangleBorder(borderRadius: BorderRadius.circular(8))),
+        ),
+      ),
       bottomNavigationBarTheme: BottomNavigationBarThemeData(
         backgroundColor: sf,
         selectedItemColor: accent,

@@ -67,4 +67,6 @@ flutter:
   assets:
     - assets/oui_vendors.tsv.gz
     - assets/fieldwatch-signatures-v2.json
+    - assets/bt_sig/
+    - assets/classify/
     - assets/icons/

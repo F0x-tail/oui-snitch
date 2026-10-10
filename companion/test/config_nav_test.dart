@@ -101,7 +101,6 @@ void main() {
               CommandBarAction(
                 icon: Icons.filter_alt,
                 label: 'FILTER',
-                badge: 3,
                 active: true,
                 onTap: _noop,
               ),
@@ -212,10 +211,10 @@ void main() {
       expect(find.text(s.label), findsWidgets, reason: 'missing ${s.label}');
     }
 
-    await tester.tap(find.text('FIRMWARE').last);
+    await tester.tap(find.text('DATA').last);
     await tester.pumpAndSettle();
 
-    expect(find.text('FIRMWARE BODY'), findsOneWidget);
+    expect(find.text('DATA BODY'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
 
@@ -242,7 +241,6 @@ void main() {
                     CommandBarAction(
                         icon: Icons.filter_alt,
                         label: 'FILTER',
-                        badge: 2,
                         onTap: _noop),
                     CommandBarAction(
                         icon: Icons.arrow_downward,
@@ -322,6 +320,6 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(tester.takeException(), isNull);
-    expect(find.text('MESH'), findsWidgets);
+    expect(find.text('NODE'), findsWidgets);
   });
 }

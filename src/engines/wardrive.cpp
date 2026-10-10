@@ -476,6 +476,21 @@ static void IRAM_ATTR wardriveWifiCb(void* buf, wifi_promiscuous_pkt_type_t type
         evt.method = METHOD_WIFI_AP;
         memcpy(evt.ext.wardrive.ssid, ssid, 33);
         evt.ext.wardrive.auth_mode = authMode;
+        uint8_t n = 0;
+        for (int o = tagOffset; o + 2 <= len && n + 3 <= sizeof(evt.ext.wardrive.adv);) {
+            uint8_t tl = p[o + 1];
+            if (o + 2 + tl > len) break;
+            if (p[o] == 0xDD && tl >= 3) {
+                const uint8_t* oui = &p[o + 2];
+                bool dup = false;
+                for (uint8_t k = 0; k < n; k += 3) {
+                    if (memcmp(&evt.ext.wardrive.adv[k], oui, 3) == 0) { dup = true; break; }
+                }
+                if (!dup) { memcpy(&evt.ext.wardrive.adv[n], oui, 3); n += 3; }
+            }
+            o += 2 + tl;
+        }
+        evt.ext.wardrive.adv_len = n;
         pushDetectionFromISR(&evt);
     }
 }

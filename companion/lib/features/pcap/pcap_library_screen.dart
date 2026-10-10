@@ -9,7 +9,8 @@ import 'package:oui_spy/core/app_time.dart';
 import 'package:oui_spy/theme/app_theme.dart';
 
 class PcapLibraryScreen extends ConsumerStatefulWidget {
-  const PcapLibraryScreen({super.key});
+  const PcapLibraryScreen({super.key, this.embedded = false});
+  final bool embedded;
 
   @override
   ConsumerState<PcapLibraryScreen> createState() => _PcapLibraryScreenState();
@@ -90,7 +91,10 @@ class _PcapLibraryScreenState extends ConsumerState<PcapLibraryScreen> {
         title: const Text('Delete capture?'),
         content: Text(f.path.split('/').last),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('CANCEL')),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('CANCEL'),
+          ),
           TextButton(
             onPressed: () => Navigator.pop(ctx, true),
             style: TextButton.styleFrom(foregroundColor: AppTheme.error),
@@ -103,9 +107,9 @@ class _PcapLibraryScreenState extends ConsumerState<PcapLibraryScreen> {
     final success = await _tryDelete(f);
     if (!mounted) return;
     if (!success) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Delete failed')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Delete failed')));
     }
     _refresh();
   }
@@ -120,7 +124,10 @@ class _PcapLibraryScreenState extends ConsumerState<PcapLibraryScreen> {
         title: const Text('Delete all captures?'),
         content: Text('${list.length} file(s) will be deleted.'),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('CANCEL')),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('CANCEL'),
+          ),
           TextButton(
             onPressed: () => Navigator.pop(ctx, true),
             style: TextButton.styleFrom(foregroundColor: AppTheme.error),
@@ -147,27 +154,32 @@ class _PcapLibraryScreenState extends ConsumerState<PcapLibraryScreen> {
   String _humanBytes(int n) {
     if (n < 1024) return '${n}B';
     if (n < 1024 * 1024) return '${(n / 1024).toStringAsFixed(1)}KB';
-    if (n < 1024 * 1024 * 1024) return '${(n / 1024 / 1024).toStringAsFixed(2)}MB';
+    if (n < 1024 * 1024 * 1024) {
+      return '${(n / 1024 / 1024).toStringAsFixed(2)}MB';
+    }
     return '${(n / 1024 / 1024 / 1024).toStringAsFixed(2)}GB';
   }
 
   @override
   Widget build(BuildContext context) {
     final t = AppTheme.of(context);
+    final actions = [
+      IconButton(icon: const Icon(Icons.refresh), onPressed: _refresh),
+      IconButton(
+        icon: const Icon(Icons.delete_sweep, color: AppTheme.error),
+        tooltip: 'Delete all',
+        onPressed: _confirmDeleteAll,
+      ),
+    ];
     return Scaffold(
       backgroundColor: t.background,
-      appBar: AppBar(
-        backgroundColor: t.background,
-        title: const Text('SAVED PCAPS'),
-        actions: [
-          IconButton(icon: const Icon(Icons.refresh), onPressed: _refresh),
-          IconButton(
-            icon: const Icon(Icons.delete_sweep, color: AppTheme.error),
-            tooltip: 'Delete all',
-            onPressed: _confirmDeleteAll,
-          ),
-        ],
-      ),
+      appBar: widget.embedded
+          ? null
+          : AppBar(
+              backgroundColor: t.background,
+              title: const Text('SAVED PCAPS'),
+              actions: actions,
+            ),
       body: Container(
         color: t.background,
         child: FutureBuilder<List<_PcapEntry>>(
@@ -177,74 +189,114 @@ class _PcapLibraryScreenState extends ConsumerState<PcapLibraryScreen> {
               return const Center(child: CircularProgressIndicator());
             }
             final list = snap.data ?? const [];
+            final header = widget.embedded
+                ? Row(
+                    mainAxisAlignment: MainAxisAlignment.end,
+                    children: actions,
+                  )
+                : const SizedBox.shrink();
             if (list.isEmpty) {
-              return Center(
-                child: Text('No captures yet',
-                    style: TextStyle(color: t.textDim, fontSize: 13)),
+              return Column(
+                children: [
+                  header,
+                  Expanded(
+                    child: Center(
+                      child: Text(
+                        'No captures yet',
+                        style: TextStyle(color: t.textDim, fontSize: 13),
+                      ),
+                    ),
+                  ),
+                ],
               );
             }
-            return ListView.separated(
-              padding: const EdgeInsets.symmetric(vertical: 8),
-              itemCount: list.length,
-              separatorBuilder: (_, _) => Divider(height: 1, color: t.surface),
-              itemBuilder: (context, i) {
-                final e = list[i];
-                final name = e.file.path.split('/').last;
-                final isBle = name.contains('_ble_');
-                final active = _isActiveCapture(e.file);
-                return ListTile(
-                  leading: Icon(
-                    isBle ? Icons.bluetooth : Icons.wifi,
-                    color: isBle ? const Color(0xFFB44AFF) : const Color(0xFF4AB4FF),
-                  ),
-                  title: Row(
-                    children: [
-                      Expanded(
-                        child: Text(
-                          name,
-                          style: TextStyle(
-                              color: t.textPrimary,
-                              fontSize: 12,
-                              fontFamily: 'monospace'),
+            return Column(
+              children: [
+                header,
+                Expanded(
+                  child: ListView.separated(
+                    padding: const EdgeInsets.symmetric(vertical: 8),
+                    itemCount: list.length,
+                    separatorBuilder: (_, _) =>
+                        Divider(height: 1, color: t.surface),
+                    itemBuilder: (context, i) {
+                      final e = list[i];
+                      final name = e.file.path.split('/').last;
+                      final isBle = name.contains('_ble_');
+                      final active = _isActiveCapture(e.file);
+                      return ListTile(
+                        leading: Icon(
+                          isBle ? Icons.bluetooth : Icons.wifi,
+                          color: isBle
+                              ? const Color(0xFFB44AFF)
+                              : const Color(0xFF4AB4FF),
                         ),
-                      ),
-                      if (active)
-                        Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                          decoration: BoxDecoration(
-                            color: AppTheme.success.withValues(alpha: 0.2),
-                            borderRadius: BorderRadius.circular(4),
-                          ),
-                          child: const Text(
-                            'LIVE',
-                            style: TextStyle(
-                                color: AppTheme.success,
-                                fontSize: 9,
-                                fontWeight: FontWeight.bold,
-                                letterSpacing: 1.5),
-                          ),
+                        title: Row(
+                          children: [
+                            Expanded(
+                              child: Text(
+                                name,
+                                style: TextStyle(
+                                  color: t.textPrimary,
+                                  fontSize: 12,
+                                  fontFamily: 'monospace',
+                                ),
+                              ),
+                            ),
+                            if (active)
+                              Container(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 6,
+                                  vertical: 2,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: AppTheme.success.withValues(
+                                    alpha: 0.2,
+                                  ),
+                                  borderRadius: BorderRadius.circular(4),
+                                ),
+                                child: const Text(
+                                  'LIVE',
+                                  style: TextStyle(
+                                    color: AppTheme.success,
+                                    fontSize: 9,
+                                    fontWeight: FontWeight.bold,
+                                    letterSpacing: 1.5,
+                                  ),
+                                ),
+                              ),
+                          ],
                         ),
-                    ],
+                        subtitle: Text(
+                          '${_humanBytes(e.size)}  ·  ${AppTime.dateTimeSeconds(e.modified)}',
+                          style: TextStyle(color: t.textDim, fontSize: 11),
+                        ),
+                        trailing: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            IconButton(
+                              icon: Icon(
+                                Icons.ios_share,
+                                size: 18,
+                                color: t.textPrimary,
+                              ),
+                              onPressed: () => _share(e.file),
+                            ),
+                            IconButton(
+                              icon: const Icon(
+                                Icons.delete_outline,
+                                size: 18,
+                                color: AppTheme.error,
+                              ),
+                              onPressed: () => _confirmDelete(e.file),
+                            ),
+                          ],
+                        ),
+                      );
+                    },
                   ),
-                  subtitle: Text(
-                    '${_humanBytes(e.size)}  ·  ${AppTime.dateTimeSeconds(e.modified)}',
-                    style: TextStyle(color: t.textDim, fontSize: 11),
-                  ),
-                  trailing: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      IconButton(
-                        icon: Icon(Icons.ios_share, size: 18, color: t.textPrimary),
-                        onPressed: () => _share(e.file),
-                      ),
-                      IconButton(
-                        icon: const Icon(Icons.delete_outline, size: 18, color: AppTheme.error),
-                        onPressed: () => _confirmDelete(e.file),
-                      ),
-                    ],
-                  ),
-                );
-              },
+                ),
+              ],
             );
           },
         ),

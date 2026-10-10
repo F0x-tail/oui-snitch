@@ -10,7 +10,10 @@ import 'package:oui_spy/core/wardrive_state.dart';
 import 'package:oui_spy/core/wigle/wigle_api.dart';
 import 'package:oui_spy/core/wigle/wigle_provider.dart';
 import 'package:oui_spy/core/wdgwars/wdgwars_provider.dart';
+import 'package:oui_spy/features/config/config_menu_state.dart';
+import 'package:oui_spy/features/detections/detections_screen.dart';
 import 'package:oui_spy/features/home/engine_card.dart';
+import 'package:oui_spy/features/wardrive/session_launch.dart';
 import 'package:oui_spy/features/home/status_bar.dart';
 import 'package:oui_spy/theme/app_theme.dart';
 
@@ -405,18 +408,9 @@ class _ConnectedView extends ConsumerWidget {
           _SummaryStrip(state: state),
           SizedBox(height: pad),
 
-          _SectionLabel(label: 'WARDRIVE', color: Engine.wardrive.color),
+          _SectionLabel(label: 'SESSION', color: Engine.wardrive.color),
           const SizedBox(height: 6),
-          EngineCard(
-            engine: Engine.wardrive,
-            detectionCount: state.countForEngine(Engine.wardrive),
-            isActive: _isEngineOn(Engine.wardrive, state, wd),
-            engineState: state.getEngineState(Engine.wardrive),
-            lastDetection: state.lastDetectionTime[Engine.wardrive],
-            rate: state.detectionRate(Engine.wardrive),
-            size: CardSize.hero,
-            nodeCount: 0,
-          ),
+          const SessionBar(),
 
           SizedBox(height: pad),
 
@@ -491,14 +485,7 @@ class _ConnectedView extends ConsumerWidget {
   }
 
   bool _isEngineOn(Engine engine, AppState state, WardriveController wd) {
-    if (wd.isActive) {
-      if (engine == Engine.wardrive) return true;
-      final activeEngines = wd.activeEngines;
-      if (activeEngines.contains(engine)) return true;
-      if (wd.includesFlock) {
-        if (engine == Engine.flockBle || engine == Engine.flockWifi) return true;
-      }
-    }
+    if (wd.isActive && (engine == Engine.wardrive || wd.ownsEngine(engine))) return true;
     return state.isEngineActive(engine);
   }
 
@@ -595,13 +582,9 @@ class _SummaryStrip extends ConsumerWidget {
                   .where((id) => id != selfId && !state.isManagerNode(id))
                   .length;
               return InkWell(
-                onTap: () async {
-                  if (state.meshEnabled) {
-                    await state.disableMesh();
-                  } else {
-                    await state.enableMesh(
-                        encryption: false, peerMacs: const []);
-                  }
+                onTap: () {
+                  ref.read(configSectionRequestProvider.notifier).state = 'NODE';
+                  context.go('/config');
                 },
                 borderRadius: BorderRadius.circular(6),
                 child: Padding(
@@ -897,7 +880,9 @@ class _SpoolImportBannerState extends State<_SpoolImportBanner> {
       padding: EdgeInsets.fromLTRB(widget.pad, widget.pad, widget.pad, 0),
       child: GestureDetector(
         onTap: () {
-          context.go('/feed');
+          ProviderScope.containerOf(context, listen: false).read(detectionsViewProvider.notifier).state =
+              DetectionsView.live;
+          context.go('/detections');
           _dismiss();
         },
         child: _SpoolBanner(color: color, icon: icon, message: message),
@@ -1010,7 +995,10 @@ class _WardriveAccountsStrip extends ConsumerWidget {
       padding: const EdgeInsets.only(top: 4),
       child: GestureDetector(
         behavior: HitTestBehavior.opaque,
-        onTap: () => context.go('/config'),
+        onTap: () {
+          ProviderScope.containerOf(context, listen: false).read(configSectionRequestProvider.notifier).state = 'DATA';
+          context.go('/config');
+        },
         child: Container(
           width: double.infinity,
           padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),

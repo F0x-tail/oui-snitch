@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:oui_spy/core/app_state.dart';
-import 'package:oui_spy/core/ble/ble_manager.dart';
+import 'package:oui_spy/core/engine_control.dart';
 import 'package:oui_spy/core/drone_grouping.dart';
 import 'package:oui_spy/core/models/engine.dart';
 import 'package:oui_spy/core/radio_classifier.dart';
@@ -29,15 +29,7 @@ class SkySpyScreen extends ConsumerWidget {
             scale: 0.7,
             child: Switch(
               value: isActive,
-              onChanged: (enable) {
-                final ble = ref.read(bleManagerProvider);
-                if (enable) {
-                  ble.enableEngine(Engine.skySpy,
-                      radio: ref.read(appStateProvider).engineRadio[Engine.skySpy]);
-                } else {
-                  ble.disableEngine(Engine.skySpy);
-                }
-              },
+              onChanged: (enable) => setEngineEnabled(ref, Engine.skySpy, enable),
               activeTrackColor: AppTheme.skySpy.withValues(alpha: 0.3),
               activeThumbColor: AppTheme.skySpy,
             ),

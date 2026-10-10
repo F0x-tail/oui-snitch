@@ -188,6 +188,8 @@ typedef struct {
     uint8_t auth;
     uint8_t namelen;
     char    name[MESH_DET_REC_NAME_MAX];
+    uint8_t ielen;
+    uint8_t ie[MESH_DET_REC_IE_MAX];
 } DetRec;
 static QueueHandle_t detRecQueue = NULL;
 static void flushDetBatches(void);
@@ -1061,7 +1063,7 @@ static void meshProcessRxPacket(const uint8_t* macAddr, const uint8_t* data, int
     }
 
     if (plainLen >= offsetof(MeshDetectionBatchPacket, data) &&
-        plainBuf[0] == MESH_PKT_DETECTION_BATCH) {
+        (plainBuf[0] == MESH_PKT_DETECTION_BATCH || plainBuf[0] == MESH_PKT_DETECTION_BATCH_IE)) {
 #ifdef OUISPY_ROLE_MANAGER
         MeshDetectionBatchPacket b;
         size_t cp = plainLen <= sizeof(b) ? plainLen : sizeof(b);
@@ -1069,11 +1071,18 @@ static void meshProcessRxPacket(const uint8_t* macAddr, const uint8_t* data, int
         if (memcmp(b.source_node_id, localNodeId, MESH_NODE_ID_LEN) == 0) return;
         size_t dataLen = plainLen - offsetof(MeshDetectionBatchPacket, data);
         if (dataLen > sizeof(b.data)) dataLen = sizeof(b.data);
+        const bool withIe = b.pkt_type == MESH_PKT_DETECTION_BATCH_IE;
         size_t off = 0; uint32_t got = 0;
         for (uint8_t i = 0; i < b.count && off + 11 <= dataLen; i++) {
             const uint8_t* p = b.data + off;
             uint8_t nl = p[10];
             if (off + 11 + nl > dataLen) break;
+            uint8_t il = 0;
+            if (withIe) {
+                if (off + 12 + nl > dataLen) break;
+                il = p[11 + nl];
+                if (off + 12 + nl + il > dataLen) break;
+            }
             DetectionEvent evt = {};
             memcpy(evt.source_node_id, b.source_node_id, MESH_NODE_ID_LEN);
             evt.engine_id = ENGINE_WARDRIVE;
@@ -1091,12 +1100,18 @@ static void meshProcessRxPacket(const uint8_t* macAddr, const uint8_t* data, int
                              ? nl : sizeof(evt.ext.wardrive.ssid) - 1;
                 memcpy(evt.ext.wardrive.ssid, p + 11, c);
             }
+            if (il && evt.method == METHOD_WIFI_AP) {
+                uint8_t c = il < sizeof(evt.ext.wardrive.adv) ? il : sizeof(evt.ext.wardrive.adv);
+                c -= c % 3;
+                memcpy(evt.ext.wardrive.adv, p + 12 + nl, c);
+                evt.ext.wardrive.adv_len = c;
+            }
 #ifdef OUISPY_NETCOUNT
             if (evt.channel != 0) ncRecordWifiMac(evt.mac);
 #else
             pushDetection(&evt);
 #endif
-            off += 11 + nl;
+            off += 11 + nl + (withIe ? 1 + il : 0);
             got++;
         }
         recordLiveSeen(b.source_node_id);
@@ -1700,6 +1715,13 @@ void meshEnqueueWardriveRecord(const DetectionEvent* evt) {
     size_t nl = strnlen(nm, MESH_DET_REC_NAME_MAX);
     r.namelen = (uint8_t)nl;
     memcpy(r.name, nm, nl);
+    if (evt->engine_id == ENGINE_WARDRIVE && evt->method == METHOD_WIFI_AP) {
+        uint8_t il = evt->ext.wardrive.adv_len;
+        if (il > MESH_DET_REC_IE_MAX) il = MESH_DET_REC_IE_MAX;
+        il -= il % 3;
+        r.ielen = il;
+        memcpy(r.ie, evt->ext.wardrive.adv, il);
+    }
 
     if (xQueueSend(detRecQueue, &r, 0) == pdTRUE && meshTxTaskHandle)
         xTaskNotifyGive(meshTxTaskHandle);
@@ -1716,12 +1738,12 @@ static void flushDetBatches(void) {
     int frames = 0;
     while (have && frames < MESH_DET_BATCH_MAX_FRAMES) {
         MeshDetectionBatchPacket pkt;
-        pkt.pkt_type = MESH_PKT_DETECTION_BATCH;
+        pkt.pkt_type = MESH_PKT_DETECTION_BATCH_IE;
         memcpy(pkt.source_node_id, localNodeId, MESH_NODE_ID_LEN);
         pkt.count = 0;
         size_t off = 0;
         while (have) {
-            size_t recLen = 11 + r.namelen;
+            size_t recLen = 12 + r.namelen + r.ielen;
             if (off + recLen > MESH_DET_BATCH_BUDGET || pkt.count >= 255) break;
             uint8_t* p = pkt.data + off;
             memcpy(p, r.mac, 6);
@@ -1731,6 +1753,8 @@ static void flushDetBatches(void) {
             p[9]  = r.auth;
             p[10] = r.namelen;
             memcpy(p + 11, r.name, r.namelen);
+            p[11 + r.namelen] = r.ielen;
+            memcpy(p + 12 + r.namelen, r.ie, r.ielen);
             off += recLen;
             pkt.count++;
             have = (xQueueReceive(detRecQueue, &r, 0) == pdTRUE);

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:oui_spy/core/notifications/class_alerts.dart';
 import 'package:oui_spy/core/notifications/notification_service.dart';
 import 'package:oui_spy/features/config/widgets/config_widgets.dart';
 import 'package:oui_spy/theme/app_theme.dart';
@@ -82,6 +83,30 @@ class NotificationSettingsBody extends ConsumerWidget {
           value: notif.foxhuntEnabled,
           onChanged: notif.setFoxhuntEnabled,
         ),
+
+        const SizedBox(height: 16),
+        const ConfigSectionHeader(label: 'CLASSIFIED DEVICE ALERTS'),
+        Padding(
+          padding: const EdgeInsets.only(bottom: 8, left: 2),
+          child: Text(
+            'Alert when any nearby device is classified as one of these. No watchlist entry needed.',
+            style: TextStyle(color: AppTheme.of(context).textDim, fontSize: 11),
+          ),
+        ),
+        for (final a in ClassAlert.values)
+          ConfigToggleRow(
+            icon: switch (a) {
+              ClassAlert.cameras => Icons.videocam_outlined,
+              ClassAlert.lawEnforcement => Icons.local_police_outlined,
+              ClassAlert.drones => Icons.flight,
+              ClassAlert.glasses => Icons.visibility_outlined,
+              ClassAlert.trackers => Icons.sell_outlined,
+            },
+            label: a.label,
+            color: AppTheme.accent,
+            value: notif.classAlerts.contains(a),
+            onChanged: (v) => notif.setClassAlert(a, v),
+          ),
 
         const SizedBox(height: 16),
         const ConfigSectionHeader(label: 'WARDRIVE'),

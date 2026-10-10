@@ -12,14 +12,11 @@ class ConfigSection {
 
 const kConfigSections = <ConfigSection>[
   ConfigSection('APP', Icons.tune),
-  ConfigSection('WARDRIVE', Icons.route),
-  ConfigSection('DETECTIONS', Icons.radar),
-  ConfigSection('PCAPS', Icons.folder_zip),
-  ConfigSection('IGNORE', Icons.block),
+  ConfigSection('SCANNING', Icons.radar),
+  ConfigSection('RULES', Icons.rule),
   ConfigSection('ALERTS', Icons.notifications_active),
-  ConfigSection('HARDWARE', Icons.memory),
-  ConfigSection('MESH', Icons.hub),
-  ConfigSection('FIRMWARE', Icons.system_update_alt),
+  ConfigSection('NODE', Icons.memory),
+  ConfigSection('DATA', Icons.storage),
 ];
 
 class ConfigNav extends InheritedWidget {

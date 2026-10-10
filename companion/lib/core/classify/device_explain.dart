@@ -1,4 +1,7 @@
 import 'adv_decoder.dart';
+import 'antihunter_class.dart';
+import 'bt_sig_registry.dart';
+import 'vendor_class.dart';
 import 'observation.dart';
 
 enum Confidence { high, medium, low }
@@ -7,7 +10,8 @@ class Guess {
   final String headline;
   final String because;
   final Confidence confidence;
-  const Guess(this.headline, this.because, this.confidence);
+  final String bucket;
+  const Guess(this.headline, this.because, this.confidence, {this.bucket = ''});
 }
 
 class _Hint {
@@ -233,10 +237,14 @@ final List<_SigRule> _sigRules = [
 ];
 
 class DeviceExplain {
-  static Guess guess(Observation device, List<String> signatureNames) {
+  static Guess guess(Observation device, List<String> signatureNames, {String? vendor}) {
+    final vh = VendorClass.hint(device, vendor);
     final hints = <_Hint>[
+      if (vh != null) _Hint(vh.bucket, vh.label, vh.reason, vh.weight),
       ..._uuidHints([...device.serviceUuids, ...device.serviceData.map((s) => s.uuid)]),
       for (final h in AdvPayloadDecoder.roleHints(device)) _Hint(h.bucket, h.label, h.reason, h.weight),
+      for (final h in AntiHunterClass.hints(device)) _Hint(h.bucket, h.label, h.reason, h.weight),
+      for (final h in BtSigRegistry.hints(device)) _Hint(h.bucket, h.label, h.reason, h.weight),
       ..._signatureHints(signatureNames),
       if (device.kind == RadioKind.wifi) ..._wifiHints(device, signatureNames),
     ];
@@ -272,13 +280,14 @@ class DeviceExplain {
     };
     return Guess(
       '$hedge ${best.label}',
-      '${support.join(' ')} This is what the device is advertising, not a visual ID.',
+      support.join(' '),
       confidence,
+      bucket: best.bucket,
     );
   }
 
   static String? listLabel(Observation device, {List<String> signatureNames = const [], String? vendor}) {
-    final g = guess(device, signatureNames);
+    final g = guess(device, signatureNames, vendor: vendor);
     final h = g.headline.toLowerCase();
     final generic = h.contains('bluetooth le advertiser') || h.contains('wi-fi access point');
     final core = generic ? null : _tidyHeadline(g.headline);
@@ -305,30 +314,19 @@ class DeviceExplain {
   }
 
   static String flagsExplain(int flags) => [
-    if (flags & 0x01 != 0) 'Limited-discoverable: briefly looking for a nearby connection.',
-    if (flags & 0x02 != 0) 'Discoverable: other BLE devices can find it.',
-    if (flags & 0x04 != 0)
-      'BLE-only: no classic Bluetooth (headsets/file-send radio).'
-    else
-      'May also do classic Bluetooth (BR/EDR) as well as BLE.',
-    if (flags & 0x08 != 0 || flags & 0x10 != 0) 'Dual-mode chip: BLE and classic can run together.',
-  ].join(' ');
+    if (flags & 0x01 != 0) 'Pairing now' else if (flags & 0x02 != 0) 'Discoverable',
+    if (flags & 0x04 != 0) 'Bluetooth LE only' else 'Bluetooth LE + Classic',
+  ].join(' · ');
 
   static String addressExplain(Observation device, {String? addressType}) {
     final local = (int.tryParse(MacUtil.normalize(device.mac).split(':').first, radix: 16) ?? 0) & 0x02 != 0;
     final type = addressType?.toLowerCase();
-    if (device.kind == RadioKind.wifi && device.randomized) {
-      return 'Locally administered BSSID. Vehicle, mesh, and guest APs often keep this address. Not a rotating phone MAC.';
-    }
-    if (local && !device.randomized) {
-      return 'Locally administered address. The local bit is set, so this is not an IEEE factory assignment.';
-    }
-    if (type == 'public' && !device.randomized) return 'Public factory address (stable, IEEE-assigned).';
-    if (type == 'random' || device.randomized) {
-      return 'Random / privacy address. The MAC can change, so this is not a lasting identity.';
-    }
-    if (type == 'anonymous') return 'Anonymous: the stack hid the address.';
-    return [?addressType, 'Universal IEEE address (stable OUI).'].join(' · ');
+    if (device.kind == RadioKind.wifi && device.randomized) return 'Custom · fixed';
+    if (local && !device.randomized) return 'Custom · fixed';
+    if (type == 'public' && !device.randomized) return 'Factory · fixed';
+    if (type == 'random' || device.randomized) return 'Random · changes over time';
+    if (type == 'anonymous') return 'Hidden';
+    return 'Factory · fixed';
   }
 
   static bool rssiMeasured(int rssi) => rssi >= -127 && rssi <= 126;
@@ -378,33 +376,33 @@ class DeviceExplain {
         0x1812 => const _Hint(
           'hid',
           'a keyboard, mouse, or gamepad',
-          'It offers the HID (human-interface) service.',
+          'It offers the Bluetooth service keyboards, mice and controllers use.',
           5,
         ),
         0x1108 || 0x1112 || 0x111E || 0x110B || 0x110A || 0x1131 || 0x1203 => const _Hint(
           'audio-personal',
           'headphones, a headset, or a speaker',
-          'It offers a classic audio / headset service.',
+          'It offers Bluetooth audio, like headphones and speakers.',
           5,
         ),
         0x184E || 0x184F || 0x1850 || 0x1851 => const _Hint(
           'audio-personal',
           'LE Audio earbuds or a speaker',
-          'It offers Bluetooth LE Audio services.',
+          'It offers newer Bluetooth LE Audio, used by recent earbuds and speakers.',
           6,
         ),
-        0x180D => const _Hint('health', 'a heart-rate monitor', 'It offers the Heart Rate service.', 6),
-        0x1810 => const _Hint('health', 'a blood-pressure monitor', 'It offers the Blood Pressure service.', 6),
-        0x181A => const _Hint('sensor', 'an environmental sensor', 'It offers Environmental Sensing.', 4),
+        0x180D => const _Hint('health', 'a heart-rate monitor', 'It shares heart-rate readings over Bluetooth.', 6),
+        0x1810 => const _Hint('health', 'a blood-pressure monitor', 'It shares blood-pressure readings over Bluetooth.', 6),
+        0x181A => const _Hint('sensor', 'an environmental sensor', 'It shares temperature or other environment readings over Bluetooth.', 4),
         0xFE2C => const _Hint(
           'audio-personal',
           'earbuds or a speaker',
-          'Google Fast Pair is present (common on buds and speakers).',
+          'It sends a Google Fast Pair signal, used by earbuds and speakers.',
           4,
         ),
-        0xFD5A => const _Hint('tag', 'a Samsung SmartTag', 'SmartTag service UUID.', 7),
-        0xFD44 => const _Hint('tag', 'an Apple Find My accessory', 'Find My related UUID.', 6),
-        0xFEED || 0xFEDD => const _Hint('tag', 'a Tile tracker', 'Tile service UUID.', 7),
+        0xFD5A => const _Hint('tag', 'a Samsung SmartTag', 'It sends the Bluetooth signal Samsung SmartTags use.', 7),
+        0xFD44 => const _Hint('tag', 'an Apple Find My accessory', 'It sends a signal used by Apple Find My accessories.', 6),
+        0xFEED || 0xFEDD => const _Hint('tag', 'a Tile tracker', 'It sends the Bluetooth signal Tile trackers use.', 7),
         _ => null,
       };
       if (h != null) out.add(h);
@@ -446,17 +444,17 @@ class DeviceExplain {
     if (name.startsWith('direct-')) {
       return [
         specific
-            ? const _Hint('wifi-direct', 'a Wi-Fi Direct access point', 'SSID starts with DIRECT-.', 4)
-            : const _Hint('wifi-direct', 'a phone or TV using Wi-Fi Direct', 'SSID starts with DIRECT-.', 6),
+            ? const _Hint('wifi-direct', 'a Wi-Fi Direct access point', 'Its network name starts with "DIRECT-", which Wi-Fi Direct devices use.', 4)
+            : const _Hint('wifi-direct', 'a phone or TV using Wi-Fi Direct', 'Its network name starts with "DIRECT-", which Wi-Fi Direct devices use.', 6),
       ];
     }
     if (name.startsWith('android-') || name.contains('hotspot')) {
-      return specific ? const [] : const [_Hint('hotspot', 'a phone hotspot', 'SSID looks like a phone hotspot.', 6)];
+      return specific ? const [] : const [_Hint('hotspot', 'a phone hotspot', 'Its network name looks like a phone hotspot.', 6)];
     }
     if (device.hiddenSsid) {
-      return const [_Hint('ap', 'a hidden Wi-Fi access point', 'SSID is hidden; the radio is still beaconing.', 4)];
+      return const [_Hint('ap', 'a hidden Wi-Fi access point', 'It hides its network name but is still broadcasting.', 4)];
     }
-    return specific ? const [] : const [_Hint('ap', 'a Wi-Fi access point', 'Beaconing access point.', 3)];
+    return specific ? const [] : const [_Hint('ap', 'a Wi-Fi access point', 'It is a Wi-Fi network broadcasting its name.', 3)];
   }
 
   static int? _uuid16(String uuid) {

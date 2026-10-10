@@ -259,7 +259,6 @@ class _FeedScreenState extends ConsumerState<FeedScreen> {
       return byTime;
     });
 
-    final gap = barGap(context);
     final hasQuery = _searchQuery.trim().isNotEmpty;
 
     return Scaffold(
@@ -268,24 +267,16 @@ class _FeedScreenState extends ConsumerState<FeedScreen> {
         bottom: false,
         child: Column(
           children: [
-            Padding(
-              padding: EdgeInsets.fromLTRB(gap * 2, gap * 1.5, gap * 2, gap * 1.5),
-              child: Row(
-                children: [
-                  Text('FEED', style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                        letterSpacing: 3, color: t.textDim, fontWeight: FontWeight.w700,
-                      )),
-                  const Spacer(),
-                  if (state.isManagerConnected && sourceNodes.isNotEmpty) ...[
-                    Icon(Icons.hub, size: barIconSize(context) * 0.8,
-                        color: AppTheme.warning),
-                    SizedBox(width: gap * 0.5),
-                  ],
-                  Text('${state.totalDetections}', style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                        color: AppTheme.accent, fontFamily: 'monospace', fontWeight: FontWeight.w700,
-                      )),
-                ],
-              ),
+            CommandHeader(
+              title: 'FEED',
+              count: _activeFilterCount > 0 || hasQuery
+                  ? '${filtered.length}/${searchScope.length}'
+                  : '${state.totalDetections}',
+              chips: _filterChips(t, state.labelForNode),
+              indicators: [
+                if (state.isManagerConnected && sourceNodes.isNotEmpty)
+                  Icon(Icons.hub, size: barIconSize(context) * 0.8, color: AppTheme.warning),
+              ],
             ),
             if (_searchOpen)
               CommandSearchField(
@@ -294,9 +285,6 @@ class _FeedScreenState extends ConsumerState<FeedScreen> {
                 onChanged: _onSearchChanged,
                 onClose: _toggleSearch,
               ),
-            if (_activeFilterCount > 0 || hasQuery)
-              _buildFilterStrip(t, filtered.length, searchScope.length,
-                  state.labelForNode),
             const Divider(height: 1),
             if (_showStats && filtered.length >= 2)
               FeedStatsHeader(detections: filtered),
@@ -322,7 +310,6 @@ class _FeedScreenState extends ConsumerState<FeedScreen> {
                 CommandBarAction(
                   icon: Icons.filter_alt,
                   label: 'FILTER',
-                  badge: _activeFilterCount,
                   active: _activeFilterCount > 0,
                   onTap: () => _openFilterSheet(sourceNodes, state.labelForNode),
                 ),
@@ -347,14 +334,8 @@ class _FeedScreenState extends ConsumerState<FeedScreen> {
     );
   }
 
-  Widget _buildFilterStrip(
-    ResolvedTheme t,
-    int shown,
-    int total,
-    String Function(String) labelForNode,
-  ) {
-    final gap = barGap(context);
-    final chips = <Widget>[
+  List<Widget> _filterChips(ResolvedTheme t, String Function(String) labelForNode) {
+    return <Widget>[
       if (!_allEnginesActive)
         CommandActiveChip(
           label: _engineFilterLabel(),
@@ -373,41 +354,12 @@ class _FeedScreenState extends ConsumerState<FeedScreen> {
           color: AppTheme.accent,
           onClear: _toggleSearch,
         ),
+      if (_searchQuery.trim().isNotEmpty)
+        Text(
+          _dbSearching ? 'HISTORY…' : 'ALL HISTORY',
+          style: barLabelStyle(context, _dbSearching ? t.textDim : AppTheme.accent, bold: false),
+        ),
     ];
-
-    return Padding(
-      padding: EdgeInsets.fromLTRB(gap * 1.5, gap * 0.5, gap * 1.5, gap * 0.5),
-      child: Row(
-        children: [
-          Text('$shown / $total',
-              style: barLabelStyle(context, t.textDim, bold: false)),
-          if (_searchQuery.trim().isNotEmpty) ...[
-            SizedBox(width: gap * 0.75),
-            Text(
-              _dbSearching ? 'HISTORY…' : 'ALL HISTORY',
-              style: barLabelStyle(
-                  context, _dbSearching ? t.textDim : AppTheme.accent,
-                  bold: false),
-            ),
-          ],
-          SizedBox(width: gap),
-          Expanded(
-            child: SingleChildScrollView(
-              scrollDirection: Axis.horizontal,
-              reverse: true,
-              child: Row(
-                children: [
-                  for (final c in chips) ...[
-                    SizedBox(width: gap * 0.75),
-                    c,
-                  ],
-                ],
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
   }
 
   Future<void> _openFilterSheet(
@@ -562,60 +514,23 @@ class _FeedScreenState extends ConsumerState<FeedScreen> {
     );
   }
 
-  Future<void> _openSortSheet() {
-    return showCommandSheet<void>(
-      context: context,
-      builder: (ctx) => StatefulBuilder(
-        builder: (ctx, setSheet) => CommandSheet(
-          title: 'SORT',
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              CommandSheetGroup(
-                label: 'ORDER BY',
-                child: Wrap(
-                  spacing: barGap(ctx),
-                  runSpacing: barGap(ctx),
-                  children: [
-                    for (final m in FeedMetric.values)
-                      CommandChip(
-                        label: m.label,
-                        selected: _sortMetric == m,
-                        color: pillColor(m.index),
-                        onTap: () {
-                          setState(() {
-                            if (_sortMetric == m) {
-                              _sortAscending = !_sortAscending;
-                            } else {
-                              _sortMetric = m;
-                              _sortAscending = false;
-                            }
-                          });
-                          setSheet(() {});
-                        },
-                      ),
-                  ],
-                ),
-              ),
-              const Divider(height: 1),
-              CommandSheetTile(
-                icon: _sortAscending
-                    ? Icons.arrow_upward
-                    : Icons.arrow_downward,
-                label: _sortAscending ? 'ASCENDING' : 'DESCENDING',
-                subtitle: _sortDirectionHint,
-                color: AppTheme.accent,
-                onTap: () {
-                  setState(() => _sortAscending = !_sortAscending);
-                  setSheet(() {});
-                },
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
+  Future<void> _openSortSheet() => showSortSheet<FeedMetric>(
+        context: context,
+        options: FeedMetric.values,
+        label: (m) => m.label,
+        current: () => _sortMetric,
+        ascending: () => _sortAscending,
+        hint: () => _sortDirectionHint,
+        onPick: (m) => setState(() {
+          if (_sortMetric == m) {
+            _sortAscending = !_sortAscending;
+          } else {
+            _sortMetric = m;
+            _sortAscending = false;
+          }
+        }),
+        onToggleDirection: () => setState(() => _sortAscending = !_sortAscending),
+      );
 
   String get _sortDirectionHint => switch ((_sortMetric, _sortAscending)) {
         (FeedMetric.time, true) => 'Oldest first',

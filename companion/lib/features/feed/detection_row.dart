@@ -434,6 +434,18 @@ class _DetailSummary extends ConsumerWidget {
     }
     rows.add(_detailRow(context, 'Engine', detection.engine.label));
     rows.add(_detailRow(context, 'Method', methodLabel(detection.method)));
+    final why = detection.detector?.filterDescription?.trim() ?? '';
+    if (why.isNotEmpty) {
+      rows.add(_detailRow(
+        context,
+        switch (detection.method) {
+          'probe_ssid' => 'Probing for',
+          'ble_watchlist' || 'wifi_watchlist' => 'Watchlist',
+          _ => 'Matched',
+        },
+        why,
+      ));
+    }
     rows.add(_detailRow(context, 'RSSI', '${detection.rssi} dBm'));
     if (detection.channel > 0) {
       rows.add(_detailRow(context, 'Channel', '${detection.channel}'));
@@ -778,6 +790,16 @@ List<String> _flockSignalLabels(FlockExtension? flock) {
   ];
 }
 
+String detectorTitle(Detection d) {
+  final why = d.detector?.filterDescription?.trim() ?? '';
+  return switch (d.method) {
+    'probe_ssid' => why.isEmpty ? 'Wi-Fi probe request' : 'Probe request for "$why"',
+    'ble_watchlist' || 'wifi_watchlist' => why.isEmpty ? 'Watchlist hit' : why,
+    'deauth_storm' => 'Deauth / disassoc attack',
+    _ => why.isEmpty ? methodLabel(d.method) : why,
+  };
+}
+
 String methodLabel(String method) => switch (method) {
   'oui_addr1' => 'ADDR1 (DST)',
   'oui_addr2' => 'ADDR2 (SRC)',
@@ -790,6 +812,13 @@ String methodLabel(String method) => switch (method) {
   'raven_uuid' => 'RAVEN UUID',
   'gatt_uuid' => 'FLOCK GATT',
   'nordic_dfu' => 'NORDIC DFU',
+  'tracker' => 'FIND MY',
+  'flipper' => 'FLIPPER',
+  'deauth_storm' => 'DEAUTH',
+  'probe_ssid' => 'PROBE',
+  'pwnagotchi' => 'PWNAGOTCHI',
+  'glasses' => 'META GLASSES',
+  'axon' => 'AXON',
   'ble_watchlist' => 'WATCHLIST',
   'wifi_watchlist' => 'WATCHLIST',
   'ble_proximity' => 'PROXIMITY',

@@ -60,6 +60,13 @@ String _confShort(FlockConfidence c) => switch (c) {
 Color _confColor(FlockConfidence c) =>
     c == FlockConfidence.suspected ? AppTheme.warning : AppTheme.success;
 
+class DetectionHistoryView extends StatelessWidget {
+  const DetectionHistoryView({super.key});
+
+  @override
+  Widget build(BuildContext context) => const _DetectionsTab();
+}
+
 class _DetectionsTab extends ConsumerStatefulWidget {
   const _DetectionsTab();
 
@@ -143,6 +150,11 @@ class _DetectionsTabState extends ConsumerState<_DetectionsTab> {
   @override
   void initState() {
     super.initState();
+    _engineFilter = ref.read(historyFilterRequestProvider) ?? _engineFilter;
+    if (ref.read(historyFilterRequestProvider) != null) {
+      WidgetsBinding.instance.addPostFrameCallback(
+          (_) => ref.read(historyFilterRequestProvider.notifier).state = null);
+    }
     _load();
   }
 
@@ -335,47 +347,6 @@ class _DetectionsTabState extends ConsumerState<_DetectionsTab> {
     );
   }
 
-  static final _csvTs = DateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'");
-
-  static String _csvEscape(String v) {
-    if (v.isEmpty) return '';
-    if (v.contains(',') || v.contains('"') || v.contains('\n') || v.contains('\r')) {
-      return '"${v.replaceAll('"', '""')}"';
-    }
-    return v;
-  }
-
-  String _buildCsv(List<Map<String, dynamic>> items) {
-    const cols = <String>[
-      'timestamp_utc', 'session_id', 'engine', 'method',
-      'mac', 'device_name', 'ssid', 'rssi_dbm', 'channel',
-      'lat', 'lon',
-    ];
-    final buf = StringBuffer()..writeln(cols.join(','));
-    for (final d in items) {
-      final tsMs = d['appTimestamp'] as int?;
-      final ts = tsMs == null
-          ? ''
-          : _csvTs.format(DateTime.fromMillisecondsSinceEpoch(tsMs).toUtc());
-      final lat = d['latitude'];
-      final lon = d['longitude'];
-      final row = <String>[
-        ts,
-        (d['sessionId'] as String?) ?? '',
-        (d['engine'] as String?) ?? '',
-        (d['detectionMethod'] as String?) ?? '',
-        (d['macAddress'] as String?) ?? '',
-        (d['deviceName'] as String?) ?? '',
-        (d['ssid'] as String?) ?? '',
-        (d['rssi']?.toString()) ?? '',
-        (d['channel']?.toString()) ?? '',
-        lat == null ? '' : lat.toString(),
-        lon == null ? '' : lon.toString(),
-      ].map(_csvEscape).toList();
-      buf.writeln(row.join(','));
-    }
-    return buf.toString();
-  }
 
   Future<void> _exportCsv(
       BuildContext context, List<Map<String, dynamic>> items) async {
@@ -385,7 +356,7 @@ class _DetectionsTabState extends ConsumerState<_DetectionsTab> {
         ? box.localToGlobal(Offset.zero) & box.size
         : const Rect.fromLTWH(0, 0, 100, 100);
     try {
-      final csv = _buildCsv(items);
+      final csv = DetectionsCsv.generate(items.map(detectionFromDbRow));
       final dir = await getTemporaryDirectory();
       final ts = DateFormat('yyyyMMdd_HHmmss').format(DateTime.now());
       final file = File('${dir.path}/oui_spy_detections_$ts.csv');
@@ -605,51 +576,16 @@ class _DetectionsTabState extends ConsumerState<_DetectionsTab> {
     );
   }
 
-  Future<void> _openSortSheet() {
-    return showCommandSheet<void>(
-      context: context,
-      builder: (ctx) => StatefulBuilder(
-        builder: (ctx, setSheet) => CommandSheet(
-          title: 'SORT',
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              CommandSheetGroup(
-                label: 'ORDER BY',
-                child: Wrap(
-                  spacing: barGap(ctx),
-                  runSpacing: barGap(ctx),
-                  children: [
-                    for (final s in _DetSort.values)
-                      _SortBtn(
-                        label: s.label,
-                        active: _sort == s,
-                        ascending: _ascending,
-                        onTap: () {
-                          _toggleSort(s);
-                          setSheet(() {});
-                        },
-                      ),
-                  ],
-                ),
-              ),
-              const Divider(height: 1),
-              CommandSheetTile(
-                icon: _ascending ? Icons.arrow_upward : Icons.arrow_downward,
-                label: _ascending ? 'ASCENDING' : 'DESCENDING',
-                subtitle: _sortDirectionHint,
-                color: AppTheme.accent,
-                onTap: () {
-                  setState(() => _ascending = !_ascending);
-                  setSheet(() {});
-                },
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
+  Future<void> _openSortSheet() => showSortSheet<_DetSort>(
+        context: context,
+        options: _DetSort.values,
+        label: (s) => s.label,
+        current: () => _sort,
+        ascending: () => _ascending,
+        hint: () => _sortDirectionHint,
+        onPick: _toggleSort,
+        onToggleDirection: () => setState(() => _ascending = !_ascending),
+      );
 
   String get _sortDirectionHint => switch ((_sort, _ascending)) {
         (_DetSort.time, true) => 'Oldest first',
@@ -733,22 +669,31 @@ class _DetectionsTabState extends ConsumerState<_DetectionsTab> {
 
   @override
   Widget build(BuildContext context) {
+    ref.listen<String?>(historyFilterRequestProvider, (_, req) {
+      if (req == null) return;
+      setState(() => _engineFilter = req);
+      ref.read(historyFilterRequestProvider.notifier).state = null;
+      _load();
+    });
     final t = AppTheme.of(context);
     final items = _loading ? const <Map<String, dynamic>>[] : _filtered;
     final hasQuery = _search.trim().isNotEmpty;
 
     return Column(
       children: [
+        CommandHeader(
+          title: 'HISTORY',
+          count: _activeFilterCount > 0 || hasQuery ? '${items.length}/${_detections.length}' : '${_detections.length}',
+          chips: _filterChips(),
+        ),
         if (_searchOpen) _buildSearchField(t),
-        if (_activeFilterCount > 0 || hasQuery) _buildFilterStrip(t, items.length),
         const Divider(height: 1),
         Expanded(child: _buildBody(t, items)),
-        ConfigBottomBar(
+        CommandBar(
           actions: [
             CommandBarAction(
               icon: Icons.filter_alt,
               label: 'FILTER',
-              badge: _activeFilterCount,
               active: _activeFilterCount > 0,
               onTap: _detections.isEmpty ? null : _openFilterSheet,
             ),
@@ -801,9 +746,8 @@ class _DetectionsTabState extends ConsumerState<_DetectionsTab> {
     );
   }
 
-  Widget _buildFilterStrip(ResolvedTheme t, int shown) {
-    final gap = barGap(context);
-    final chips = <Widget>[
+  List<Widget> _filterChips() {
+    return <Widget>[
       if (_engineFilter != null)
         CommandActiveChip(
           label: switch (_engineFilter!) {
@@ -851,33 +795,6 @@ class _DetectionsTabState extends ConsumerState<_DetectionsTab> {
           onClear: _toggleSearch,
         ),
     ];
-
-    return Padding(
-      padding: EdgeInsets.fromLTRB(gap * 1.5, gap * 0.5, gap * 1.5, gap * 0.5),
-      child: Row(
-        children: [
-          Text(
-            '$shown / ${_detections.length}',
-            style: barLabelStyle(context, t.textDim, bold: false),
-          ),
-          SizedBox(width: gap),
-          Expanded(
-            child: SingleChildScrollView(
-              scrollDirection: Axis.horizontal,
-              reverse: true,
-              child: Row(
-                children: [
-                  for (final c in chips) ...[
-                    SizedBox(width: gap * 0.75),
-                    c,
-                  ],
-                ],
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
   }
 
   Widget _buildBody(ResolvedTheme t, List<Map<String, dynamic>> items) {
@@ -1301,63 +1218,6 @@ class _DetDropdown extends StatelessWidget {
   }
 }
 
-class _SortBtn extends StatelessWidget {
-  const _SortBtn({
-    required this.label,
-    required this.active,
-    required this.ascending,
-    required this.onTap,
-  });
-  final String label;
-  final bool active;
-  final bool ascending;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    final t = AppTheme.of(context);
-    final gap = barGap(context);
-    final radius = BorderRadius.circular(gap);
-    return Material(
-      color: active ? AppTheme.accent.withValues(alpha: 0.18) : t.surfaceLight,
-      borderRadius: radius,
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: radius,
-        child: Container(
-          constraints:
-              const BoxConstraints(minHeight: kMinInteractiveDimension),
-          padding: EdgeInsets.symmetric(horizontal: gap * 2, vertical: gap),
-          decoration: BoxDecoration(
-            borderRadius: radius,
-            border: Border.all(
-              color: active ? AppTheme.accent : t.border,
-              width: active ? 1.6 : 1.0,
-            ),
-          ),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Text(
-                label,
-                style: barLabelStyle(
-                    context, active ? AppTheme.accent : t.textSecondary),
-              ),
-              if (active) ...[
-                SizedBox(width: gap * 0.75),
-                Icon(
-                  ascending ? Icons.arrow_upward : Icons.arrow_downward,
-                  size: barIconSize(context) * 0.9,
-                  color: AppTheme.accent,
-                ),
-              ],
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
 
 String _droneTransportShort(String method) => switch (method) {
       'odid_ble' => 'BLE',

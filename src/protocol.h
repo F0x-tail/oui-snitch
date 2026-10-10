@@ -476,6 +476,7 @@ enum MeshPacketType : uint8_t {
     MESH_PKT_DETECTION_BATCH = 0x11,
     MESH_PKT_WIFI_OTA        = 0x12,
     MESH_PKT_NODE_INFO       = 0x13,
+    MESH_PKT_DETECTION_BATCH_IE = 0x14,
 };
 
 typedef struct __attribute__((packed)) {
@@ -496,6 +497,7 @@ static inline uint8_t ouispyBoardCode(void) {
 }
 
 #define MESH_DET_REC_NAME_MAX  32
+#define MESH_DET_REC_IE_MAX    30
 #define MESH_DET_BATCH_BUDGET  215
 typedef struct __attribute__((packed)) {
     uint8_t  pkt_type;                          // MESH_PKT_DETECTION_BATCH

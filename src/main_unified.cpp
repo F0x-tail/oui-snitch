@@ -1543,6 +1543,18 @@ void setup() {
     xTaskCreatePinnedToCore(spoolStressInjectTask, "spoolstress", 4096, NULL, 1, NULL, 1);
     Serial.println("[SPOOL-STRESS] node: offline ON, mesh auto, injecting ~500 spoolable det/s; 20s flush-to-mesh pulse");
 #endif
+#ifdef OUISPY_IE_E2E
+    xTaskCreatePinnedToCore([](void*) {
+        vTaskDelay(pdMS_TO_TICKS(4000));
+        engineEnable(ENGINE_WARDRIVE);
+        Serial.println("[IE-E2E] wardrive enabled");
+        const uint8_t oui[6] = {0x40, 0x48, 0x6E, 0, 0, 0};
+        detectorAddFilter(oui, 3, "Nokia router");
+        engineEnable(ENGINE_DETECTOR);
+        Serial.println("[IE-E2E] detector enabled, watchlist 40:48:6E 'Nokia router'");
+        vTaskDelete(NULL);
+    }, "iee2e", 4096, NULL, 1, NULL, 1);
+#endif
 #ifdef OUISPY_SPOOL_E2E
     offlineScanEnabledSetFromPref(true);
     xTaskCreatePinnedToCore(spoolE2EInjectTask, "spoole2e", 4096, NULL, 1, NULL, 1);

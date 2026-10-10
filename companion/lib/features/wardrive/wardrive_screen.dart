@@ -8,9 +8,6 @@ import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:geolocator/geolocator.dart';
-import 'package:permission_handler/permission_handler.dart' as ph;
-import 'package:shared_preferences/shared_preferences.dart';
 import 'package:oui_spy/core/debug_log.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:oui_spy/core/db/app_database.dart' hide Detection;
@@ -29,6 +26,7 @@ import 'package:oui_spy/core/wigle/wigle_provider.dart';
 import 'package:oui_spy/core/wdgwars/wdgwars_provider.dart';
 import 'package:oui_spy/features/feed/detection_row.dart';
 import 'package:oui_spy/features/wardrive/drone_markers.dart';
+import 'package:oui_spy/features/wardrive/session_launch.dart';
 import 'package:oui_spy/features/geofence/geofence_screen.dart';
 import 'package:oui_spy/features/wardrive/flock_panel.dart';
 import 'package:oui_spy/features/wardrive/wardrive_stats.dart';
@@ -72,7 +70,6 @@ class _WardriveScreenState extends ConsumerState<WardriveScreen> with WidgetsBin
   Detection? _focusedDetection;
   String _cachedLayersKey = '';
   List<Geofence> _exclusionZones = [];
-  bool _priming = false;
   bool _reconnectPromptOpen = false;
 
   @override
@@ -108,214 +105,7 @@ class _WardriveScreenState extends ConsumerState<WardriveScreen> with WidgetsBin
     }
   }
 
-  Future<bool> _primeLocationPermission() async {
-    if (_priming || !mounted) return false;
-    _priming = true;
-    try {
-      var status = await Geolocator.checkPermission();
-      if (status == LocationPermission.denied) {
-        status = await Geolocator.requestPermission();
-      }
-      if (!mounted) return false;
-      if (status == LocationPermission.denied ||
-          status == LocationPermission.deniedForever) {
-        _showPermissionGateDialog();
-        return false;
-      }
-      final servicesOn = await Geolocator.isLocationServiceEnabled();
-      if (!mounted) return false;
-      if (!servicesOn) {
-        _showServicesOffDialog();
-        return false;
-      }
-
-      if (Platform.isIOS) {
-        if (status == LocationPermission.whileInUse) {
-          await _showIosAlwaysUpgradeDialog();
-        }
-      } else if (Platform.isAndroid) {
-        final always = await ph.Permission.locationAlways.status;
-        if (!always.isGranted && mounted) {
-          await _showAndroidAlwaysUpgradeDialog();
-        }
-      }
-      return true;
-    } finally {
-      _priming = false;
-    }
-  }
-
-  Future<void> _requestAlwaysLocation() async {
-    final always = await ph.Permission.locationAlways.request();
-    if (!always.isGranted) {
-      await ph.openAppSettings();
-    }
-  }
-
-  Future<bool> _confirmRadioRoles() async {
-    final app = ref.read(appStateProvider);
-    final wd = ref.read(wardriveProvider);
-    if (!app.isManagerConnected) return true;
-    final mgrId = AppState.canonicalNodeId(app.nodeId);
-    final nodes = app.liveKnownNodes.where((id) => id != mgrId).toList()..sort();
-    if (nodes.isEmpty) return true;
-    final roles = <String, int>{
-      for (final n in nodes) n: app.wardriveRadioForNode(n),
-    };
-    if (!mounted) return false;
-    final result = await showDialog<Map<String, int>>(
-      context: context,
-      builder: (_) => _RadioRolePopup(
-        nodes: nodes,
-        labelFor: app.labelForNode,
-        initial: roles,
-      ),
-    );
-    if (result == null) return false;
-    await app.applyNodeRadioRoles(result);
-    if (!app.isManagerConnected && result.length == 1) {
-      final mask = result.values.first;
-      wd.setRadio(WardriveController.radioFromMask(mask));
-      app.setEngineRadio(Engine.wardrive, mask);
-    }
-    return true;
-  }
-
-  Future<void> _showIosAlwaysUpgradeDialog() async {
-    final p = await SharedPreferences.getInstance();
-    if (p.getBool('ios_always_upgrade_dismissed') == true) return;
-    if (!mounted) return;
-    final t = AppTheme.of(context);
-    await showDialog<void>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        backgroundColor: t.surface,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-        title: Text('Enable "Always" Location',
-          style: TextStyle(color: t.textPrimary, fontSize: 16, fontWeight: FontWeight.w600)),
-        content: Text(
-          'iOS only shows "While Using" in the first prompt. For wardriving with screen off, set:\n\n'
-          'Settings → OUI-SPY → Location → Always',
-          style: TextStyle(color: t.textSecondary, fontSize: 13),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () async {
-              await p.setBool('ios_always_upgrade_dismissed', true);
-              if (ctx.mounted) Navigator.of(ctx).pop();
-            },
-            child: Text("DON'T ASK AGAIN", style: TextStyle(color: t.textDim)),
-          ),
-          TextButton(
-            onPressed: () => Navigator.of(ctx).pop(),
-            child: Text('LATER', style: TextStyle(color: t.textDim)),
-          ),
-          TextButton(
-            onPressed: () async {
-              Navigator.of(ctx).pop();
-              await Geolocator.openAppSettings();
-            },
-            child: const Text('OPEN SETTINGS', style: TextStyle(color: AppTheme.accent)),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Future<void> _showAndroidAlwaysUpgradeDialog() async {
-    final p = await SharedPreferences.getInstance();
-    if (p.getBool('android_always_upgrade_dismissed') == true) return;
-    if (!mounted) return;
-    final t = AppTheme.of(context);
-    await showDialog<void>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        backgroundColor: t.surface,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-        title: Text('Enable "Always" Location',
-          style: TextStyle(color: t.textPrimary, fontSize: 16, fontWeight: FontWeight.w600)),
-        content: Text(
-          'For background tracking, Android requires "Allow all the time".\n\n'
-          'Settings → Apps → OUI-SPY → Permissions → Location → Allow all the time',
-          style: TextStyle(color: t.textSecondary, fontSize: 13),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () async {
-              await p.setBool('android_always_upgrade_dismissed', true);
-              if (ctx.mounted) Navigator.of(ctx).pop();
-            },
-            child: Text("DON'T ASK AGAIN", style: TextStyle(color: t.textDim)),
-          ),
-          TextButton(
-            onPressed: () => Navigator.of(ctx).pop(),
-            child: Text('LATER', style: TextStyle(color: t.textDim)),
-          ),
-          TextButton(
-            onPressed: () async {
-              Navigator.of(ctx).pop();
-              await _requestAlwaysLocation();
-            },
-            child: const Text('ALLOW ALL THE TIME', style: TextStyle(color: AppTheme.accent)),
-          ),
-        ],
-      ),
-    );
-  }
-
-  void _showPermissionGateDialog() {
-    final t = AppTheme.of(context);
-    showDialog<void>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        backgroundColor: t.surface,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-        title: Text('Location Permission Required',
-          style: TextStyle(color: t.textPrimary, fontSize: 16, fontWeight: FontWeight.w600)),
-        content: Text(
-          'OUI-SPY needs location access to tag wardrive detections.\n\n'
-          'Open Settings → OUI-SPY → Location and choose "While Using" or "Always".',
-          style: TextStyle(color: t.textSecondary, fontSize: 13),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(ctx).pop(),
-            child: Text('LATER', style: TextStyle(color: t.textDim)),
-          ),
-          TextButton(
-            onPressed: () async {
-              Navigator.of(ctx).pop();
-              await Geolocator.openAppSettings();
-            },
-            child: const Text('OPEN SETTINGS', style: TextStyle(color: AppTheme.accent)),
-          ),
-        ],
-      ),
-    );
-  }
-
-  void _showServicesOffDialog() {
-    final t = AppTheme.of(context);
-    showDialog<void>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        backgroundColor: t.surface,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-        title: Text('Location Services Off',
-          style: TextStyle(color: t.textPrimary, fontSize: 16, fontWeight: FontWeight.w600)),
-        content: Text(
-          'Enable Settings → Privacy & Security → Location Services to wardrive.',
-          style: TextStyle(color: t.textSecondary, fontSize: 13),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(ctx).pop(),
-            child: Text('OK', style: TextStyle(color: AppTheme.accent)),
-          ),
-        ],
-      ),
-    );
-  }
+  Future<bool> _primeLocationPermission() => primeLocationPermission(context);
 
   Future<void> _showReconnectPrompt(WardriveController wd) async {
     final t = AppTheme.of(context);
@@ -1093,7 +883,7 @@ class _WardriveScreenState extends ConsumerState<WardriveScreen> with WidgetsBin
                       for (final m in WardriveController.selectableTargets)
                         if (m != WardriveTarget.wigle &&
                             ((wd.isActive && wd.isTargetSelected(m)) ||
-                                _targetEngineRunning(appEngines, m)))
+                                targetEngineRunning(appEngines, m)))
                           _ScanningPill(color: m.color, label: m.label),
                     ],
                   ),
@@ -1150,18 +940,7 @@ class _WardriveScreenState extends ConsumerState<WardriveScreen> with WidgetsBin
                 child: _IdleControls(
                   wd: wd,
                   ref: ref,
-                  appEngines: appEngines,
-                  isManagerConnected: ref.watch(
-                      appStateProvider.select((s) => s.isManagerConnected)),
-                  enginesRunning: WardriveController.selectableTargets.any((m) =>
-                      m != WardriveTarget.wigle &&
-                      _targetEngineRunning(appEngines, m)),
                   onGeofenceReturn: _loadExclusionZones,
-                  onStart: () async {
-                    if (!await _primeLocationPermission()) return;
-                    if (!await _confirmRadioRoles()) return;
-                    await ref.read(wardriveProvider).startSession();
-                  },
                 ),
               ),
 

@@ -1,149 +1,20 @@
 part of 'wardrive_screen.dart';
 
 class _IdleControls extends StatelessWidget {
-  const _IdleControls({required this.wd, required this.ref, required this.appEngines, required this.isManagerConnected, required this.enginesRunning, this.onGeofenceReturn, required this.onStart});
+  const _IdleControls({required this.wd, required this.ref, this.onGeofenceReturn});
   final WardriveController wd;
   final WidgetRef ref;
-  final AppState appEngines;
-  final bool isManagerConnected;
-  final bool enginesRunning;
   final VoidCallback? onGeofenceReturn;
-  final Future<void> Function() onStart;
 
   @override
   Widget build(BuildContext context) {
     final th = AppTheme.of(context);
-    final t = wd.target;
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
-        Container(
-          margin: const EdgeInsets.symmetric(horizontal: 24),
-          padding: const EdgeInsets.all(4),
-          decoration: BoxDecoration(
-            color: th.background.withValues(alpha: 0.92),
-            borderRadius: BorderRadius.circular(10),
-            border: Border.all(color: th.border, width: 0.5),
-          ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Row(
-                children: WardriveController.selectableTargets.map((m) {
-                  final liveTargets = {
-                    for (final x in WardriveController.selectableTargets)
-                      if (_targetEngineRunning(appEngines, x)) x
-                  };
-                  final sel = _targetEngineRunning(appEngines, m) ||
-                      (liveTargets.isEmpty && wd.isTargetSelected(m));
-                  return Expanded(
-                    child: GestureDetector(
-                      onTap: () =>
-                          ref.read(wardriveProvider).onChipTap(m, liveTargets),
-                      child: AnimatedContainer(
-                        duration: const Duration(milliseconds: 150),
-                        padding: const EdgeInsets.symmetric(vertical: 8),
-                        margin: const EdgeInsets.all(2),
-                        decoration: BoxDecoration(
-                          color: sel ? m.color.withValues(alpha: 0.15) : Colors.transparent,
-                          borderRadius: BorderRadius.circular(6),
-                          border: sel ? Border.all(color: m.color.withValues(alpha: 0.4)) : null,
-                        ),
-                        child: Column(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Stack(
-                              clipBehavior: Clip.none,
-                              children: [
-                                Icon(m.icon, size: 16, color: sel ? m.color : th.textDim),
-                                if (sel)
-                                  Positioned(
-                                    right: -6, top: -5,
-                                    child: Icon(Icons.check_circle, size: 9, color: m.color),
-                                  ),
-                              ],
-                            ),
-                            const SizedBox(height: 2),
-                            FittedBox(
-                              fit: BoxFit.scaleDown,
-                              child: Padding(
-                                padding: const EdgeInsets.symmetric(horizontal: 2),
-                                child: Text(
-                                  m.label,
-                                  textAlign: TextAlign.center,
-                                  maxLines: 1,
-                                  style: TextStyle(
-                                    color: sel ? m.color : th.textDim,
-                                    fontSize: 8, fontWeight: FontWeight.w700,
-                                    letterSpacing: 0.5,
-                                  ),
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-                  );
-                }).toList(),
-              ),
-              if (!isManagerConnected) ...[
-                const Divider(height: 1),
-                Padding(
-                  padding: const EdgeInsets.symmetric(vertical: 4),
-                  child: Row(
-                    children: WardriveRadio.values.map((r) {
-                      final sel = r == wd.radio;
-                      final radioIcon = switch (r) {
-                        WardriveRadio.wifi => Icons.wifi,
-                        WardriveRadio.ble => Icons.bluetooth,
-                        WardriveRadio.both => Icons.sensors,
-                      };
-                      return Expanded(
-                        child: GestureDetector(
-                          onTap: () {
-                            ref.read(wardriveProvider).setRadio(r);
-                            final mask = switch (r) {
-                              WardriveRadio.wifi => 0x01,
-                              WardriveRadio.ble => 0x02,
-                              WardriveRadio.both => 0x03,
-                            };
-                            final app = ref.read(appStateProvider);
-                            for (final tt in wd.selectedTargets) {
-                              final maskEngine = tt.radioMaskEngine;
-                              if (maskEngine != null) {
-                                app.setEngineRadio(maskEngine, mask);
-                              }
-                            }
-                          },
-                          child: Container(
-                            padding: const EdgeInsets.symmetric(vertical: 6),
-                            margin: const EdgeInsets.symmetric(horizontal: 2),
-                            decoration: BoxDecoration(
-                              color: sel ? t.color.withValues(alpha: 0.1) : Colors.transparent,
-                              borderRadius: BorderRadius.circular(4),
-                            ),
-                            child: Row(
-                              mainAxisAlignment: MainAxisAlignment.center,
-                              children: [
-                                Icon(radioIcon, size: 12,
-                                    color: sel ? t.color : th.textDim),
-                                const SizedBox(width: 4),
-                                Text(r.label, style: TextStyle(
-                                  color: sel ? t.color : th.textDim,
-                                  fontSize: 9, fontWeight: FontWeight.w600,
-                                )),
-                              ],
-                            ),
-                          ),
-                        ),
-                      );
-                    }).toList(),
-                  ),
-                ),
-              ],
-            ],
-          ),
+        const Padding(
+          padding: EdgeInsets.symmetric(horizontal: 24),
+          child: SessionBar(),
         ),
         const SizedBox(height: 6),
         Container(
@@ -233,43 +104,6 @@ class _IdleControls extends StatelessWidget {
                 child: Icon(Icons.fence, size: 14, color: AppTheme.warning),
               ),
             ),
-            const SizedBox(width: 12),
-            if (enginesRunning)
-              _Pill(
-                label: 'STOP',
-                color: AppTheme.error,
-                onTap: () => ref.read(wardriveProvider).stopSession(),
-              )
-            else
-              _Pill(
-                label: 'START',
-                color: wd.selectedTargets.isEmpty
-                    ? t.color.withValues(alpha: 0.35)
-                    : t.color,
-                onTap: () {
-                  if (wd.selectedTargets.isEmpty) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(
-                        content: Text('Select at least one target to scan'),
-                        duration: Duration(seconds: 3),
-                      ),
-                    );
-                    return;
-                  }
-                  ref.read(gpsProvider).onMessage = (msg) {
-                    if (context.mounted) {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(
-                          content: Text(msg),
-                          backgroundColor: AppTheme.accent,
-                          duration: const Duration(seconds: 4),
-                        ),
-                      );
-                    }
-                  };
-                  onStart();
-                },
-              ),
           ],
         ),
       ],
@@ -902,7 +736,9 @@ class _DetListRow extends ConsumerWidget {
     final bool isWifiAp = d.isWifiDetection;
     final bool isHidden = isWifiAp && d.ssid.isEmpty && d.deviceName.isEmpty;
     final vendor = ref.read(ouiLookupProvider).lookup(d.macAddress);
-    final label = isHidden
+    final label = d.engine == Engine.detector
+        ? detectorTitle(d)
+        : isHidden
         ? '<hidden>'
         : d.ssid.isNotEmpty
             ? d.ssid
