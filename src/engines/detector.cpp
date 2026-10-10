@@ -246,7 +246,9 @@ static void detectorCheckSignatures(NimBLEAdvertisedDevice* dev, const uint8_t* 
                 axonMfg = (cid == 0x034D);
             }
         }
-        bool axonSvc = dev->isAdvertisingService(NimBLEUUID((uint16_t)0xFC81));
+        bool axonSvc = dev->isAdvertisingService(NimBLEUUID((uint16_t)0xFC81)) ||
+                       dev->isAdvertisingService(NimBLEUUID((uint16_t)0xFE6B)) ||
+                       dev->isAdvertisingService(NimBLEUUID((uint16_t)0xFE6C));
         bool axonMac = (memcmp(mac, AXON_OUI, 3) == 0);
         if ((axonMac || axonMfg || axonSvc) && !sigDedup.check(mac)) {
             DetectionEvent evt = {};
