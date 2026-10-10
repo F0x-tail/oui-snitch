@@ -87,7 +87,7 @@ class _EngineCardState extends ConsumerState<EngineCard>
   void _toggleEngine(bool value) {
     if (widget.engine == Engine.wardrive) {
       if (value) {
-        unawaited(startWardriveSession(context, ref));
+        unawaited(startWardriveSession(context, ref, requireLocation: false));
       } else {
         ref.read(wardriveProvider).stopSession();
       }

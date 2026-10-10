@@ -172,7 +172,7 @@ class SessionBar extends ConsumerWidget {
   }
 }
 
-Future<bool> startWardriveSession(BuildContext context, WidgetRef ref) async {
+Future<bool> startWardriveSession(BuildContext context, WidgetRef ref, {bool requireLocation = true}) async {
   DebugLog.log('WARDRIVE: start requested');
   final messenger = ScaffoldMessenger.maybeOf(context);
   if (ref.read(wardriveProvider).selectedTargets.isEmpty) {
@@ -183,7 +183,7 @@ Future<bool> startWardriveSession(BuildContext context, WidgetRef ref) async {
   ref.read(gpsProvider).onMessage = (msg) => messenger?.showSnackBar(
         SnackBar(content: Text(msg), backgroundColor: AppTheme.accent, duration: const Duration(seconds: 4)),
       );
-  if (!await primeLocationPermission(context)) {
+  if (requireLocation && !await primeLocationPermission(context)) {
     DebugLog.log('WARDRIVE: start aborted — location permission/services');
     return false;
   }
