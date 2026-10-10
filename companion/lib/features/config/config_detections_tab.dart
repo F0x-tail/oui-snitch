@@ -1062,8 +1062,7 @@ class _DetectionsTabState extends ConsumerState<_DetectionsTab> {
                     )),
                   ),
                 ),
-                if (!OuiLookupService.isFoxhuntBlocked(mac, method))
-                  Expanded(
+                Expanded(
                     child: TextButton.icon(
                       onPressed: () {
                         Navigator.pop(ctx);
@@ -1130,17 +1129,6 @@ class _DetectionsTabState extends ConsumerState<_DetectionsTab> {
     final mac = det['macAddress'] as String;
     final channel = det['channel'] as int? ?? 0;
 
-    if (OuiLookupService.isFoxhuntBlocked(mac, det['detectionMethod'] as String?)) {
-      if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            backgroundColor: AppTheme.warning,
-            content: Text('Foxhunt blocked — law enforcement device'),
-          ),
-        );
-      }
-      return;
-    }
 
     ref.read(appStateProvider).setFoxhunterTarget(
       mac,
@@ -1275,7 +1263,6 @@ class _DetectionRow extends ConsumerWidget {
     final rssi = data['rssi'] as int;
     final channel = data['channel'] as int? ?? 0;
     final method = data['detectionMethod'] as String? ?? '';
-    final foxhuntBlocked = OuiLookupService.isFoxhuntBlocked(mac, method);
     final ts = DateTime.fromMillisecondsSinceEpoch(data['appTimestamp'] as int);
     final timeStr = AppTime.dateTimeShort(ts);
     final hasGps = data['latitude'] != null && data['longitude'] != null;
@@ -1541,7 +1528,7 @@ class _DetectionRow extends ConsumerWidget {
                     ),
                   ),
                 ),
-                if (!foxhuntBlocked) ...[
+                ...[
                   Container(width: 0.5, height: 20, color: t.border),
                   Expanded(
                     child: GestureDetector(

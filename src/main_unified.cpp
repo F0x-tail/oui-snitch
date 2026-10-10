@@ -234,15 +234,80 @@ static void detectionChime(void) {
     ledcDetachPin(PIN_BUZZER);
 }
 
+struct BuzzNote { uint16_t hz; uint16_t on_ms; uint16_t gap_ms; };
+
+static const BuzzNote AXON_DETECT[] = {
+    {523, 65, 30}, {659, 65, 30}, {784, 65, 30}, {1047, 65, 30}, {1319, 75, 60},
+};
+static const BuzzNote AXON_HEARTBEAT[] = { {523, 60, 40}, {392, 110, 30} };
+static const BuzzNote AXON_LOST[] = { {659, 150, 80}, {330, 260, 40} };
+
+static void playNotes(const BuzzNote* n, size_t count) {
+    if (!hwBuzzerEnabled || hwBuzzerVolume == 0) return;
+    for (size_t i = 0; i < count; i++) {
+        ledcSetup(0, n[i].hz, 8);
+        ledcAttachPin(PIN_BUZZER, 0);
+        ledcWrite(0, hwBuzzerVolume);
+        delay(n[i].on_ms);
+        ledcWrite(0, 0);
+        delay(n[i].gap_ms);
+    }
+    ledcDetachPin(PIN_BUZZER);
+}
+
+#define CHIME_REQ_TARGET 1
+#define CHIME_REQ_AXON   2
+#define AXON_LOST_MS        25000
+#define AXON_HEARTBEAT_MS   2000
+
 static QueueHandle_t chimeQueue = NULL;
+static volatile uint32_t axonLastSeenMs = 0;
+static volatile int8_t axonLastRssi = -90;
+
+static void axonPresenceTick(bool& tracking, uint32_t& nextBeat) {
+    if (!tracking) return;
+    uint32_t now = millis();
+    if ((uint32_t)(now - axonLastSeenMs) > AXON_LOST_MS) {
+        tracking = false;
+        Serial.println("[AXON] lost");
+        if (!hwAlertsSuppressed) playNotes(AXON_LOST, sizeof(AXON_LOST) / sizeof(AXON_LOST[0]));
+        return;
+    }
+    if ((int32_t)(now - nextBeat) >= 0) {
+        int r = constrain((int)axonLastRssi, -90, -40);
+        nextBeat = now + (uint32_t)map(r, -90, -40, AXON_HEARTBEAT_MS, 250);
+        if (!hwAlertsSuppressed)
+            playNotes(AXON_HEARTBEAT, sizeof(AXON_HEARTBEAT) / sizeof(AXON_HEARTBEAT[0]));
+    }
+}
 
 static void chimeTaskFn(void* param) {
     uint8_t req;
+    bool axonTracking = false;
+    uint32_t axonNextBeat = 0;
     for (;;) {
-        if (xQueueReceive(chimeQueue, &req, portMAX_DELAY) == pdTRUE) {
-            detectionChime();
+        if (xQueueReceive(chimeQueue, &req, pdMS_TO_TICKS(250)) == pdTRUE) {
+            if (req == CHIME_REQ_AXON) {
+                if (!axonTracking) {
+                    axonTracking = true;
+                    Serial.println("[AXON] tracking");
+                    playNotes(AXON_DETECT, sizeof(AXON_DETECT) / sizeof(AXON_DETECT[0]));
+                    axonNextBeat = millis() + AXON_HEARTBEAT_MS;
+                }
+            } else {
+                detectionChime();
+            }
         }
+        axonPresenceTick(axonTracking, axonNextBeat);
     }
+}
+
+static void axonPresenceSeen(int8_t rssi) {
+    axonLastSeenMs = millis();
+    axonLastRssi = rssi;
+    if (!chimeQueue || hwAlertsSuppressed) return;
+    uint8_t req = CHIME_REQ_AXON;
+    xQueueSend(chimeQueue, &req, 0);
 }
 
 // Coalesce beeps: one chime per hit, not per detection event. A single device
@@ -491,6 +556,10 @@ static void detectionNotifyTask(void* param) {
                 continue;
             }
 
+            const bool evtIsAxon = evt.engine_id == ENGINE_DETECTOR &&
+                                   evt.method == METHOD_DET_AXON;
+            if (evtIsAxon) axonPresenceSeen(evt.rssi);
+
             if (evt.engine_id == ENGINE_SKYSPY) {
                 if (isDroneDedupCooldown(evt.ext.odid.uav_id, evt.method)) continue;
             } else if (evt.engine_id != ENGINE_WARDRIVE &&
@@ -501,7 +570,7 @@ static void detectionNotifyTask(void* param) {
             // Audible + visual feedback only for target engines
             if (isAlertableEngine(evt.engine_id)) {
                 Serial.printf("[CHIME] engine=%d\n", evt.engine_id);
-                requestChime();
+                if (!evtIsAxon) requestChime();
 #ifndef OUISPY_DONGLE
                 if (hwLedEnabled) {
                     g_ledOffAtMs = millis() + 80;

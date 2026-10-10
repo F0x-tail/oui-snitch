@@ -295,13 +295,10 @@ static const DongleLedPattern kEngLed[ENGINE_COUNT] = {
 };
 
 static uint8_t s_hitMacRaw[6] = {0};
-static bool s_hitIsAxon = false;
 static uint8_t s_fhMac[6] = {0};
 static uint8_t s_fhChan = 0;
-static bool s_fhIsAxon = false;
 static bool s_fhValid = false;
 static bool s_fhArmed = false;
-static const uint8_t kAxonOui[3] = {0x00, 0x25, 0xdf};
 static char s_hitEng[10] = "";
 static char s_hitMac[18] = "";
 static char s_hitName[DONGLE_COLS + 1] = "";
@@ -1048,11 +1045,6 @@ static void foxhuntLastHit(uint32_t now) {
         buttonFlash(now, 90, 0, 0);
         return;
     }
-    if (s_fhIsAxon) {
-        Serial.println("[DONGLE] foxhunt REFUSED (law-enforcement device)");
-        buttonFlash(now, 90, 0, 0);
-        return;
-    }
     foxhunterSetTarget(s_fhMac, s_fhChan);
     engineEnable(ENGINE_FOXHUNTER);
     s_fhArmed = true;
@@ -1293,8 +1285,6 @@ void dongleOnDetection(const DetectionEvent* evt) {
     s_hitRssi = evt->rssi;
     s_hitChan = evt->channel;
     memcpy(s_hitMacRaw, evt->mac, 6);
-    s_hitIsAxon = (evt->method == METHOD_DET_AXON) ||
-                  (memcmp(evt->mac, kAxonOui, 3) == 0);
     s_haveHit = true;
 
     switch ((EngineId)evt->engine_id) {
@@ -1306,7 +1296,6 @@ void dongleOnDetection(const DetectionEvent* evt) {
             if (evt->source_node_id[0] != '\0') break;   // relayed: not ours to hunt
             memcpy(s_fhMac, evt->mac, 6);
             s_fhChan = evt->channel;
-            s_fhIsAxon = s_hitIsAxon;
             s_fhValid = true;
             break;
         default:

@@ -28,8 +28,6 @@ class DetectionRow extends ConsumerWidget {
     final timeStr = _formatTimeDiff(timeDiff);
     final manufacturer = ref.watch(ouiLookupProvider).lookup(detection.macAddress);
     final connected = ref.watch(appStateProvider).isConnected;
-    final foxhuntBlocked =
-        OuiLookupService.isFoxhuntBlocked(detection.macAddress, detection.method);
     final nodeLabel = detection.sourceNodeId.isEmpty
         ? ''
         : ref.watch(appStateProvider).labelForNode(detection.sourceNodeId);
@@ -178,8 +176,7 @@ class DetectionRow extends ConsumerWidget {
                         fontWeight: FontWeight.w700,
                       )),
                   const SizedBox(width: 4),
-                  if (!foxhuntBlocked)
-                    _ActionIcon(
+                  _ActionIcon(
                       icon: Icons.gps_fixed,
                       color: AppTheme.foxhunter,
                       tooltip: connected ? 'Foxhunt' : 'Foxhunt (node disconnected)',
@@ -247,15 +244,6 @@ void detectionZoomOnMap(
 
 void detectionStartFoxhunt(
     BuildContext context, WidgetRef ref, Detection detection) {
-  if (OuiLookupService.isFoxhuntBlocked(detection.macAddress, detection.method)) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('Foxhunt blocked — law enforcement device'),
-        backgroundColor: AppTheme.warning,
-      ),
-    );
-    return;
-  }
   ref.read(appStateProvider).setFoxhunterTarget(
         detection.macAddress,
         channel: detection.channel,
@@ -324,9 +312,7 @@ void showDetectionDetails(
               ),
             ),
             const SizedBox(height: 12),
-            if (connected &&
-                !OuiLookupService.isFoxhuntBlocked(
-                    detection.macAddress, detection.method))
+            if (connected)
               ListTile(
                 leading: const Icon(Icons.gps_fixed, color: AppTheme.foxhunter),
                 title: const Text('Foxhunt This Device',

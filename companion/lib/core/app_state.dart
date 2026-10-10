@@ -7,7 +7,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:oui_spy/core/ble/ble_manager.dart';
-import 'package:oui_spy/core/oui/oui_lookup_service.dart';
 import 'package:oui_spy/core/debug_log.dart';
 import 'package:oui_spy/core/geofence/geofence_filter.dart';
 import 'package:latlong2/latlong.dart';
@@ -111,7 +110,6 @@ class AppState extends ChangeNotifier {
   int foxhunterChannel = 0;
 
   void setFoxhunterTarget(String mac, {int channel = 0, String? nodeId}) {
-    if (OuiLookupService.isLawEnforcement(mac)) return;
     final effective = nodeId
         ?? foxhunterTargetNodeId
         ?? (isManagerConnected && knownNodes.isNotEmpty

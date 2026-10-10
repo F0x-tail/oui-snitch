@@ -88,9 +88,6 @@ class OuiLookupService extends ChangeNotifier {
     return prefix != null && lawEnforcementOuis.containsKey(prefix);
   }
 
-  static bool isFoxhuntBlocked(String mac, [String? method]) =>
-      isLawEnforcement(mac) || method == 'axon';
-
   bool get isLoaded => _loaded;
   int get entryCount => _db.length;
   DateTime? get lastUpdated => _lastUpdated;

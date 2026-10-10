@@ -19,7 +19,6 @@ import 'package:oui_spy/core/gps/gps_types.dart';
 import 'package:oui_spy/core/geofence/geofence_filter.dart';
 import 'package:oui_spy/core/ignore_list_state.dart';
 import 'package:oui_spy/core/models/detection.dart';
-import 'package:oui_spy/core/oui/oui_lookup_service.dart';
 import 'package:oui_spy/core/models/engine.dart';
 import 'package:oui_spy/core/radio_classifier.dart';
 import 'package:oui_spy/core/models/session.dart';
@@ -1164,7 +1163,6 @@ class WardriveController extends ChangeNotifier {
   }
 
   void setFoxhuntTarget(String mac, {int channel = 0}) {
-    if (OuiLookupService.isLawEnforcement(mac)) return;
     _ble.enableEngine(Engine.foxhunter);
     _ble.setFoxhunterTarget(mac, channel: channel);
     foxhuntTarget = mac;

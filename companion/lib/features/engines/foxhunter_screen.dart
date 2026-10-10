@@ -3,7 +3,6 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:oui_spy/core/app_state.dart';
-import 'package:oui_spy/core/oui/oui_lookup_service.dart';
 import 'package:oui_spy/core/models/engine.dart';
 import 'package:oui_spy/theme/app_theme.dart';
 
@@ -37,15 +36,6 @@ class _FoxhunterScreenState extends ConsumerState<FoxhunterScreen> {
 
   void _setTarget() {
     final mac = _macController.text.trim();
-    if (OuiLookupService.isLawEnforcement(mac)) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Not supported — law enforcement OUI'),
-          backgroundColor: AppTheme.warning,
-        ),
-      );
-      return;
-    }
     if (mac.length != 17) return;
     final channel = _channelForMac(mac);
     final st = ref.read(appStateProvider);

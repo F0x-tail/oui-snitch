@@ -549,17 +549,7 @@ class DeviceDetailSheet extends ConsumerWidget {
 
   void _foxhunt(BuildContext context, WidgetRef ref) {
     final o = device.obs;
-    final method = o.kind == RadioKind.ble ? 'ble_adv' : 'wifi_ap';
     Navigator.of(context).maybePop();
-    if (OuiLookupService.isFoxhuntBlocked(o.mac, method)) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Foxhunt blocked — law enforcement device'),
-          backgroundColor: AppTheme.warning,
-        ),
-      );
-      return;
-    }
     ref.read(appStateProvider).setFoxhunterTarget(o.mac, channel: o.channel);
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
@@ -583,12 +573,7 @@ class DeviceDetailSheet extends ConsumerWidget {
     final o = device.obs;
     final g = device.guess;
     final connected = ref.read(appStateProvider).isConnected;
-    final canFoxhunt =
-        o.mac.isNotEmpty &&
-        !OuiLookupService.isFoxhuntBlocked(
-          o.mac,
-          o.kind == RadioKind.ble ? 'ble_adv' : 'wifi_ap',
-        );
+    final canFoxhunt = o.mac.isNotEmpty;
     final body = Theme.of(
       context,
     ).textTheme.bodySmall?.copyWith(color: t.textSecondary);

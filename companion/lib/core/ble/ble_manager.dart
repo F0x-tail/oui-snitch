@@ -11,7 +11,6 @@ import 'package:flutter_blue_plus/flutter_blue_plus.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:oui_spy/core/ble/ble_protocol.dart';
 import 'package:oui_spy/core/ble/gatt_uuids.dart';
-import 'package:oui_spy/core/oui/oui_lookup_service.dart';
 import 'package:oui_spy/core/debug_log.dart';
 import 'package:oui_spy/core/detector_signatures.dart';
 import 'package:oui_spy/core/models/detection.dart';
@@ -1299,7 +1298,6 @@ class BleManager {
   // -- Foxhunter --
 
   Future<void> setFoxhunterTarget(String mac, {int channel = 0, String? nodeId}) async {
-    if (OuiLookupService.isLawEnforcement(mac)) return;
     if (nodeId != null) {
       if (_engineControl == null) return;
       final macBytes = BleProtocol.encodeFoxhunterTarget(mac, channel: channel);
