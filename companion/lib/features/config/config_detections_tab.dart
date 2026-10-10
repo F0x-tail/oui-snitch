@@ -61,14 +61,18 @@ Color _confColor(FlockConfidence c) =>
     c == FlockConfidence.suspected ? AppTheme.warning : AppTheme.success;
 
 class DetectionHistoryView extends StatelessWidget {
-  const DetectionHistoryView({super.key});
+  const DetectionHistoryView({super.key, this.onShowLive});
+
+  final VoidCallback? onShowLive;
 
   @override
-  Widget build(BuildContext context) => const _DetectionsTab();
+  Widget build(BuildContext context) => _DetectionsTab(onShowLive: onShowLive);
 }
 
 class _DetectionsTab extends ConsumerStatefulWidget {
-  const _DetectionsTab();
+  const _DetectionsTab({this.onShowLive});
+
+  final VoidCallback? onShowLive;
 
   @override
   ConsumerState<_DetectionsTab> createState() => _DetectionsTabState();
@@ -685,31 +689,34 @@ class _DetectionsTabState extends ConsumerState<_DetectionsTab> {
           title: 'HISTORY',
           count: _activeFilterCount > 0 || hasQuery ? '${items.length}/${_detections.length}' : '${_detections.length}',
           chips: _filterChips(),
-        ),
-        if (_searchOpen) _buildSearchField(t),
-        const Divider(height: 1),
-        Expanded(child: _buildBody(t, items)),
-        CommandBar(
           actions: [
             CommandBarAction(
               icon: Icons.filter_alt,
-              label: 'FILTER',
+              label: 'Filter',
               active: _activeFilterCount > 0,
               onTap: _detections.isEmpty ? null : _openFilterSheet,
             ),
             CommandBarAction(
               icon: _ascending ? Icons.arrow_upward : Icons.arrow_downward,
-              label: _sort.label,
-              active: true,
+              label: 'Sort: ${_sort.label}',
               onTap: _detections.isEmpty ? null : _openSortSheet,
             ),
+            if (widget.onShowLive != null)
+              CommandBarAction(
+                icon: Icons.sensors,
+                label: 'Live',
+                onTap: widget.onShowLive,
+              ),
             CommandBarAction(
-              icon: _rescanning ? Icons.hourglass_top : Icons.more_horiz,
-              label: 'MORE',
+              icon: _rescanning ? Icons.hourglass_top : Icons.more_vert,
+              label: 'More',
               onTap: _openActionSheet,
             ),
           ],
         ),
+        if (_searchOpen) _buildSearchField(t),
+        const Divider(height: 1),
+        Expanded(child: _buildBody(t, items)),
       ],
     );
   }

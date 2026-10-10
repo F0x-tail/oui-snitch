@@ -29,6 +29,17 @@ const kPillAll = AppTheme.accent;
 const kPillBle = AppTheme.flockBle;
 const kPillWifi = AppTheme.wardrive;
 
+(String, Color) wifiAuthMeta(int mode) => switch (mode) {
+      0 => ('OPEN', AppTheme.error),
+      1 => ('WEP', AppTheme.warning),
+      2 => ('WPA', AppTheme.warning),
+      3 => ('WPA2', AppTheme.success),
+      4 => ('WPA/2', AppTheme.success),
+      5 => ('ENT', AppTheme.accent),
+      6 => ('WPA3', AppTheme.success),
+      _ => ('WPA2', AppTheme.success),
+    };
+
 TextStyle barLabelStyle(BuildContext context, Color color,
     {bool bold = true}) {
   final base = Theme.of(context).textTheme.labelSmall ?? const TextStyle();
@@ -703,12 +714,14 @@ class CommandHeader extends StatelessWidget {
     required this.count,
     this.chips = const [],
     this.indicators = const [],
+    this.actions = const <CommandBarAction>[],
   });
 
   final String title;
   final String count;
   final List<Widget> chips;
   final List<Widget> indicators;
+  final List<CommandBarAction> actions;
 
   @override
   Widget build(BuildContext context) {
@@ -732,6 +745,15 @@ class CommandHeader extends StatelessWidget {
             count,
             style: style?.copyWith(color: AppTheme.accent, fontFamily: 'monospace', fontWeight: FontWeight.w700),
           ),
+          if (actions.isNotEmpty) SizedBox(width: gap * 0.5),
+          for (final a in actions)
+            IconButton(
+              tooltip: a.label,
+              onPressed: a.onTap,
+              visualDensity: VisualDensity.compact,
+              icon: Icon(a.icon, size: barIconSize(context)),
+              color: a.color ?? (a.active ? AppTheme.accent : t.textSecondary),
+            ),
         ],
       ),
     );

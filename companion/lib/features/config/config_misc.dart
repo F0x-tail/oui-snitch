@@ -205,24 +205,13 @@ class _WifiEnableToggleState extends ConsumerState<_WifiEnableToggle> {
 
 
 
-(String, Color) _configAuthMeta(int mode) => switch (mode) {
-      0 => ('OPEN', AppTheme.error),
-      1 => ('WEP', AppTheme.warning),
-      2 => ('WPA', AppTheme.warning),
-      3 => ('WPA2', AppTheme.success),
-      4 => ('WPA/2', AppTheme.success),
-      5 => ('ENT', AppTheme.accent),
-      6 => ('WPA3', AppTheme.success),
-      _ => ('WPA2', AppTheme.success),
-    };
-
 class _ConfigAuthPill extends StatelessWidget {
   const _ConfigAuthPill({required this.authMode});
   final int authMode;
 
   @override
   Widget build(BuildContext context) {
-    final (label, color) = _configAuthMeta(authMode);
+    final (label, color) = wifiAuthMeta(authMode);
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
       decoration: BoxDecoration(

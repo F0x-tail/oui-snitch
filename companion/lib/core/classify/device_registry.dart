@@ -109,6 +109,7 @@ Observation observationFromDetection(Detection d) {
     firstSeenMs: at,
     lastSeenMs: at,
     channel: ble ? 0 : d.channel,
+    authMode: ble || d.method != 'wifi_ap' ? null : d.wardrive?.authMode,
     hiddenSsid: !ble && d.method == 'wifi_ap' && d.ssid.trim().isEmpty,
     vendorIeOuis: ieOuis,
     gpsTrail: d.latitude != null && d.longitude != null && !d.approxGps

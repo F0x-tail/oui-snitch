@@ -25,6 +25,21 @@ Color confidenceColor(Confidence c) => switch (c) {
   Confidence.low => AppTheme.gpsNone,
 };
 
+Color classColor(SignatureClass k) => pillColor(k.index + 1);
+
+Color rssiColor(int rssi) => rssi >= -60
+    ? AppTheme.success
+    : rssi >= -75
+        ? AppTheme.warning
+        : AppTheme.gpsNone;
+
+String _ago(int ms) {
+  final s = (DateTime.now().millisecondsSinceEpoch - ms) ~/ 1000;
+  if (s < 60) return '${s < 0 ? 0 : s}s';
+  if (s < 3600) return '${s ~/ 60}m';
+  return '${s ~/ 3600}h';
+}
+
 class DevicesScreen extends ConsumerStatefulWidget {
   const DevicesScreen({super.key});
 
@@ -193,7 +208,7 @@ class _DevicesScreenState extends ConsumerState<DevicesScreen> {
                             label: k.label.toUpperCase(),
                             count: counts[k],
                             selected: _class == k,
-                            color: pillColor(k.index + 1),
+                            color: classColor(k),
                             onTap: () => apply(() {
                               _unclassifiedOnly = false;
                               _class = k;
@@ -329,6 +344,24 @@ class _DevicesScreenState extends ConsumerState<DevicesScreen> {
             CommandHeader(
               title: 'DEVICES',
               count: _filterCount > 0 ? '${shown.length}/${all.length}' : '${all.length}',
+              actions: [
+                CommandBarAction(
+                  icon: Icons.filter_alt,
+                  label: 'Filter',
+                  active: _filterCount > 0,
+                  onTap: () => _openFilterSheet(counts, unclassified),
+                ),
+                CommandBarAction(
+                  icon: _sortAscending ? Icons.arrow_upward : Icons.arrow_downward,
+                  label: 'Sort: ${_sortLabel(_sort)}',
+                  onTap: _openSortSheet,
+                ),
+                CommandBarAction(
+                  icon: Icons.more_vert,
+                  label: 'More',
+                  onTap: _openActionSheet,
+                ),
+              ],
               chips: [
                           if (_radio != null)
                             CommandActiveChip(
@@ -367,36 +400,20 @@ class _DevicesScreenState extends ConsumerState<DevicesScreen> {
                           ? 'Devices heard by the connected node or this phone appear here, grouped by signature class.'
                           : 'Loading signature catalog.',
                     )
-                  : ListView.builder(
-                      itemCount: ordered.length,
-                      itemBuilder: (context, i) => _DeviceRow(
-                        device: ordered[i],
-                        guess: guesses[ordered[i].obs.key]!,
+                  : Align(
+                      alignment: Alignment.topCenter,
+                      child: ConstrainedBox(
+                        constraints: const BoxConstraints(maxWidth: 860),
+                        child: ListView.builder(
+                          padding: EdgeInsets.symmetric(vertical: barGap(context)),
+                          itemCount: ordered.length,
+                          itemBuilder: (context, i) => _DeviceRow(
+                            device: ordered[i],
+                            guess: guesses[ordered[i].obs.key]!,
+                          ),
+                        ),
                       ),
                     ),
-            ),
-            CommandBar(
-              actions: [
-                CommandBarAction(
-                  icon: Icons.filter_alt,
-                  label: 'FILTER',
-                  active: _filterCount > 0,
-                  onTap: () => _openFilterSheet(counts, unclassified),
-                ),
-                CommandBarAction(
-                  icon: _sortAscending
-                      ? Icons.arrow_upward
-                      : Icons.arrow_downward,
-                  label: _sortLabel(_sort),
-                  active: true,
-                  onTap: _openSortSheet,
-                ),
-                CommandBarAction(
-                  icon: Icons.more_horiz,
-                  label: 'MORE',
-                  onTap: _openActionSheet,
-                ),
-              ],
             ),
           ],
         ),
@@ -470,71 +487,134 @@ class _DeviceRow extends ConsumerWidget {
       for (final s in device.signatures)
         if (s.decode case final d?) ...FleetDecode.decode(d, o).where((f) => f.live),
     ];
-    final alert = live.any((f) => f.emphasis);
+    final ble = o.kind == RadioKind.ble;
+    final kinds = {for (final s in device.signatures) s.kind}.toList();
+    final accent = kinds.isEmpty ? t.textDim : classColor(kinds.first);
     final sub = [
-      for (final f in live) f.display.toUpperCase(),
       if (o.name.isNotEmpty && o.name != title) o.name,
-      if (device.signatures.isNotEmpty) device.signatureNames.join(', '),
-      o.kind == RadioKind.ble ? 'BLE' : 'WIFI ch${o.channel}',
+      if (vendor != null && vendor != title) vendor,
+      if (o.mac.isNotEmpty) o.mac,
     ].join(' · ');
-    return InkWell(
-      onTap: () => showCommandSheet<void>(
-        context: context,
-        builder: (_) => DeviceDetailSheet(device: device, vendor: vendor),
-      ),
-      child: Padding(
-        padding: EdgeInsets.symmetric(horizontal: gap * 2, vertical: gap),
-        child: Row(
-          children: [
-            Container(
-              width: gap * 0.6,
-              height: kMinInteractiveDimension * 0.7,
-              decoration: BoxDecoration(
-                color: confidenceColor(guess.confidence),
-                borderRadius: BorderRadius.circular(gap),
-              ),
-            ),
-            SizedBox(width: gap * 1.5),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    title,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                      color: t.textPrimary,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                  Text(
-                    sub,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: Theme.of(
-                      context,
-                    ).textTheme.bodySmall?.copyWith(color: alert ? AppTheme.error : t.textDim),
-                  ),
-                ],
-              ),
-            ),
-            if (withYou) ...[
-              Icon(
-                Icons.directions_walk,
-                size: barIconSize(context),
-                color: AppTheme.error,
-              ),
-              SizedBox(width: gap),
+    final text = Theme.of(context).textTheme;
+    Widget tag(String label, Color c, {IconData? icon}) => Container(
+          padding: EdgeInsets.symmetric(horizontal: gap * 0.7, vertical: gap * 0.25),
+          decoration: BoxDecoration(
+            color: c.withValues(alpha: 0.14),
+            borderRadius: BorderRadius.circular(gap * 0.8),
+            border: Border.all(color: c.withValues(alpha: 0.5), width: 0.8),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              if (icon != null) ...[
+                Icon(icon, size: barIconSize(context) * 0.6, color: c),
+                SizedBox(width: gap * 0.3),
+              ],
+              Text(label, style: barLabelStyle(context, c).copyWith(fontSize: (text.labelSmall?.fontSize ?? 11) * 0.95)),
             ],
-            Text(
-              '${o.rssi}',
-              style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                color: t.textSecondary,
-                fontFamily: 'monospace',
-              ),
+          ),
+        );
+    final auth = o.authMode;
+    final authMeta = auth == null ? null : wifiAuthMeta(auth);
+    return Padding(
+      padding: EdgeInsets.symmetric(horizontal: gap * 1.5, vertical: gap * 0.4),
+      child: Material(
+        color: t.surface,
+        borderRadius: BorderRadius.circular(gap * 1.6),
+        clipBehavior: Clip.antiAlias,
+        child: InkWell(
+          onTap: () => showCommandSheet<void>(
+            context: context,
+            builder: (_) => DeviceDetailSheet(device: device, vendor: vendor),
+          ),
+          child: Container(
+            decoration: BoxDecoration(
+              border: Border(left: BorderSide(color: accent, width: gap * 0.6)),
             ),
-          ],
+            padding: EdgeInsets.fromLTRB(gap * 1.4, gap * 1.1, gap * 1.4, gap * 1.1),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Container(
+                  width: kMinInteractiveDimension * 0.8,
+                  height: kMinInteractiveDimension * 0.8,
+                  decoration: BoxDecoration(
+                    color: accent.withValues(alpha: 0.16),
+                    shape: BoxShape.circle,
+                  ),
+                  child: Icon(
+                    ble ? Icons.bluetooth : Icons.wifi,
+                    size: barIconSize(context) * 0.9,
+                    color: accent,
+                  ),
+                ),
+                SizedBox(width: gap * 1.4),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        title,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: text.bodyMedium?.copyWith(
+                          color: t.textPrimary,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                      if (sub.isNotEmpty)
+                        Padding(
+                          padding: EdgeInsets.only(top: gap * 0.2),
+                          child: Text(
+                            sub,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: text.bodySmall?.copyWith(color: t.textDim),
+                          ),
+                        ),
+                      SizedBox(height: gap * 0.7),
+                      Wrap(
+                        spacing: gap * 0.6,
+                        runSpacing: gap * 0.6,
+                        children: [
+                          for (final k in kinds) tag(k.label.toUpperCase(), classColor(k)),
+                          if (kinds.isEmpty) tag('UNCLASSIFIED', t.textDim),
+                          tag(ble ? 'BLE' : 'WIFI', ble ? kPillBle : kPillWifi),
+                          if (authMeta != null)
+                            tag(authMeta.$1, authMeta.$2, icon: auth == 0 ? Icons.lock_open : Icons.lock),
+                          if (!ble && o.channel > 0) tag('CH ${o.channel}', t.textSecondary),
+                          if (o.hiddenSsid) tag('HIDDEN', AppTheme.warning),
+                          if (o.randomized) tag('RANDOM MAC', t.textDim),
+                          for (final f in live)
+                            tag(f.display.toUpperCase(), f.emphasis ? AppTheme.error : AppTheme.accent),
+                          if (withYou) tag('WITH YOU', AppTheme.error, icon: Icons.directions_walk),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+                SizedBox(width: gap),
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.end,
+                  children: [
+                    Text(
+                      '${o.rssi}',
+                      style: text.titleSmall?.copyWith(
+                        color: rssiColor(o.rssi),
+                        fontFamily: 'monospace',
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                    Text('dBm', style: text.labelSmall?.copyWith(color: t.textDim)),
+                    SizedBox(height: gap * 0.5),
+                    Icon(Icons.circle, size: gap, color: confidenceColor(guess.confidence)),
+                    SizedBox(height: gap * 0.3),
+                    Text(_ago(o.lastSeenMs), style: text.labelSmall?.copyWith(color: t.textDim)),
+                  ],
+                ),
+              ],
+            ),
+          ),
         ),
       ),
     );

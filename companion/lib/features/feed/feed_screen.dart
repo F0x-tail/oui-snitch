@@ -35,7 +35,9 @@ enum FeedMetric {
 }
 
 class FeedScreen extends ConsumerStatefulWidget {
-  const FeedScreen({super.key});
+  const FeedScreen({super.key, this.onShowHistory});
+
+  final VoidCallback? onShowHistory;
 
   @override
   ConsumerState<FeedScreen> createState() => _FeedScreenState();
@@ -277,6 +279,30 @@ class _FeedScreenState extends ConsumerState<FeedScreen> {
                 if (state.isManagerConnected && sourceNodes.isNotEmpty)
                   Icon(Icons.hub, size: barIconSize(context) * 0.8, color: AppTheme.warning),
               ],
+              actions: [
+                CommandBarAction(
+                  icon: Icons.filter_alt,
+                  label: 'Filter',
+                  active: _activeFilterCount > 0,
+                  onTap: () => _openFilterSheet(sourceNodes, state.labelForNode),
+                ),
+                CommandBarAction(
+                  icon: _sortAscending ? Icons.arrow_upward : Icons.arrow_downward,
+                  label: 'Sort: ${_sortMetric.label}',
+                  onTap: _openSortSheet,
+                ),
+                if (widget.onShowHistory != null)
+                  CommandBarAction(
+                    icon: Icons.history,
+                    label: 'History',
+                    onTap: widget.onShowHistory,
+                  ),
+                CommandBarAction(
+                  icon: Icons.more_vert,
+                  label: 'More',
+                  onTap: () => _openActionSheet(state),
+                ),
+              ],
             ),
             if (_searchOpen)
               CommandSearchField(
@@ -304,29 +330,6 @@ class _FeedScreenState extends ConsumerState<FeedScreen> {
                         return DetectionRow(detection: item as Detection);
                       },
                     ),
-            ),
-            CommandBar(
-              actions: [
-                CommandBarAction(
-                  icon: Icons.filter_alt,
-                  label: 'FILTER',
-                  active: _activeFilterCount > 0,
-                  onTap: () => _openFilterSheet(sourceNodes, state.labelForNode),
-                ),
-                CommandBarAction(
-                  icon: _sortAscending
-                      ? Icons.arrow_upward
-                      : Icons.arrow_downward,
-                  label: _sortMetric.label,
-                  active: true,
-                  onTap: _openSortSheet,
-                ),
-                CommandBarAction(
-                  icon: Icons.more_horiz,
-                  label: 'MORE',
-                  onTap: () => _openActionSheet(state),
-                ),
-              ],
             ),
           ],
         ),

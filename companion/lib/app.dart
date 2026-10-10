@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 import 'package:oui_spy/features/config/config_menu_state.dart';
 import 'package:oui_spy/features/config/device_config.dart';
 import 'package:oui_spy/features/detections/detections_screen.dart';
+import 'package:oui_spy/features/devices/devices_screen.dart';
 import 'package:oui_spy/features/config/widgets/config_nav.dart'
     show kConfigSectionSheetRoute;
 import 'package:oui_spy/features/engines/detector_screen.dart';
@@ -43,6 +44,12 @@ final routerProvider = Provider<GoRouter>((ref) {
             path: '/detections',
             pageBuilder: (context, state) => const NoTransitionPage(
               child: DetectionsScreen(),
+            ),
+          ),
+          GoRoute(
+            path: '/devices',
+            pageBuilder: (context, state) => const NoTransitionPage(
+              child: DevicesScreen(),
             ),
           ),
           GoRoute(
@@ -233,8 +240,8 @@ class AppShell extends ConsumerStatefulWidget {
 }
 
 class _AppShellState extends ConsumerState<AppShell> {
-  static const _routes = ['/home', '/detections', '/wardrive', '/config'];
-  static const _configIndex = 3;
+  static const _routes = ['/home', '/detections', '/devices', '/wardrive', '/config'];
+  static const _configIndex = 4;
 
   bool get _sectionSheetOpen {
     final nav = _shellNavigatorKey.currentState;
@@ -273,11 +280,15 @@ class _AppShellState extends ConsumerState<AppShell> {
           ),
           BottomNavigationBarItem(
             icon: Icon(Icons.radar),
-            label: 'DETECTIONS',
+            label: 'LIVE',
+          ),
+          BottomNavigationBarItem(
+            icon: Icon(Icons.devices_other),
+            label: 'DEVICES',
           ),
           BottomNavigationBarItem(
             icon: Icon(Icons.map),
-            label: 'MAP',
+            label: 'WARDRIVE',
           ),
           BottomNavigationBarItem(
             icon: Icon(Icons.settings),
