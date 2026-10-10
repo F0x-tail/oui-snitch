@@ -986,7 +986,7 @@ static uint8_t s_brightStep = 0;
 static void toggleEngine(EngineId id, const char* label, uint32_t now,
                          uint8_t r, uint8_t g, uint8_t b) {
     bool on = engineGetState(id) != ESTATE_DISABLED;
-    if (on) engineDisable(id); else engineEnable(id);
+    if (on) engineDisableLocal(id); else engineEnableLocal(id);
     Serial.printf("[DONGLE] button -> %s %s\n", label, on ? "stop" : "start");
     buttonFlash(now, r, g, b);
 }
@@ -1011,8 +1011,8 @@ static void cycleDetMode(uint32_t now) {
 static void toggleFlock(uint32_t now) {
     bool on = engineGetState(ENGINE_FLOCK_BLE) != ESTATE_DISABLED ||
               engineGetState(ENGINE_FLOCK_WIFI) != ESTATE_DISABLED;
-    if (on) { engineDisable(ENGINE_FLOCK_BLE); engineDisable(ENGINE_FLOCK_WIFI); }
-    else    { engineEnable(ENGINE_FLOCK_BLE);  engineEnable(ENGINE_FLOCK_WIFI); }
+    if (on) { engineDisableLocal(ENGINE_FLOCK_BLE); engineDisableLocal(ENGINE_FLOCK_WIFI); }
+    else    { engineEnableLocal(ENGINE_FLOCK_BLE);  engineEnableLocal(ENGINE_FLOCK_WIFI); }
     Serial.printf("[DONGLE] flock %s\n", on ? "off" : "on");
     buttonFlash(now, 0, 90, 40);
 }
@@ -1027,14 +1027,14 @@ static void startSelectedMode(uint32_t now) {
 
 static void foxhuntLastHit(uint32_t now) {
     if (engineGetState(ENGINE_FOXHUNTER) != ESTATE_DISABLED) {
-        engineDisable(ENGINE_FOXHUNTER);
+        engineDisableLocal(ENGINE_FOXHUNTER);
         s_fhArmed = false;
         Serial.println("[DONGLE] foxhunt off");
         buttonFlash(now, 40, 40, 40);
         return;
     }
     if (foxhunterHasTarget()) {          // app-set target wins
-        engineEnable(ENGINE_FOXHUNTER);
+        engineEnableLocal(ENGINE_FOXHUNTER);
         s_fhArmed = true;
         Serial.println("[DONGLE] foxhunt -> app target");
         buttonFlash(now, 0, 60, 90);
@@ -1046,7 +1046,7 @@ static void foxhuntLastHit(uint32_t now) {
         return;
     }
     foxhunterSetTarget(s_fhMac, s_fhChan);
-    engineEnable(ENGINE_FOXHUNTER);
+    engineEnableLocal(ENGINE_FOXHUNTER);
     s_fhArmed = true;
     Serial.printf("[DONGLE] foxhunt -> %02X:%02X:%02X:%02X:%02X:%02X ch=%u\n",
                   s_fhMac[0], s_fhMac[1], s_fhMac[2], s_fhMac[3], s_fhMac[4],

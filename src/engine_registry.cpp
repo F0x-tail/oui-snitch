@@ -12,6 +12,7 @@ static uint8_t g_engineDenyMask = 0;
 
 static const EngineCallbacks* engines[ENGINE_COUNT] = {nullptr};
 static EngineState states[ENGINE_COUNT] = {ESTATE_DISABLED};
+static volatile uint8_t localMask = 0;
 static bool initialized[ENGINE_COUNT] = {false};
 static SemaphoreHandle_t engineMux = nullptr;
 
@@ -117,6 +118,7 @@ void engineDisableAll(void) {
     autoPcapTriggerSrc = 0xFF;
     autoPcapUserCancelled = false;
     memset(autoPcapTriggerMac, 0, 6);
+    localMask = 0;
     for (int i = 0; i < ENGINE_COUNT; i++) {
         if (states[i] != ESTATE_DISABLED && engines[i] != nullptr && engines[i]->stop) {
             Serial.printf("[ENGINE] Force-stopping %s\n", engines[i]->name);
@@ -221,6 +223,42 @@ bool engineDisable(EngineId id) {
     bool r = engineDisableImpl(id);
     if (engineMux) xSemaphoreGiveRecursive(engineMux);
     return r;
+}
+
+bool engineEnableLocal(EngineId id) {
+    if (id >= ENGINE_COUNT) return false;
+    if (engineMux) xSemaphoreTakeRecursive(engineMux, portMAX_DELAY);
+    bool r = engineEnable(id);
+    if (r) localMask |= ENGINE_BITMASK(id);
+    if (engineMux) xSemaphoreGiveRecursive(engineMux);
+    return r;
+}
+
+uint8_t engineGetLocalMask(void) { return localMask; }
+
+bool engineDisableLocal(EngineId id) {
+    if (id >= ENGINE_COUNT) return false;
+    if (engineMux) xSemaphoreTakeRecursive(engineMux, portMAX_DELAY);
+    localMask &= (uint8_t)~ENGINE_BITMASK(id);
+    bool r = engineDisableImpl(id);
+    if (engineMux) xSemaphoreGiveRecursive(engineMux);
+    return r;
+}
+
+void engineDisableNonLocal(void) {
+    if (engineMux) xSemaphoreTakeRecursive(engineMux, portMAX_DELAY);
+    uint8_t keep = localMask & engineGetActiveMask();
+    if (keep == 0) {
+        engineDisableAll();
+    } else {
+        for (int i = 0; i < ENGINE_COUNT; i++) {
+            if (!(keep & ENGINE_BITMASK(i)) && states[i] != ESTATE_DISABLED) {
+                engineDisableImpl((EngineId)i);
+            }
+        }
+        Serial.printf("[ENGINE] Non-local engines disabled, kept device-started mask=0x%02X\n", keep);
+    }
+    if (engineMux) xSemaphoreGiveRecursive(engineMux);
 }
 
 EngineState engineGetState(EngineId id) {
@@ -535,7 +573,7 @@ void engineProcessCommand(const EngineCommand* cmd) {
                 autoPcapPausedMask = 0;
                 Serial.println("[ENGINE] user cancelled auto-pcap; restore skipped");
             }
-            engineDisable((EngineId)cmd->engine_id);
+            engineDisableLocal((EngineId)cmd->engine_id);
             break;
         case 0x0F: // Disable ALL engines
             engineDisableAll();

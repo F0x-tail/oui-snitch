@@ -854,7 +854,7 @@ void bleGattNodeGraceTick(void) {
     if (nodePhoneGoneMs != 0 && !phoneConnected &&
         (millis() - nodePhoneGoneMs) > NODE_PHONE_GRACE_MS) {
         if (!offlineScanEnabled) {
-            engineDisableAll();
+            engineDisableNonLocal();
             Serial.println("[BLE] phone gone (grace expired) — node engines off");
         }
         nodePhoneGoneMs = 0;

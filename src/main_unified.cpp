@@ -1603,6 +1603,17 @@ void setup() {
     xTaskCreatePinnedToCore(spoolStressInjectTask, "spoolstress", 4096, NULL, 1, NULL, 1);
     Serial.println("[SPOOL-STRESS] node: offline ON, mesh auto, injecting ~500 spoolable det/s; 20s flush-to-mesh pulse");
 #endif
+#ifdef OUISPY_LOCAL_OWN_E2E
+    xTaskCreatePinnedToCore([](void*) {
+        vTaskDelay(pdMS_TO_TICKS(4000));
+        engineEnableLocal(ENGINE_SKYSPY);
+        engineEnable(ENGINE_DETECTOR);
+        Serial.printf("[OWN-E2E] armed active=0x%02X local=0x%02X\n", engineGetActiveMask(), engineGetLocalMask());        for (;;) {
+            vTaskDelay(pdMS_TO_TICKS(5000));
+            Serial.printf("[OWN-E2E] active=0x%02X local=0x%02X phone=%d\n", engineGetActiveMask(), engineGetLocalMask(), bleGattIsConnected() ? 1 : 0);
+        }
+    }, "owne2e", 3072, NULL, 1, NULL, 1);
+#endif
 #ifdef OUISPY_IE_E2E
     xTaskCreatePinnedToCore([](void*) {
         vTaskDelay(pdMS_TO_TICKS(4000));

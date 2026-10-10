@@ -27,6 +27,11 @@ bool engineDisable(EngineId id);
 // Force-disable ALL engines (stop callbacks + reset state)
 void engineDisableAll(void);
 
+bool engineEnableLocal(EngineId id);
+bool engineDisableLocal(EngineId id);
+uint8_t engineGetLocalMask(void);
+void engineDisableNonLocal(void);
+
 // Get current state
 EngineState engineGetState(EngineId id);
 void engineSetState(EngineId id, EngineState state);
