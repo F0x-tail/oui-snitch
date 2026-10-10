@@ -129,8 +129,6 @@ Future<void> reconcileDanglingWardriveSessions(AppDatabase db) async {
   }
 }
 
-/// Global WiFi band select. On dual-band (C5) nodes: 2.4GHz only, 5GHz only,
-/// or both. On single-band nodes the 5GHz bit is a no-op.
 enum WifiBand { band24, band5, both }
 
 class WardriveController extends ChangeNotifier {
@@ -251,8 +249,6 @@ class WardriveController extends ChangeNotifier {
   bool offlineGpsTag = false;
 
   WardriveState state = WardriveState.idle;
-  // Non-null while the radio is starting up / shutting down, for UI feedback
-  // until the running header (or idle controls) is real. 'starting' | 'stopping'.
   String? radioTransition;
   /// Detections dropped because they fell inside a wardrive-exclusion zone.
   int geofenceSuppressed = 0;
@@ -1177,9 +1173,6 @@ class WardriveController extends ChangeNotifier {
     WardriveRadio.both => 0x03,
   };
 
-  /// Enable engines one at a time with a settle delay after WiFi engines.
-  /// ESP32 WiFi init can destabilize the NimBLE connection if BLE scan
-  /// restarts too quickly; the resulting reconnect fires DISABLE_ALL.
   Future<void> _enableEnginesSequentially(List<Engine> engineList) async {
     if (engineList.any((e) => e.isWifi)) {
       await _ble.sendWifiBand(wifiBandMask);
@@ -1199,8 +1192,6 @@ class WardriveController extends ChangeNotifier {
     }
   }
 
-  /// Wait for the firmware to report [engine] running. The duration is a
-  /// ceiling, not a sleep: the device answers in well under 100ms.
   Future<void> _awaitEngineUp(Engine engine, Duration ceiling) async {
     try {
       await _ble.engineStates

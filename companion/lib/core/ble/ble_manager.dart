@@ -46,8 +46,6 @@ enum NodeConnectionState {
   reconnecting,
 }
 
-/// Central BLE manager. Handles scanning, connection, GATT operations,
-/// and detection stream from the OUI-SPY device.
 class BleManager {
   BleManager();
 
@@ -1247,8 +1245,6 @@ class BleManager {
     );
   }
 
-  /// Read the device's live GPS state, including whether its on-board GPS
-  /// module has a fix.
   Future<GpsStatus?> readGpsStatus() async {
     if (_gpsReceive == null || !isConnected) return null;
     try {

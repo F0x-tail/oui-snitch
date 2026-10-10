@@ -2,8 +2,6 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:oui_spy/core/wardrive_state.dart';
 
 void main() {
-  // Node running flock(ble+wifi)+drone+detector, NO wardrive bit
-  // (wigle dropped by keep-running). 0x01 det | 0x02 fBle | 0x04 fWifi | 0x10 sky.
   const runningMask = 0x01 | 0x02 | 0x04 | 0x10;
 
   test('targetsFromEngineMask never yields wigle', () {

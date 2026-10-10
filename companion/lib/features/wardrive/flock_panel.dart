@@ -15,8 +15,6 @@ String _flockConfShort(FlockConfidence c) => switch (c) {
   FlockConfidence.suspected => 'S',
 };
 
-/// Compact flock count badge. Tap to expand detail list.
-/// Receives pre-deduped flock detections (unique per MAC).
 class FlockPanel extends StatefulWidget {
   const FlockPanel(
       {super.key,

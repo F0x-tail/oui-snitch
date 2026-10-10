@@ -50,8 +50,6 @@ class _Tile {
   final DateTime fetchedAt;
 }
 
-/// Crowd-sourced ALPR positions from OpenStreetMap (the DeFlock dataset),
-/// cached per tile so a driven area keeps working offline.
 class DeflockProvider extends ChangeNotifier {
   DeflockProvider(this._prefs, {DeflockApi? api})
       : _api = api ?? DeflockApi() {
@@ -65,8 +63,6 @@ class DeflockProvider extends ChangeNotifier {
   static const _keyShow = 'deflock_show_alpr';
   static const _keyCache = 'deflock_tile_cache_v1';
 
-  /// ~5.5 km cells: small enough for one Overpass call, big enough that a
-  /// drive does not thrash the API.
   static const double _tileDeg = 0.05;
   static const Duration _tileTtl = Duration(days: 7);
   static const int _maxTiles = 2000;
@@ -83,8 +79,6 @@ class DeflockProvider extends ChangeNotifier {
 
   final Map<String, _Tile> _tiles = {};
 
-  /// Tile bboxes are inclusive on every edge, so a node sitting on a boundary
-  /// comes back in each neighbouring tile — index by OSM id to keep it once.
   final Map<int, AlprNode> _byId = {};
   bool _showAlpr = false;
   bool _loading = false;
@@ -196,8 +190,6 @@ class DeflockProvider extends ChangeNotifier {
     return GeoBounds(south: south, west: west, north: north, east: east);
   }
 
-  /// Pull the tile a single detection sits in, so a hit outside the area you
-  /// panned over still resolves. No-op unless the layer is on.
   Future<void> ensureAround(double lat, double lon) {
     if (!_showAlpr) return Future<void>.value();
     return ensureBounds(_boundsForKey(_keyFor(lat, lon)));

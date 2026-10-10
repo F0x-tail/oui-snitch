@@ -1,9 +1,3 @@
-/**
- * OUI-SPY Unified Firmware — Shared Protocol Definitions
- *
- * All structs, enums, UUIDs, and queue definitions shared between
- * the GATT server, engine registry, and individual engines.
- */
 #ifndef PROTOCOL_H
 #define PROTOCOL_H
 
@@ -57,9 +51,6 @@ extern volatile uint32_t g_engRawSeen;
   #define OUISPY_BOARD "unknown"
 #endif
 
-// ============================================================================
-// Engine IDs — bitmask-compatible
-// ============================================================================
 enum EngineId : uint8_t {
     ENGINE_DETECTOR   = 0,  // bitmask 0x01
     ENGINE_FLOCK_BLE  = 1,  // bitmask 0x02
@@ -101,9 +92,6 @@ static inline void bleAddrToMac(const uint8_t* native, uint8_t* out) {
     for (int i = 0; i < 6; i++) out[i] = native[5 - i];
 }
 
-// ============================================================================
-// Engine State
-// ============================================================================
 enum EngineState : uint8_t {
     ESTATE_DISABLED      = 0,
     ESTATE_IDLE          = 1,
@@ -117,10 +105,6 @@ enum EngineState : uint8_t {
     ESTATE_COMPLETE      = 8
 };
 
-// ============================================================================
-// Detection Methods
-// ============================================================================
-// Flock-WiFi methods
 #define METHOD_OUI_ADDR1       0
 #define METHOD_OUI_ADDR2       1
 #define METHOD_OUI_ADDR3       2
@@ -136,8 +120,6 @@ enum EngineState : uint8_t {
 #define METHOD_GATT_UUID       4
 #define METHOD_NORDIC_DFU      5
 
-// Flock signal mask — every predicate that hit, not just the deciding one.
-// BLE emits on NAME or RAVEN_UUID alone, else only on the full VALIDATED set.
 #define FLOCK_SIG_OUI          0x01
 #define FLOCK_SIG_NAME         0x02
 #define FLOCK_SIG_SERIAL       0x04
@@ -177,9 +159,6 @@ enum EngineState : uint8_t {
 #define SIG_AXON       0x40
 #define SIG_ALL        0x7F
 
-// ============================================================================
-// Detection Event — produced by engines, consumed by GATT notification task
-// ============================================================================
 typedef struct __attribute__((packed)) {
     uint8_t  engine_id;          // EngineId
     uint8_t  mac[6];             // Device MAC
@@ -270,9 +249,6 @@ typedef struct __attribute__((packed)) {
 static_assert(sizeof(DetectionEvent) == 163, "DetectionEvent size is part of queue/spool/mesh layout");
 #endif
 
-// ============================================================================
-// GPS Data — received from phone app via BLE
-// ============================================================================
 typedef struct __attribute__((packed)) {
     double   latitude;
     double   longitude;
@@ -284,9 +260,6 @@ typedef struct __attribute__((packed)) {
     int64_t  timestamp_ms;
 } GpsData;
 
-// ============================================================================
-// Engine Command — from GATT write to engine task
-// ============================================================================
 typedef struct {
     uint8_t  command;       // 0x01=enable, 0x00=disable, 0x10=config_update, 0x1A=wifi_band
     uint8_t  engine_id;
@@ -294,25 +267,14 @@ typedef struct {
     uint8_t  payload_len;
 } EngineCommand;
 
-// Global WiFi band select (command 0x1A): payload[0] = WIFI_BAND_* bitmask
-// (bit0=2.4GHz, bit1=5GHz). engine_id ignored. Applies to all WiFi engines.
 #define ENGINE_CTRL_WIFI_BAND 0x1A
 
-// ============================================================================
-// Queues (extern, created in main.cpp)
-// ============================================================================
 extern QueueHandle_t detectionQueue;   // DetectionEvent, depth 128
 extern QueueHandle_t engineCmdQueue;   // EngineCommand, depth 8
 
-// ============================================================================
-// GPS State (extern, updated by BLE write callback)
-// ============================================================================
 extern volatile GpsData currentGps;
 extern volatile bool    gpsValid;
 
-// ============================================================================
-// Hardware Config (extern, loaded at boot, updated by BLE write callback)
-// ============================================================================
 extern volatile bool    hwBuzzerEnabled;
 extern volatile uint8_t hwBuzzerVolume;      // 0-255 PWM duty cycle
 extern volatile bool    hwLedEnabled;
@@ -342,12 +304,6 @@ size_t melodyGetEntryOp(uint8_t idx, uint8_t* out);
 uint8_t melodyCount(void);
 bool   melodyLookup(uint8_t engine, uint8_t method, uint8_t* n, uint8_t notes[][3]);
 
-// ============================================================================
-// GATT UUIDs
-// ============================================================================
-// Base UUID matches Flutter app: 0000XXXX-0ui5-4py0-bad0-c010ne1pan1c
-// NimBLE needs valid hex — "0ui5" isn't valid hex. Use the app's literal strings.
-// Canonical form: lowercase hex only. Map app UUIDs to valid hex.
 #define UUID_BASE            "0a15-4b70-ba00-c010ae1ba01c"
 #define SVC_UUID             "00000001-" UUID_BASE
 #define CHR_DEVICE_INFO      "00000001-" UUID_BASE
@@ -375,9 +331,6 @@ bool   melodyLookup(uint8_t engine, uint8_t method, uint8_t* n, uint8_t notes[][
 #define CHR_PCAP_DATA        "00000162-" UUID_BASE
 #define CHR_DETECTOR_CONFIG  "00000100-" UUID_BASE
 
-// ============================================================================
-// System Control (CHR_SYSTEM_CONTROL write opcodes)
-// ============================================================================
 #define SYS_CMD_REBOOT            0x01
 #define SYS_CMD_FACTORY_RESET     0x02
 #define SYS_CMD_CONFIRM_OTA       0x03
@@ -390,12 +343,6 @@ bool   melodyLookup(uint8_t engine, uint8_t method, uint8_t* n, uint8_t notes[][
 #define SYS_CMD_FLUSH_SPOOL       0x0B
 #define SYS_CMD_SPOOL_CLEAR       0x0C
 
-// ============================================================================
-// PCAP — live capture stats (notified over CHR_PCAP_STATS)
-// ============================================================================
-// Modes:
-//   0 = WIFI radiotap (LINKTYPE_IEEE80211_RADIOTAP=127)
-//   1 = BLE LE LL with PHDR (LINKTYPE_BLUETOOTH_LE_LL_WITH_PHDR=256)
 #define PCAP_MODE_WIFI 0
 #define PCAP_MODE_BLE  1
 
@@ -444,9 +391,6 @@ typedef struct __attribute__((packed)) {
 #define PCAP_DATA_COMMIT         0x03  // [op]
 #define PCAP_DATA_ABORT          0x04  // [op][reason:1]
 
-// ============================================================================
-// Mesh Configuration
-// ============================================================================
 typedef struct __attribute__((packed)) {
     uint8_t enabled;
     uint8_t encryption_enabled;
@@ -478,9 +422,6 @@ typedef struct __attribute__((packed)) {
 
 #define DET_FLAG_AWAY 0x80
 
-// ============================================================================
-// Mesh Packet Types — discriminator for ESP-NOW payloads
-// ============================================================================
 enum MeshPacketType : uint8_t {
     MESH_PKT_DETECTION       = 0x01,
     MESH_PKT_COMMAND         = 0x02,
@@ -556,9 +497,6 @@ typedef struct __attribute__((packed)) {
     uint8_t  data[MESH_CONFIG_MAX];
 } MeshConfigPacket;
 
-// Fleet WiFi OTA: manager -> all nodes. Carries the manager's STA creds + the
-// node firmware URL so each node joins WiFi and self-updates (no per-node BLE).
-// data = [ssid_len][ssid][pass_len][pass][url_len][url]
 #define MESH_WIFIOTA_MAX 220
 typedef struct __attribute__((packed)) {
     uint8_t  pkt_type;          // MESH_PKT_WIFI_OTA
@@ -593,8 +531,6 @@ typedef struct __attribute__((packed)) {
     uint8_t  mode;
 } MeshAutoPcapEventPacket;
 
-// Raw BLE notification forwarded over mesh. Node fills payload + kind,
-// MGR routes to matching BLE characteristic and notifies phone.
 enum MeshRawNotifyKind : uint8_t {
     RAW_NOTIFY_PCAP_DATA         = 0x01,
     RAW_NOTIFY_PCAP_STATS        = 0x02,
@@ -655,10 +591,6 @@ typedef struct __attribute__((packed)) {
     uint8_t  channel;               // ESP-NOW channel
 } MeshInvitePacket;
 
-// ============================================================================
-// Mesh OTA byte-relay (manager downloads node image once over WiFi, streams it
-// to nodes over ESP-NOW — espressif esp-now OTA pattern). Nodes need no WiFi.
-// ============================================================================
 #define MESH_OTA_CHUNK_MAX 192   // payload bytes/chunk (plaintext+GCM fits ESP-NOW 250B)
 
 typedef struct __attribute__((packed)) {
@@ -698,16 +630,10 @@ typedef struct __attribute__((packed)) {
     uint16_t recv_count;           // chunks written so far (progress)
 } MeshOtaAckPacket;
 
-// ============================================================================
-// GATT UUIDs — Mesh
-// ============================================================================
 #define CHR_MESH_CONFIG      "00000060-" UUID_BASE
 #define CHR_MESH_STATUS      "00000061-" UUID_BASE
 #define CHR_ORCHESTRATION    "00000070-" UUID_BASE
 
-// ============================================================================
-// Mesh globals (extern, managed by mesh_espnow.cpp)
-// ============================================================================
 extern volatile MeshConfig meshCurrentConfig;
 extern volatile MeshStatus meshCurrentStatus;
 
@@ -715,16 +641,10 @@ extern volatile MeshStatus meshCurrentStatus;
 #define MESH_PEER_STATUS_QUEUE_DEPTH 4
 extern QueueHandle_t peerStatusQueue;  // MeshStatusPacket, depth 4
 
-// ============================================================================
-// Helper: push detection onto queue (ISR-safe variant available)
-// ============================================================================
 #if defined(OUISPY_ENGINE_DIAG) || defined(OUISPY_ENGINE_MATRIX)
 extern volatile uint32_t g_diagDetCount[ENGINE_COUNT];
 #endif
 
-// Slots reserved for the WiFi promiscuous ISR path (pushDetectionFromISR),
-// which cannot block or retry. Task-context producers (BLE) back off before
-// the queue is full so a dense BLE environment can't starve WiFi capture.
 #define DETQ_ISR_RESERVE 24
 
 static inline bool pushDetection(const DetectionEvent* evt) {

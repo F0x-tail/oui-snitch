@@ -234,8 +234,6 @@ class _WardriveScreenState extends ConsumerState<WardriveScreen> with WidgetsBin
     });
   }
 
-  /// Tapping a detection isolates it: the map drops every other pin until
-  /// the focus chip is cleared.
   void _zoomToDetection(Detection d) {
     if (!_hasMapCoord(d.latitude, d.longitude)) return;
     setState(() {
@@ -1447,12 +1445,6 @@ class _WardriveScreenState extends ConsumerState<WardriveScreen> with WidgetsBin
         rings: rings);
   }
 
-  /// Geographic bearing (rad, clockwise from north) of the route polyline at
-  /// its vertex nearest [p]. Null when the route is too short to have a
-  /// direction. Leaders are drawn perpendicular to this so heads sit off to
-  /// the side of the path instead of overlapping it.
-  // ponytail: O(detections·routePoints) nearest scan; build a grid index if a
-  // long session's marker rebuild ever lags.
   static double? _routeBearingRad(LatLng p, List<LatLng> route) {
     if (route.length < 2) return null;
     final cosLat = cos(p.latitude * pi / 180);

@@ -1,8 +1,6 @@
 import 'dart:io';
 import 'package:path_provider/path_provider.dart';
 
-/// File-based debug logger. Writes to Documents/oui_spy.log.
-/// Tail with: tail -f ~/Library/Containers/tech.colonelpanic.ouiSpy/Data/Documents/oui_spy.log
 class DebugLog {
   DebugLog._();
   static IOSink? _sink;

@@ -9,10 +9,6 @@
 #include <Arduino.h>
 #include <NimBLEDevice.h>
 
-// Standalone Flock-BLE scanner. When Wardrive is active, this engine yields:
-// Wardrive's BLE callback runs the same predicates from flock_match.h and
-// emits FLOCK_BLE events directly.
-
 static NimBLEScan* bleScan = nullptr;
 static bool scanning = false;
 static bool flockBleRadioGate = true;

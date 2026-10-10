@@ -1,6 +1,3 @@
-/**
- * Engine Registry implementation.
- */
 #include "engine_registry.h"
 #include "engines/pcap.h"
 #include "mesh_espnow.h"
@@ -30,8 +27,6 @@ static bool isBleScanEngine(EngineId id) {
            id == ENGINE_PCAP;
 }
 
-// Wardrive coexists with Flock-WiFi/Flock-BLE via passive mode (those engines
-// detect on wardrive's sniffer callback instead of owning the radio).
 static bool wifiCoexCompatible(EngineId a, EngineId b) {
     auto inGroup = [](EngineId e) {
         return e == ENGINE_WARDRIVE || e == ENGINE_FLOCK_WIFI ||
@@ -167,8 +162,6 @@ static bool engineEnableImpl(EngineId id) {
         }
     }
 
-    // WiFi exclusivity — force-stop conflicting WiFi engines, except
-    // wardrive+flock_wifi which run together via passive mode.
     if (isWifiEngine(id)) {
         for (int i = 0; i < ENGINE_COUNT; i++) {
             if (i == id) continue;

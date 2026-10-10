@@ -4,18 +4,6 @@ import 'package:oui_spy/core/models/detection.dart';
 import 'package:oui_spy/core/models/engine.dart';
 import 'package:oui_spy/core/radio_classifier.dart';
 
-/// Flock-BLE notification wire layout (firmware ble_gatt.cpp packDetection):
-///   [0]      engine_id
-///   [1..6]   mac
-///   [7]      rssi        [8]  channel
-///   [9..12]  timestamp   [13] method
-///   [14..18] source_node_id
-///   ext base = 19:
-///     +0      is_raven
-///     +1..16  raven_fw
-///     +17     auth_mode
-///     +18..49 name
-///     +50     sig_mask
 List<int> _flockPacket({
   required String name,
   int sigMask = 0,

@@ -221,9 +221,6 @@ extern "C" void otaInit(void) {
                       running->label, boot->label);
     }
 
-    // Rollback validation state: if previous OTA boot is pending validation,
-    // log it. Companion confirms via SYS_CMD_CONFIRM_OTA after a successful
-    // GATT handshake. Until then, a reboot would auto-revert.
     esp_ota_img_states_t state;
     if (running && esp_ota_get_state_partition(running, &state) == ESP_OK) {
         if (state == ESP_OTA_IMG_PENDING_VERIFY) {

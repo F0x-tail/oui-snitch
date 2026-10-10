@@ -85,8 +85,6 @@ static void unipwnScanComplete(NimBLEScanResults results) { (void)results; }
 
 static void unipwnLoop(void) {
     if (!scanning || !bleScan) return;
-    // Yield the shared scan to wardrive's duty cycle when it owns the radio;
-    // our scanCb still gets adverts via ble_coex dispatch.
     if (engineGetState(ENGINE_WARDRIVE) != ESTATE_DISABLED) return;
     bleCoexEnsureScanning();
 }

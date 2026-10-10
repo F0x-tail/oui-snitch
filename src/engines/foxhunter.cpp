@@ -22,8 +22,6 @@ static unsigned long lastBeepTime = 0;
 static bool beepOn = false;
 static unsigned long beepOffAt = 0;
 
-// WiFi promiscuous — 2.4GHz 1-14 + (C5) 5GHz UNII bands.
-// Channel hint from feed = start channel + extra dwell (priority), not a lock.
 #ifdef OUISPY_DUAL_BAND
 static const uint8_t fhChannels[] = {
     1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14,
@@ -257,9 +255,6 @@ static void foxhunterStart(void) {
         if (!meshIsEnabled()) {
             WiFi.mode(WIFI_STA);
         }
-        // MGMT+DATA only. CTRL frames (ACK/CTS/RTS/BlockAck) outnumber legit
-        // target frames 10-100x on busy networks; including them overloads
-        // the ISR and drops the very frames foxhunter needs to track RSSI on.
         wifiSnifferApplyPs();
         wifiApplyRegdomain();
         wifiCoexRegister(wifiSnifferCb,

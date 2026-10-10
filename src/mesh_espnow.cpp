@@ -270,19 +270,12 @@ static void recordLiveNode(const char* id, uint8_t role, uint8_t engines, uint32
     xSemaphoreGive(liveMutex);
 }
 
-// A brand-new node took a slot since the last check — the manager uses this to
-// push the full current config immediately instead of making the node wait up
-// to ~21s for the next 7s rebroadcast cycle.
 bool meshConsumeNewNodeJoined(void) {
     bool v = gNewNodeJoined;
     gNewNodeJoined = false;
     return v;
 }
 
-// Optimistically reflect a just-issued engine command in every live node's
-// mask, so reconcile sees intent satisfied immediately instead of spamming the
-// command for the ~5s until the next heartbeat confirms it. A heartbeat that
-// disagrees later re-reveals genuine drift (bounded to one re-issue per HB).
 void meshMarkNodesEngine(uint8_t engine, bool on) {
     if (!liveMutex || engine >= 8) return;
     uint8_t bit = (uint8_t)(1u << engine);
@@ -296,9 +289,6 @@ void meshMarkNodesEngine(uint8_t engine, bool on) {
     xSemaphoreGive(liveMutex);
 }
 
-// Liveness-only refresh. ACK and detection RX must NOT clobber the node's
-// engine mask/role — only HEARTBEAT carries those. Zeroing them here makes
-// reconcile see engines as "missing" between heartbeats and storm re-enables.
 static void recordLiveSeen(const char* id) {
     if (!liveMutex) return;
     if (id[0] == 0) return;
@@ -1240,10 +1230,6 @@ static void onEspNowSend(const uint8_t* macAddr, esp_now_send_status_t status) {
 
 #define MESH_RX_WINDOW_MS    300
 #define MESH_RX_MIN_MS       100
-// Backstop: if a scanning node hasn't naturally dwelt on the mesh channel
-// within this window, force a brief ch1 visit so mesh stays alive. Normal
-// scanning weaves through ch1 (a priority channel) every sweep, so this rarely
-// fires — that's what recovers v0.3.9-class scan speed (no forced park).
 #define MESH_HOME_MAX_GAP_MS 1500
 #define MESH_MGR_SILENCE_FORCE_MS 6000
 #define MESH_REACQUIRE_MS 3000
@@ -1257,9 +1243,6 @@ static TaskHandle_t  meshSchedTaskHandle = NULL;
 bool meshInMeshWindow(void) { return g_meshWindow; }
 bool meshInRidWindow(void) { return g_ridWindow; }
 
-// Called by a scanning engine when it dwells on the mesh channel (ch1). The
-// radio is already there, so drain queued mesh TX now; ESP-NOW RX is active on
-// the current channel. No channel change, no scan pause.
 void meshNoteOnHome(void) {
     g_lastHomeMs = millis();
     if (meshTxTaskHandle) xTaskNotifyGive(meshTxTaskHandle);
@@ -1304,9 +1287,6 @@ static uint32_t meshMgrSilenceMs(void) {
 }
 #endif
 
-// True when this node is hopping WiFi channels (promiscuous scan). BLE-only
-// engines (flock_ble, unipwn, wardrive radio=0x02) stay on the mesh channel,
-// so they coexist with ESP-NOW without time-multiplexing.
 static bool meshNodeHopsWifi(void) {
     uint8_t m = engineGetActiveMask();
     const uint8_t wifiHop = ENGINE_BITMASK(ENGINE_FLOCK_WIFI)
@@ -1920,9 +1900,6 @@ static void meshTxTaskFn(void* arg) {
             esp_wifi_set_channel(MESH_RENDEZVOUS_CH, WIFI_SECOND_CHAN_NONE);
         }
 #else
-        // Node: never yank the radio off the scan channel. Send only while the
-        // scan is naturally dwelling on ch1 (meshNoteOnHome fired); otherwise
-        // wait for the next ch1 dwell. Keeps the scan sweep unbroken.
         if (cur_ch != MESH_RENDEZVOUS_CH) {
             xSemaphoreGive(txMutex);
             continue;

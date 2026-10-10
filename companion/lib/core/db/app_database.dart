@@ -185,8 +185,6 @@ class AppDatabase extends _$AppDatabase {
             ..orderBy([(d) => OrderingTerm.desc(d.appTimestamp)]))
           .get();
 
-  /// Returns detection rows as maps for cross-module consumption
-  /// (avoids drift Detection / model Detection name collision).
   Map<String, dynamic> _detectionRowMap(Detection r) => {
         'id': r.id,
         'sessionId': r.sessionId,

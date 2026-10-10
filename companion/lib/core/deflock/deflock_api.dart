@@ -30,8 +30,6 @@ class DeflockApiException implements Exception {
   String toString() => message;
 }
 
-/// One `man_made=surveillance` + `surveillance:type=ALPR` node from OSM —
-/// the same dataset DeFlock renders.
 class AlprNode {
   const AlprNode({
     required this.id,
@@ -87,8 +85,6 @@ class AlprNode {
   }
 }
 
-/// Read-only Overpass client for ALPR nodes. Queries run only when the user
-/// turns the layer on or asks for a prefetch — never on app start.
 class DeflockApi {
   DeflockApi({Dio? dio})
       : _dio = dio ??

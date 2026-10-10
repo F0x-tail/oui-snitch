@@ -18,8 +18,6 @@ import 'package:oui_spy/core/radio_classifier.dart';
 import 'package:oui_spy/core/notifications/live_activity_service.dart';
 import 'package:oui_spy/core/notifications/notification_service.dart';
 
-/// App-wide state that survives navigation. Single source of truth.
-/// All screens read from here instead of creating their own subscriptions.
 class AppState extends ChangeNotifier {
   AppState(this._ble, this._gps, this._ignoreList, this._geofenceFilter, this._notificationService, this._liveActivity) {
     _init();

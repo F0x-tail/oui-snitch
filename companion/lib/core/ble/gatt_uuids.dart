@@ -1,9 +1,5 @@
 import 'package:flutter_blue_plus/flutter_blue_plus.dart';
 
-/// All GATT service and characteristic UUIDs for OUI-SPY firmware.
-///
-/// Base UUID: 0000XXXX-0a15-4b70-ba00-c010ae1ba01c
-/// Must match firmware protocol.h exactly.
 class GattUuids {
   const GattUuids._();
 

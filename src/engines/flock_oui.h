@@ -4,14 +4,6 @@
 #include <stdint.h>
 #include <string.h>
 
-// Curated OUI superset. Sources:
-//   - colonelpanichacks/flock-you (original)
-//   - zmattmanz/flock-detection (scored model)
-//   - dougborg/AirHound (broad)
-//   - VirtuallyScott/flock-you (wifi+ble)
-// Includes Flock direct, Cradlepoint (LTE modem), Liteon (Wi-Fi),
-// Murata/SiP, Sierra Wireless (cellular), and Espressif (ESP32 control board).
-// Entries MUST be sorted by first byte (bucket lookup assumes contiguous runs).
 struct FlockOui { uint8_t b[3]; uint8_t ext; };
 
 // Upstream flock-you RSSI_MIN: frames weaker than this are dropped.

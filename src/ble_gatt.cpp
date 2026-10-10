@@ -1,16 +1,3 @@
-/**
- * NimBLE GATT Server implementation.
- *
- * Single service with characteristics for:
- * - Device info (READ)
- * - Engine control (READ, WRITE, NOTIFY)
- * - Detection events (NOTIFY)
- * - Device status (READ, NOTIFY)
- * - GPS receive (WRITE)
- * - Hardware config (READ, WRITE)
- * - Alert config (READ, WRITE)
- * - Foxhunter RSSI (NOTIFY)
- */
 #include "ble_gatt.h"
 #include "det_spool.h"
 #include "engine_registry.h"
@@ -816,9 +803,6 @@ void bleGattE2ESmokeStart(void) {
 
 void bleGattReconcileEngines(void) {
 #ifdef OUISPY_ROLE_MANAGER
-    // Advertising watchdog: if no phone is connected, ensure we are advertising.
-    // Under heavy mesh load NimBLE can leave advertising stopped after a
-    // disconnect, making the manager invisible/unconnectable until a power-cycle.
     if (!phoneConnected) {
         NimBLEAdvertising* adv = NimBLEDevice::getAdvertising();
         if (adv && !adv->isAdvertising()) {
@@ -895,10 +879,6 @@ class ServerCallbacks : public NimBLEServerCallbacks {
             scan->stop();
         }
 
-        // Request tight conn params for OTA throughput.
-        // iOS honors within its limits — Apple accepts 15ms minimum for
-        // peripherals. Units: interval * 1.25ms, timeout * 10ms.
-        // min=12 (15ms), max=24 (30ms), latency=0, timeout=600 (6s, Apple max).
         uint16_t connHandle = server->getPeerInfo(0).getConnHandle();
         server->updateConnParams(connHandle, 12, 24, 0, 600);
         Serial.println("[BLE] Phone connected, requested fast conn params");
@@ -1487,8 +1467,6 @@ class UnipwnCommandCallbacks : public NimBLECharacteristicCallbacks {
         uint8_t payloadLen = data[7];
         Serial.printf("[BLE] UniPwn command: type=%d target=%02x:%02x:%02x:%02x:%02x:%02x payload=%d bytes\n",
                       cmdType, data[0], data[1], data[2], data[3], data[4], data[5], payloadLen);
-        // UniPwn exploitation requires BLE client mode — queued for engine to process
-        // Full exploitation chain not implemented in v3 (requires dedicated BLE client task)
     }
 };
 
@@ -1594,8 +1572,6 @@ class SystemControlCallbacks : public NimBLECharacteristicCallbacks {
         if (val.empty()) return;
         uint8_t cmd = (uint8_t)val[0];
 
-        // Magic byte required for destructive ops to avoid accidental triggers
-        // Format: [cmd][magic1][magic2] = 0xC0 0xDE
         bool magicOk = val.length() >= 3
                        && (uint8_t)val[1] == 0xC0
                        && (uint8_t)val[2] == 0xDE;
@@ -2188,9 +2164,6 @@ class DeviceInfoCallbacks : public NimBLECharacteristicCallbacks {
     }
 };
 
-// ============================================================================
-// Static callback instances
-// ============================================================================
 static ServerCallbacks serverCb;
 static FoxhunterConfigCallbacks foxhunterConfigCb;
 static DetectorConfigCallbacks detectorConfigCb;
@@ -2212,9 +2185,6 @@ static void wifiOtaNotifyTrampoline(const uint8_t* data, size_t len) {
     chrSystemControl->notify();
 }
 
-// ============================================================================
-// Init
-// ============================================================================
 void bleGattInit(void) {
     Serial.println("[BLE] Initializing NimBLE...");
     if (!chrDetMutex) chrDetMutex = xSemaphoreCreateMutex();
@@ -2436,9 +2406,6 @@ void bleGattInit(void) {
     Serial.println("[BLE] GATT server started, advertising as OUI-SPY");
 }
 
-// ============================================================================
-// Notifications
-// ============================================================================
 static size_t packDetection(const DetectionEvent* evt, uint8_t* buf) {
     size_t len = 19;
     buf[0] = evt->engine_id;

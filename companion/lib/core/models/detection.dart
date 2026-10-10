@@ -40,9 +40,6 @@ class Detection with _$Detection {
       _$DetectionFromJson(json);
 }
 
-/// Bitmask of every Flock predicate that matched, mirroring FLOCK_SIG_* in
-/// firmware protocol.h. A bare 10-digit name (serial) is not standalone
-/// evidence; it only counts when the XUNTONG mfg ID corroborates it.
 abstract class FlockSignal {
   static const int oui = 0x01;
   static const int name = 0x02;

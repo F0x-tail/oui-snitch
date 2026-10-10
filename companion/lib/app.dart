@@ -236,8 +236,6 @@ class _AppShellState extends ConsumerState<AppShell> {
   static const _routes = ['/home', '/detections', '/wardrive', '/config'];
   static const _configIndex = 3;
 
-  /// The section sheet lives on the shell navigator, which sits below this
-  /// widget's context — reach it by key, not by Navigator.of(context).
   bool get _sectionSheetOpen {
     final nav = _shellNavigatorKey.currentState;
     if (nav == null) return false;

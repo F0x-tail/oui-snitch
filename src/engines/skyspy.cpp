@@ -1,8 +1,3 @@
-/**
- * Sky Spy Engine — FAA Remote ID / Open Drone ID detection.
- * BLE scan for ODID advertisements + WiFi promiscuous for NAN/Beacon frames.
- * Ported from raw/skyspy.cpp.
- */
 #include "skyspy.h"
 #include "protocol.h"
 #include "../mesh_espnow.h"
@@ -195,10 +190,6 @@ static bool odidIsPlausible(const ODID_UAS_Data* u) {
     return false;
 }
 
-// ============================================================================
-// BLE Callback — ODID advertisements
-// ============================================================================
-
 class SkySkyBLECallback : public NimBLEAdvertisedDeviceCallbacks {
     void onResult(NimBLEAdvertisedDevice* dev) override {
         g_engRawSeen++;
@@ -269,10 +260,6 @@ class SkySkyBLECallback : public NimBLEAdvertisedDeviceCallbacks {
 
 static SkySkyBLECallback bleCb;
 
-// ============================================================================
-// WiFi Promiscuous Callback — NAN + Beacon ODID frames
-// ============================================================================
-
 static void IRAM_ATTR wifiCallback(void* buf, wifi_promiscuous_pkt_type_t type) {
     g_engRawSeen++;
     if (type != WIFI_PKT_MGMT) return;
@@ -337,10 +324,6 @@ static void IRAM_ATTR wifiCallback(void* buf, wifi_promiscuous_pkt_type_t type) 
     }
 }
 
-// ============================================================================
-// Lifecycle
-// ============================================================================
-
 static void skyspyInit(void) {
     memset(drones, 0, sizeof(drones));
     g_lastBleDrone = nullptr;
@@ -362,8 +345,6 @@ static void skyspyStart(void) {
             WiFi.mode(WIFI_STA);
         }
 #endif
-        // MGMT only — ODID (NAN/Beacon) travels in mgmt frames; DATA/CTRL would
-        // bury the callback in irrelevant traffic and miss drone beacons.
         wifiSnifferApplyPs();
         wifiApplyRegdomain();
         wifiCoexRegister(wifiCallback, WIFI_PROMIS_FILTER_MASK_MGMT);

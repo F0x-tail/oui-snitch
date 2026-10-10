@@ -65,8 +65,6 @@ class WdgwarsApi {
     return compute(_parseTerritories, body);
   }
 
-  /// Upload a CSV via the documented async endpoint (POST /api/v2/upload-csv),
-  /// gzipped — the API accepts .gz and it cuts a wardrive CSV ~20x.
   Future<WdgwarsUploadResult> uploadCsv(
     File csvFile, {
     void Function(int sent, int total)? onProgress,
@@ -127,8 +125,6 @@ class WdgwarsApi {
         (data['error'] as String?) ?? 'Upload failed (HTTP $code)');
   }
 
-  /// Poll `/api/v2/upload-job/{id}` until terminal; falls back to the queued
-  /// receipt if the parser is still busy when we give up waiting.
   Future<WdgwarsUploadResult> _awaitJob(
       String jobId, Map<String, dynamic> queued) async {
     final deadline = DateTime.now().add(const Duration(seconds: 120));
@@ -188,8 +184,6 @@ class WdgwarsApi {
     );
   }
 
-  /// dio applies sendTimeout to the whole body transfer, not per-chunk, so it
-  /// has to scale with size: 60s of headroom + 12s per MB (~700 kbit/s floor).
   static Duration _sendTimeoutFor(int bytes) {
     final mb = bytes / (1024 * 1024);
     final secs = 60 + (mb * 12).ceil();

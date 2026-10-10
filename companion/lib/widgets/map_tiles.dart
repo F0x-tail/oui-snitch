@@ -8,10 +8,6 @@ import 'package:oui_spy/theme/app_theme.dart';
 
 final Map<String, Future<Style>> _styleCache = {};
 
-/// vector_tile_renderer's colour parser rejects the CSS keyword `transparent`,
-/// which CARTO's GL styles use on three layers. Rewrite it to its rgba form
-/// before the theme is built, otherwise the first paint of those layers throws
-/// and the whole tile renders blank.
 Object? _rgbaForTransparent(Object? node) {
   if (node == 'transparent') return 'rgba(0,0,0,0)';
   if (node is Map) {

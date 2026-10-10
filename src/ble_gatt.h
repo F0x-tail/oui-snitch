@@ -1,7 +1,3 @@
-/**
- * NimBLE GATT Server — sole control interface for the OUI-SPY device.
- * Phone connects here to control engines, receive detections, push GPS.
- */
 #ifndef BLE_GATT_H
 #define BLE_GATT_H
 

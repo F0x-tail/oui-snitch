@@ -7,12 +7,6 @@
 #include <NimBLEDevice.h>
 #include "flock_oui.h"
 
-// ============================================================================
-// Shared Flock Safety detection predicates.
-// Single source of truth for OUI/name/mfg/UUID/TN-serial/Penguin-decimal logic.
-// Used by both standalone flock_ble/flock_wifi engines AND wardrive passenger.
-// ============================================================================
-
 static const char* FLOCK_NAME_PATTERNS[] = {
     "FS Ext Battery", "Penguin", "Flock", "Pigvision",
     "FlockCam", "FlockOS", "FS-", "FS_", "flocksafety"
@@ -72,10 +66,6 @@ static inline void flockMatchInit() {
     flockOuiInitBuckets();
 }
 
-// ----------------------------------------------------------------------------
-// Name match — case-insensitive substring against pattern list. Standalone
-// evidence: these strings are unambiguous.
-// ----------------------------------------------------------------------------
 static inline bool flockMatchNameStr(const char* name) {
     if (!name || !name[0]) return false;
     for (int i = 0; i < FLOCK_NAME_PATTERN_COUNT; i++) {
@@ -84,12 +74,6 @@ static inline bool flockMatchNameStr(const char* name) {
     return false;
 }
 
-// ----------------------------------------------------------------------------
-// Bare 10-digit decimal name — post-March-2025 Penguin firmware dropped the
-// "Penguin-" prefix, leaving the serial alone. NOT standalone evidence: any
-// device may advertise a 10-digit name. Callers must corroborate with the
-// XUNTONG mfg ID before treating this as a Flock hit.
-// ----------------------------------------------------------------------------
 static inline bool flockMatchBareSerialName(const char* name) {
     if (!name) return false;
     if (strlen(name) != 10) return false;
@@ -99,11 +83,6 @@ static inline bool flockMatchBareSerialName(const char* name) {
     return true;
 }
 
-// ----------------------------------------------------------------------------
-// Mfg ID match. If matched, optionally extract TN-serial (TN<digits>) from
-// payload — high-confidence signal. Returns true if mfg ID hits; if tnOut
-// non-NULL, copies TN-serial there when found.
-// ----------------------------------------------------------------------------
 static inline bool flockMatchMfgPayload(const uint8_t* payload, size_t plen,
                                         char* tnOut, size_t tnOutLen) {
     if (tnOut && tnOutLen > 0) tnOut[0] = '\0';
@@ -134,10 +113,6 @@ static inline bool flockMatchMfgPayload(const uint8_t* payload, size_t plen,
     return true;
 }
 
-// ----------------------------------------------------------------------------
-// Raven UUID match — uses cached NimBLEUUID. Returns firmware-estimate string
-// when matched (raven family only).
-// ----------------------------------------------------------------------------
 static inline bool flockMatchRavenUuid(NimBLEAdvertisedDevice* dev,
                                        const char** fwOut) {
     if (fwOut) *fwOut = "";
@@ -194,15 +169,8 @@ static inline bool flockMatchNordicDfu(NimBLEAdvertisedDevice* dev,
     return false;
 }
 
-// ----------------------------------------------------------------------------
-// Address-type filter — drop random-resolvable adverts (phones, watches)
-// unless they hit one of the deterministic predicates (name/mfg/uuid).
-// Public + random-static are kept; flock cams use these.
-// ----------------------------------------------------------------------------
 static inline bool flockShouldConsiderAddr(NimBLEAdvertisedDevice* dev) {
     uint8_t t = dev->getAddressType();
-    // BLE_ADDR_PUBLIC=0, BLE_ADDR_RANDOM=1, BLE_ADDR_PUBLIC_ID=2, BLE_ADDR_RANDOM_ID=3
-    // Drop ID (resolvable) types as they are RPA traffic.
     return t == 0 || t == 1;
 }
 

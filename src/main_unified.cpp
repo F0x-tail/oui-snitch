@@ -1,13 +1,3 @@
-/**
- * OUI-SPY Unified Firmware v3.0 — App-Controlled Architecture
- *
- * No boot selector. No WiFi APs. No web dashboards.
- * BLE GATT is the sole control interface.
- * All engines compiled in, activated by phone app at runtime.
- *
- * Core 0: WiFi engine task (Flock-WiFi or Sky Spy promiscuous)
- * Core 1: BLE GATT server + BLE engine tasks + detection notification
- */
 #include <Arduino.h>
 #include <NimBLEDevice.h>
 #include <Preferences.h>
@@ -60,9 +50,6 @@
   #define OUISPY_LED_OFF()   digitalWrite(PIN_LED, HIGH)
 #endif
 
-// ============================================================================
-// Global queues and GPS state
-// ============================================================================
 QueueHandle_t detectionQueue = NULL;
 QueueHandle_t engineCmdQueue = NULL;
 volatile GpsData currentGps = {};
@@ -141,9 +128,6 @@ volatile bool    hwLedEnabled = true;
 volatile uint8_t hwNeopixelBrightness = 50;
 volatile bool    hwAlertsSuppressed = false;
 
-// ============================================================================
-// Hardware
-// ============================================================================
 static void initHardware(void) {
 #ifdef OUISPY_TINYRAM
     Serial.printf("[HW] buzzer pin %d\n", (int)PIN_BUZZER); Serial.flush();
@@ -163,9 +147,6 @@ static void initHardware(void) {
 #endif
 }
 
-// ============================================================================
-// Hardware Config — load from NVS at boot
-// ============================================================================
 static void loadHardwareConfig(void) {
     Preferences p;
     p.begin("ouispy-hw", true);
@@ -194,14 +175,6 @@ static void loadHardwareConfig(void) {
                   (int)hwLedEnabled, (int)hwNeopixelBrightness, (int)flockExt);
 }
 
-// ============================================================================
-// Buzzer Feedback — melodic triple-tone on target detection
-// ============================================================================
-
-/// Returns true if this engine produces alertable target detections.
-/// Whitelist approach: only engines that detect specific targets should chime.
-/// Wardrive is passive collection — no beep.
-/// Foxhunter has its own proximity beep loop — handled separately.
 static bool isAlertableEngine(uint8_t engine_id) {
     switch ((EngineId)engine_id) {
         case ENGINE_DETECTOR:
@@ -217,7 +190,6 @@ static bool isAlertableEngine(uint8_t engine_id) {
             return false;
     }
 }
-
 
 /// Pleasant ascending three-note chime: E6 → G#6 → B6
 static void detectionChime(void) {
@@ -370,9 +342,6 @@ static void requestChime(uint8_t engine, uint8_t method) {
     xQueueSend(chimeQueue, &req, 0);
 }
 
-// ============================================================================
-// Boot melody — quick ascending chirp to indicate v3 app-controlled mode
-// ============================================================================
 static void playBootMelody(void) {
     if (!hwBuzzerEnabled) return;
 
@@ -388,10 +357,6 @@ static void playBootMelody(void) {
     ledcDetachPin(PIN_BUZZER);
 }
 
-// ============================================================================
-// Detection Notification Task (Core 1)
-// Drains detectionQueue, deduplicates across engines, sends BLE notifications
-// ============================================================================
 #define NOTIFY_DEDUP_SIZE 48
 #define NOTIFY_DEDUP_COOLDOWN_MS_DEFAULT 5000
 static struct {
@@ -402,9 +367,6 @@ static struct {
 static int notifyDedupHead = 0;
 static int notifyDedupCount = 0;
 
-/// Engine-aware dedup: same MAC from DIFFERENT engine classes passes through.
-/// Wardrive (passive collection) and flock/detector (active alerting) are
-/// separate classes so a wardrive event never suppresses a flock alert.
 static uint8_t engineClass(uint8_t engine_id) {
     switch ((EngineId)engine_id) {
         case ENGINE_FLOCK_BLE:
@@ -491,8 +453,6 @@ static void spoolStressInjectTask(void* arg) {
     (void)arg;
     uint32_t n = 0;
     for (;;) {
-        // ~500 spoolable detections/s through the REAL capture hook.
-        // 80% unique (fill+evict), 20% repeats of a hot set (dedup path).
         for (int i = 0; i < 50; i++) {
             DetectionEvent e = {};
             e.engine_id = ENGINE_FLOCK_WIFI;
@@ -645,9 +605,6 @@ static void detectionNotifyTask(void* param) {
             snprintf(macStr, sizeof(macStr), "%02x:%02x:%02x:%02x:%02x:%02x",
                      evt.mac[0], evt.mac[1], evt.mac[2],
                      evt.mac[3], evt.mac[4], evt.mac[5]);
-            // Only emit when the TX buffer has room — a full USB-CDC/UART
-            // buffer would block this drain task and back up detectionQueue,
-            // causing the WiFi ISR to drop captures.
 #ifndef OUISPY_SWEEPLOG
             if (Serial.availableForWrite() >= 96) {
                 if (evt.engine_id == ENGINE_FLOCK_WIFI) {
@@ -670,10 +627,6 @@ static void detectionNotifyTask(void* param) {
     }
 }
 
-// ============================================================================
-// Engine Command Task (Core 1)
-// Processes enable/disable commands from BLE
-// ============================================================================
 static void engineCmdTask(void* param) {
     EngineCommand cmd;
     Serial.println("[TASK] Engine command task started");
@@ -690,10 +643,6 @@ static void engineCmdTask(void* param) {
     }
 }
 
-// ============================================================================
-// Status Heartbeat Task (Core 1)
-// Periodic device status updates to phone
-// ============================================================================
 static void statusHeartbeatTask(void* param) {
     Serial.println("[TASK] Status heartbeat task started");
 
@@ -981,9 +930,6 @@ static void engineDiagTask(void* arg) {
 }
 #endif
 
-// ============================================================================
-// Arduino Setup
-// ============================================================================
 #ifdef OUISPY_ENGINE_SELFTEST
 static const char* selftestEngineName(EngineId id) {
     switch (id) {
@@ -1739,9 +1685,6 @@ void setup() {
     Serial.printf("[INIT] Free heap: %d bytes\n", esp_get_free_heap_size());
 }
 
-// ============================================================================
-// Arduino Loop
-// ============================================================================
 void loop() {
 #ifdef OUISPY_STACKPROBE
     static int stackProbeDone = 0;

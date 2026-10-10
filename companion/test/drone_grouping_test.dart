@@ -100,9 +100,6 @@ void main() {
       ]));
       expect(a.methods, containsAll(<String>['odid_ble', 'odid_nan', 'odid_beacon']));
 
-      // representative must be the MOST COMPLETE member (a WiFi pack), so the
-      // grouped entity shows operator + description even though the BLE advert
-      // (the "first" one) lacked them.
       expect(a.representative.odid?.operatorId, 'OpID4Real');
       expect(a.representative.odid?.selfId, 'Test Flight');
       expect(a.representative.odid?.uaType, 2);

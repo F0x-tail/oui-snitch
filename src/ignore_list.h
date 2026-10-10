@@ -2,10 +2,6 @@
 #include <stdint.h>
 #include <stddef.h>
 
-// Wire format (matches companion IgnoreListState serialization):
-//   [count:1] then count entries, each: [type:1][scope:1][len:1][value:len]
-//   type:  0=SSID (utf8), 1=MAC (6 raw bytes), 2=OUI (3 raw bytes)
-//   scope: 0=both, 1=wifi-only, 2=ble-only
 #define IGNORE_TYPE_SSID 0
 #define IGNORE_TYPE_MAC  1
 #define IGNORE_TYPE_OUI  2

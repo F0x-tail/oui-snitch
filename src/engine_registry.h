@@ -1,6 +1,3 @@
-/**
- * Engine Registry — manages enable/disable, state, and compatibility.
- */
 #ifndef ENGINE_REGISTRY_H
 #define ENGINE_REGISTRY_H
 
@@ -46,17 +43,11 @@ void engineLoopAll(void);
 // Process engine command from BLE queue
 void engineProcessCommand(const EngineCommand* cmd);
 
-// Apply a global WiFi band mask (WIFI_BAND_* bits) + restart active WiFi engines.
-// Shared by the BLE 0x1A command and the mesh MESH_CFG_KIND_WIFIBAND relay.
 void engineApplyWifiBand(uint8_t mask);
 
 void engineSetDenyMask(uint8_t mask);
 void engineStateConfigApply(const uint8_t* data, uint8_t len);
 
-// ---- Auto-PCAP-on-detect ---------------------------------------------------
-// When enabled, a detection from any engine other than Foxhunter triggers a
-// timed PCAP capture on that detection's radio + channel. After the capture
-// window expires, the origin engine is re-enabled.
 void engineSetAutoPcap(bool enabled);
 bool engineAutoPcapEnabled(void);
 bool engineAutoPcapPending(void);
@@ -71,14 +62,8 @@ uint32_t engineGetAutoPcapRemainingMs(void);
 uint8_t  engineGetAutoPcapTriggerSrc(void);
 const uint8_t* engineGetAutoPcapTriggerMac(void);
 
-// Called by the detection notify task on every event. No-op if disabled.
-// `mac` may be nullptr; when provided, a per-MAC cooldown (rediscover pref)
-// suppresses repeated auto-pcap triggers on the same device.
 void engineRequestAutoPcap(EngineId src, uint8_t channel, const uint8_t* mac);
 
-// ---- Alert prefs (cooldown / rediscover) ----------------------------------
-// Loaded from `ouispy-alert` NVS at boot; reload via engineLoadAlertPrefs()
-// after the BLE alert-config write callback so changes take effect live.
 void engineLoadAlertPrefs(void);
 uint32_t engineGetNotifyCooldownMs(void);
 uint32_t engineGetRediscoverMs(void);

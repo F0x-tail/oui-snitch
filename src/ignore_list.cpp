@@ -17,10 +17,6 @@ static uint32_t g_version = 0;
 static portMUX_TYPE g_mux = portMUX_INITIALIZER_UNLOCKED;
 
 void ignoreListInit(void) {
-    // Runtime-only. The app is the single source of truth: it pushes the list
-    // on every connect and the manager re-broadcasts it to all nodes, so no
-    // per-node copy can diverge. Nothing is persisted. Wipe any list a prior
-    // firmware left in NVS (a normal flash does NOT erase NVS).
     Preferences p;
     if (p.begin("ouispy-ign", false)) {
         p.clear();

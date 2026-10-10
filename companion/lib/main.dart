@@ -104,8 +104,6 @@ Future<void> _autoConnect(ProviderContainer container) async {
       return;
     }
 
-    // Surface a reconnecting state so the home screen shows a searching
-    // animation through the scan window instead of the manual CONNECT button.
     container.read(bleManagerProvider).signalAutoReconnect(true);
 
     final prefs = await SharedPreferences.getInstance();

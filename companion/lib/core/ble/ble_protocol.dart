@@ -20,10 +20,6 @@ class BleProtocol {
 
   // -- Detection event decoding --
 
-  /// Decode a detection notification payload.
-  /// v3.0 header (14 bytes): engine_id[1] mac[6] rssi[1] channel[1] ts_ms[4] method[1]
-  /// v3.1 header (19 bytes): + source_node_id[5]
-  /// Auto-detects format by packet size vs expected sizes for each engine.
   static Detection decodeDetection(List<int> data, {
     required String sessionId,
     required String nodeId,
@@ -118,8 +114,6 @@ class BleProtocol {
 
   // -- GPS encoding --
 
-  /// Encode phone GPS for writing to GPS Receive characteristic.
-  /// lat[8] lon[8] alt[4] speed[4] heading[4] accuracy[4] sat_count[1] timestamp[8] = 41 bytes
   static Uint8List encodeGps({
     required double latitude,
     required double longitude,
@@ -185,14 +179,10 @@ class BleProtocol {
     return Uint8List.fromList(base);
   }
 
-  /// Encode a "disable all engines" command.
-  /// action[1]=0x0F engine_id[1]=0x00 (ignored by firmware)
   static Uint8List encodeDisableAll() {
     return Uint8List.fromList([0x0F, 0x00]);
   }
 
-  /// Encode engine config update command.
-  /// action[1]=0x10 engine_id[1] payload[N]
   static Uint8List encodeEngineConfig({
     required Engine engine,
     required Uint8List payload,
@@ -200,14 +190,10 @@ class BleProtocol {
     return Uint8List.fromList([0x10, engine.index, ...payload]);
   }
 
-  /// Encode global WiFi band select. action[1]=0x1A engine_id[1]=0 (ignored)
-  /// mask[1]: bit0=2.4GHz, bit1=5GHz. Applies to all WiFi engines.
   static Uint8List encodeWifiBand(int mask) {
     return Uint8List.fromList([0x1A, 0x00, mask & 0x03]);
   }
 
-  /// Decode engine control status.
-  /// available[1] active[1] states[6]
   static ({int available, int active, List<EngineState> states}) decodeEngineStatus(
       List<int> data) {
     final available = data[0];

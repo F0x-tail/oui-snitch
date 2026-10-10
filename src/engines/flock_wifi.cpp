@@ -21,8 +21,6 @@ volatile bool g_flockExtendedOui = false;
 void flockSetExtendedOui(bool en) { g_flockExtendedOui = en; }
 bool flockGetExtendedOui(void) { return g_flockExtendedOui; }
 
-// Flock Wi-Fi cams field-observed on 2.4GHz ISM (1/6/11). On C5 also sweep
-// UNII-1 + UNII-3 5GHz in case of 5GHz-capable cams; cams reply fast to probe.
 #ifdef OUISPY_DUAL_BAND
 static const uint8_t channels[] = {1, 6, 11, 36, 40, 44, 48, 149, 153, 157, 161, 165};
 #else
@@ -39,9 +37,6 @@ static bool flockWifiRadioGate = true;
 // 64-slot dedup ring (bumped from 16: phones flood OUI matches).
 static DedupRingISR<64, 5000> wifiDedup;
 
-// Wildcard probe template (broadcast PROBE_REQ, empty SSID).
-// Elicits PROBE_RESP from APs immediately on channel hop, faster than
-// waiting for beacon interval (~102.4 ms).
 static const uint8_t wildcardProbeTpl[] = {
     0x40, 0x00, 0x00, 0x00,
     0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,

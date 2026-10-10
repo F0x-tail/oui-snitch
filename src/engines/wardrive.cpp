@@ -26,10 +26,6 @@ extern volatile uint32_t g_flockCorroborated;
 
 // Flock predicates and OUI live in flock_match.h / flock_oui.h.
 
-// ============================================================================
-// State
-// ============================================================================
-
 static volatile bool wardriveActive = false;
 static unsigned long lastBleScan = 0;
 static volatile uint8_t wardriveRadio = 0x03;
@@ -139,10 +135,6 @@ static void buildHopSchedule(void) {
         }
     }
 #endif
-    // Node mode: ensure the sweep visits the mesh channel (ch1) so ESP-NOW
-    // rides the natural dwell instead of a forced scan-pausing park. ch1 is a
-    // real, dense channel, so this dwell still logs networks. Skipped in solo
-    // (no manager) — full v0.3.9 sweep, no mesh tax.
     if (meshIsEnabled() && meshManagerJoined()) {
         bool hasMeshCh = false;
         for (uint8_t i = 0; i < hopScheduleLen; i++)
@@ -202,16 +194,6 @@ static volatile uint8_t wdFlockWifiActive = 0;
 static volatile uint8_t wdFoxhunterActive = 0;
 static volatile uint8_t wdDetectorActive = 0;
 
-// ============================================================================
-// Auth mode mapping from 802.11 RSN/WPA IE to our compact enum
-// ============================================================================
-
-// AKM suite selectors (OUI 00-0F-AC):
-// 1 = 802.1X (WPA2-Enterprise)
-// 2 = PSK (WPA2-Personal)
-// 6 = SAE (WPA3-Personal)
-// 8 = SAE (WPA3-Personal, FT)
-// 12 = SAE-EXT (WPA3-Enterprise 192-bit)
 #define AKM_OUI_00   0x00
 #define AKM_OUI_0F   0x0F
 #define AKM_OUI_AC   0xAC
@@ -222,8 +204,6 @@ static volatile uint8_t wdDetectorActive = 0;
 #define AKM_SUITE_SAE_EXT 12
 
 static uint8_t IRAM_ATTR parseAuthFromFrame(const uint8_t* p, int len) {
-    // Walk tagged parameters starting after fixed fields
-    // Beacon: 24-byte header + 12 bytes fixed (timestamp[8]+interval[2]+capability[2])
     int offset = 36;
     bool hasRSN = false;
     bool hasWPA = false;
@@ -289,22 +269,12 @@ static uint8_t IRAM_ATTR parseAuthFromFrame(const uint8_t* p, int len) {
     return 0;                           // Open
 }
 
-// ============================================================================
-// Check if SSID bytes are all zeroes (hidden network variant: tagLen > 0 but null-filled)
-// ============================================================================
-
 static bool IRAM_ATTR isNullSsid(const uint8_t* ssidBytes, uint8_t ssidLen) {
     for (uint8_t i = 0; i < ssidLen; i++) {
         if (ssidBytes[i] != 0) return false;
     }
     return true;
 }
-
-// ============================================================================
-// Wildcard probe request — stimulates APs to respond immediately on channel hop.
-// GhostESP technique: send broadcast probe with empty SSID after each hop.
-// APs respond with probe response instead of waiting for next beacon (102.4ms).
-// ============================================================================
 
 static const uint8_t wildcardProbeTemplate[] = {
     // Frame control: probe request (type 0, subtype 4)
@@ -327,9 +297,6 @@ static const uint8_t wildcardProbeTemplate[] = {
 
 static void sendWildcardProbe(void) {
     uint8_t probe[sizeof(wildcardProbeTemplate)];
-    // Burst of 2 probes with different random source MACs. Single probe
-    // can be lost in dense RF — burst gives ~99% AP-response rate without
-    // measurable channel cost (~250µs total airtime).
     for (int n = 0; n < 2; n++) {
         memcpy(probe, wildcardProbeTemplate, sizeof(probe));
         probe[10] = 0x02 | (esp_random() & 0xFE);
@@ -343,18 +310,10 @@ static void sendWildcardProbe(void) {
     }
 }
 
-// ============================================================================
-// WiFi Promiscuous Callback — wardrive WiFi scanner.
-// Beacons/probe-resp for WiGLE collection + foxhunter passive frames.
-// Flock-WiFi OUI detection lives in the standalone flock_wifi engine.
-// ============================================================================
-
 static void IRAM_ATTR wardriveWifiCb(void* buf, wifi_promiscuous_pkt_type_t type) {
     g_engRawSeen++;
     if (!wardriveActive) return;
 
-    // MGMT (beacons/probe-resp for WiGLE) + DATA (foxhunter target frames).
-    // CTRL frames excluded at filter mask; this is belt-and-suspenders.
     if (type != WIFI_PKT_MGMT && type != WIFI_PKT_DATA) return;
 
     wifi_promiscuous_pkt_t* pkt = (wifi_promiscuous_pkt_t*)buf;
@@ -369,8 +328,6 @@ static void IRAM_ATTR wardriveWifiCb(void* buf, wifi_promiscuous_pkt_type_t type
     const uint8_t* addr2 = &p[10];
     const uint8_t* addr3 = &p[16];
 
-    // ----- Flock-WiFi OUI fast-path (any frame type) -----
-    // Cheap: bucket-indexed OUI table, ISR-safe dedup, no allocs.
     if (wdFlockWifiActive && pkt->rx_ctrl.rssi >= FLOCK_RSSI_MIN) {
         uint8_t fMethod = 0xFF;
         const uint8_t* fMac = NULL;
@@ -495,10 +452,6 @@ static void IRAM_ATTR wardriveWifiCb(void* buf, wifi_promiscuous_pkt_type_t type
     }
 }
 
-// ============================================================================
-// BLE — timed scans via callback. NimBLE 1.4 API.
-// ============================================================================
-
 static NimBLEScan* pWardriveScan = nullptr;
 
 class WardriveAdvCallbacks : public NimBLEAdvertisedDeviceCallbacks {
@@ -515,8 +468,6 @@ class WardriveAdvCallbacks : public NimBLEAdvertisedDeviceCallbacks {
         uint32_t now = millis();
         std::string name = dev->getName();
 
-        // Flock predicates (only when engine active). Uses shared
-        // flock_match.h — cached NimBLEUUID, no heap allocs in hot path.
         if (wdFlockBleActive && flockShouldConsiderAddr(dev)) {
             bool isFlock = false;
             uint8_t flockMethod = 0;
@@ -629,10 +580,6 @@ static void wardriveBleOnComplete(NimBLEScanResults results) {
 }
 
 static WardriveAdvCallbacks wardriveBleCallbacks;
-
-// ============================================================================
-// Lifecycle
-// ============================================================================
 
 static void wardriveInit(void) {
     wardriveDedupRef().reset();
