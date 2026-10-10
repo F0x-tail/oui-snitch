@@ -216,6 +216,7 @@ class BleProtocol {
     required int buzzerVolume,
     bool extendedOui = false,
     bool offlineScan = false,
+    bool allowOuiOnly = false,
   }) {
     return Uint8List.fromList([
       buzzer ? 1 : 0,
@@ -224,6 +225,7 @@ class BleProtocol {
       buzzerVolume.clamp(0, 255),
       extendedOui ? 1 : 0,
       offlineScan ? 1 : 0,
+      allowOuiOnly ? 1 : 0,
     ]);
   }
 

@@ -84,6 +84,7 @@ class _DeviceConfigScreenState extends ConsumerState<DeviceConfigScreen>
   late TabController _tabController;
 
   bool _flockExtendedOui = false;
+  bool _flockAllowOuiOnly = false;
   bool _offlineScanEnabled = false;
   bool _offlineGpsTag = false;
   bool _buzzerEnabled = true;
@@ -196,6 +197,7 @@ class _DeviceConfigScreenState extends ConsumerState<DeviceConfigScreen>
                 .setInt('neopixelBrightness', hw[2]);
             _buzzerVolume = hw.length >= 4 ? hw[3] : 100;
             _flockExtendedOui = hw.length >= 5 && hw[4] != 0;
+            _flockAllowOuiOnly = hw.length >= 7 && hw[6] != 0;
             _offlineScanEnabled = hw.length > 5 && hw[5] != 0;
           });
           ref.read(sharedPreferencesProvider)
@@ -702,6 +704,17 @@ class _DeviceConfigScreenState extends ConsumerState<DeviceConfigScreen>
           value: _flockExtendedOui,
           onChanged: (v) {
             setState(() => _flockExtendedOui = v);
+            _writeHardwareConfig();
+          },
+        ),
+        ConfigToggleRow(
+          icon: Icons.fingerprint,
+          label: 'Report OUI-only WiFi hits',
+          subtitle: 'Report a WiFi device on a Flock OUI match alone, without a probe or other corroborating signal. More hits, more false positives.',
+          color: const Color(0xFFFF6B6B),
+          value: _flockAllowOuiOnly,
+          onChanged: (v) {
+            setState(() => _flockAllowOuiOnly = v);
             _writeHardwareConfig();
           },
         ),
@@ -1271,6 +1284,7 @@ class _DeviceConfigScreenState extends ConsumerState<DeviceConfigScreen>
             neopixelBrightness: _neopixelBrightness,
             buzzerVolume: _buzzerVolume,
             extendedOui: _flockExtendedOui,
+            allowOuiOnly: _flockAllowOuiOnly,
             offlineScan: _offlineScanEnabled,
           );
       ref.read(sharedPreferencesProvider)

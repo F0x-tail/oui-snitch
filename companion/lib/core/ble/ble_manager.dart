@@ -1276,6 +1276,7 @@ class BleManager {
     required int buzzerVolume,
     bool extendedOui = false,
     bool offlineScan = false,
+    bool allowOuiOnly = false,
   }) async {
     if (_hardwareConfig == null) return;
     await _hardwareConfig!.write(
@@ -1286,6 +1287,7 @@ class BleManager {
         buzzerVolume: buzzerVolume,
         extendedOui: extendedOui,
         offlineScan: offlineScan,
+        allowOuiOnly: allowOuiOnly,
       ),
     );
   }

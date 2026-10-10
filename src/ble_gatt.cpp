@@ -1129,6 +1129,7 @@ void hardwareConfigApply(const uint8_t* data, size_t len) {
         p.putBool("offl_scan", offlineScanEnabled);
     }
     p.end();
+    if (len >= 7) flockSetAllowOuiOnly(data[6] != 0);
 
     Serial.printf("[CFG] Hardware: buzzer=%d vol=%d led=%d brightness=%d flock_ext=%d\n",
                   buzzer, buzzerVol, led, brightness, (int)flockGetExtendedOui());
@@ -1238,7 +1239,7 @@ void bleGattRebroadcastConfigs(void) {
 static void mgrLoadConfigCaches(void) {
     Preferences p;
     p.begin("ouispy-hw", true);
-    uint8_t hw[6];
+    uint8_t hw[7];
     hw[0] = p.getBool("buzzer", true) ? 1 : 0;
     hw[1] = p.getBool("led", true) ? 1 : 0;
     hw[2] = p.getUChar("neo_brt", 50);
@@ -1246,7 +1247,8 @@ static void mgrLoadConfigCaches(void) {
     hw[4] = p.getBool("flock_ext", false) ? 1 : 0;
     hw[5] = p.getBool("offl_scan", false) ? 1 : 0;
     p.end();
-    mgrCacheConfig(MESH_CFG_KIND_HW, hw, 6);
+    hw[6] = flockGetAllowOuiOnly() ? 1 : 0;
+    mgrCacheConfig(MESH_CFG_KIND_HW, hw, 7);
 
     Preferences q;
     q.begin("ouispy-alert", true);
@@ -1290,7 +1292,8 @@ class HardwareConfigCallbacks : public NimBLECharacteristicCallbacks {
         buf[4] = p.getBool("flock_ext", false) ? 1 : 0;
         buf[5] = p.getBool("offl_scan", false) ? 1 : 0;
         p.end();
-        chr->setValue(buf, 6);
+        buf[6] = flockGetAllowOuiOnly() ? 1 : 0;
+        chr->setValue(buf, 7);
     }
 };
 

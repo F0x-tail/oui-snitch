@@ -6,7 +6,7 @@ void main() {
     final on = BleProtocol.encodeHardwareConfig(
       buzzer: true, led: true, neopixelBrightness: 10, buzzerVolume: 20,
       extendedOui: false, offlineScan: true);
-    expect(on.length, 6);
+    expect(on.length, 7);
     expect(on[5], 1);
     final off = BleProtocol.encodeHardwareConfig(
       buzzer: true, led: true, neopixelBrightness: 10, buzzerVolume: 20,

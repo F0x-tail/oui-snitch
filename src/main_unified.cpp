@@ -162,6 +162,13 @@ static void loadHardwareConfig(void) {
     bool offlScan = p.getBool("offl_scan", false);
     p.end();
     flockSetExtendedOui(flockExt);
+    {
+        extern bool flockAllowOuiOnly;
+        Preferences f;
+        f.begin("ouispy-flock", true);
+        flockAllowOuiOnly = f.getBool("oui_only", false);
+        f.end();
+    }
     offlineScanEnabledSetFromPref(offlScan);
     detSpoolInit();
 #ifdef OUISPY_SPOOL_SELFTEST
