@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_blue_plus/flutter_blue_plus.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -9,6 +10,7 @@ import 'package:oui_spy/core/ble/ble_permissions.dart';
 import 'package:oui_spy/core/ble/gatt_uuids.dart';
 import 'package:oui_spy/core/debug_log.dart';
 import 'package:oui_spy/theme/app_theme.dart';
+import 'package:oui_spy/widgets/ios.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:uuid/uuid.dart';
 
@@ -190,45 +192,37 @@ class _ScanScreenState extends ConsumerState<ScanScreen> {
   }
 
   void _showPermDialog(BlePermResult result) {
-    final t = AppTheme.of(context);
     final bool servicesOff = result == BlePermResult.locationServicesOff;
     final bool permanently =
         result == BlePermResult.permissionPermanentlyDenied;
 
     final String title = servicesOff
-        ? 'Location Services Off'
-        : 'Bluetooth Permission Required';
+        ? 'Location services off'
+        : 'Bluetooth permission required';
     final String body = servicesOff
         ? 'Android requires Location Services to be ON to scan for Bluetooth '
-            'devices. Enable it, then tap SCAN again.'
+            'devices. Enable it, then tap Scan again.'
         : permanently
             ? 'Bluetooth scanning permission was denied. Open Settings and '
-                'allow Nearby devices / Location for OUI-SPY, then tap SCAN again.'
+                'allow Nearby devices / Location for OUI-SPY, then tap Scan again.'
             : 'OUI-SPY needs Bluetooth scanning permission to find your node. '
-                'Tap SCAN again and allow it.';
+                'Tap Scan again and allow it.';
     final String actionLabel =
-        servicesOff ? 'ENABLE LOCATION' : 'OPEN SETTINGS';
+        servicesOff ? 'Enable location' : 'Open settings';
     final bool showAction = servicesOff || permanently;
 
-    showDialog<void>(
+    showCupertinoDialog<void>(
       context: context,
-      builder: (ctx) => AlertDialog(
-        backgroundColor: t.surface,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-        title: Text(title,
-            style: TextStyle(
-                color: t.textPrimary,
-                fontSize: 16,
-                fontWeight: FontWeight.w600)),
-        content: Text(body,
-            style: TextStyle(color: t.textSecondary, fontSize: 13)),
+      builder: (ctx) => CupertinoAlertDialog(
+        title: Text(title),
+        content: Text(body),
         actions: [
-          TextButton(
+          CupertinoDialogAction(
             onPressed: () => Navigator.of(ctx).pop(),
-            child: Text('LATER', style: TextStyle(color: t.textDim)),
+            child: const Text('Later'),
           ),
           if (showAction)
-            TextButton(
+            CupertinoDialogAction(
               onPressed: () async {
                 Navigator.of(ctx).pop();
                 if (servicesOff) {
@@ -237,8 +231,7 @@ class _ScanScreenState extends ConsumerState<ScanScreen> {
                   await BlePermissions.openAppSettings();
                 }
               },
-              child: Text(actionLabel,
-                  style: const TextStyle(color: AppTheme.accent)),
+              child: Text(actionLabel),
             ),
         ],
       ),
@@ -269,144 +262,105 @@ class _ScanScreenState extends ConsumerState<ScanScreen> {
 
     return Scaffold(
       backgroundColor: t.background,
-      appBar: AppBar(
-        title: const Text('CONNECT'),
-        leading: IconButton(icon: const Icon(Icons.arrow_back), onPressed: () => context.go('/home')),
-      ),
-      body: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            if (_error != null)
-              Container(
-                width: double.infinity,
-                padding: const EdgeInsets.all(12),
-                margin: const EdgeInsets.only(bottom: 12),
-                decoration: BoxDecoration(
-                  color: AppTheme.error.withValues(alpha: 0.1),
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: Text(_error!, style: const TextStyle(color: AppTheme.error, fontSize: 11, fontFamily: 'monospace')),
-              ),
-
-            SizedBox(
-              width: double.infinity,
-              child: ElevatedButton(
-                onPressed: _scanning ? null : _startScan,
-                child: Text(_scanning ? 'SCANNING...' : 'SCAN FOR OUI-SPY'),
-              ),
-            ),
-            const SizedBox(height: 8),
-
-            if (_scanning)
-              LinearProgressIndicator(color: AppTheme.accent, backgroundColor: t.border),
-
-            Padding(
-              padding: const EdgeInsets.symmetric(vertical: 8),
-              child: Text('${sorted.length} device${sorted.length == 1 ? '' : 's'} found',
-                  style: TextStyle(color: t.textDim, fontSize: 11)),
-            ),
-
-            Expanded(
-              child: sorted.isEmpty
-                  ? Center(child: Text(
-                      _scanning ? 'SEARCHING...' : 'TAP SCAN TO FIND DEVICES',
-                      style: TextStyle(color: t.textDim, letterSpacing: 1, fontSize: 11),
-                    ))
-                  : ListView.builder(
-                      itemCount: sorted.length,
-                      itemBuilder: (context, index) {
-                        final r = sorted[index];
-                        final id = r.device.remoteId.toString();
-                        final isThisConnecting = _connecting && _connectingId == id;
-                        final isOtherConnecting = _connecting && _connectingId != id;
-                        return GestureDetector(
-                          onTap: _connecting ? null : () => _connectDevice(r),
-                          child: Container(
-                            margin: const EdgeInsets.only(bottom: 8),
-                            padding: const EdgeInsets.all(12),
-                            decoration: BoxDecoration(
-                              color: isOtherConnecting
-                                  ? t.surface.withValues(alpha: 0.4)
-                                  : AppTheme.accent.withValues(alpha: isThisConnecting ? 0.2 : 0.08),
-                              borderRadius: BorderRadius.circular(8),
-                              border: Border.all(color: AppTheme.accent.withValues(alpha: 0.4)),
-                            ),
-                            child: Row(
-                              children: [
-                                isThisConnecting
-                                    ? const SizedBox(
-                                        width: 20,
-                                        height: 20,
-                                        child: CircularProgressIndicator(
-                                          color: AppTheme.accent,
-                                          strokeWidth: 2,
-                                        ),
-                                      )
-                                    : const Icon(Icons.bluetooth, color: AppTheme.accent, size: 20),
-                                const SizedBox(width: 12),
-                                Expanded(child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Text(
-                                      r.advertisementData.advName.isNotEmpty
-                                          ? r.advertisementData.advName
-                                          : (r.device.platformName.isNotEmpty
-                                              ? r.device.platformName
-                                              : (r.advertisementData.serviceUuids.contains(GattUuids.service)
-                                                  ? 'OUI-SPY node'
-                                                  : '(unnamed)')),
-                                        style: const TextStyle(color: AppTheme.accent, fontSize: 14, fontWeight: FontWeight.w600)),
-                                    if (isMgr(r))
-                                      Container(
-                                        margin: const EdgeInsets.only(top: 4),
-                                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                                        decoration: BoxDecoration(
-                                          color: AppTheme.success.withValues(alpha: 0.15),
-                                          borderRadius: BorderRadius.circular(4),
-                                          border: Border.all(color: AppTheme.success.withValues(alpha: 0.5)),
-                                        ),
-                                        child: const Text('MANAGER',
-                                            style: TextStyle(
-                                              color: AppTheme.success,
-                                              fontSize: 9,
-                                              letterSpacing: 1.2,
-                                              fontWeight: FontWeight.w700,
-                                            )),
-                                      ),
-                                    Text(
-                                      isThisConnecting
-                                          ? 'CONNECTING...'
-                                          : r.device.remoteId.toString(),
-                                      style: TextStyle(
-                                        color: isThisConnecting
-                                            ? AppTheme.accent
-                                            : t.textDim,
-                                        fontSize: 11,
-                                        fontFamily: 'monospace',
-                                        letterSpacing: isThisConnecting ? 1.5 : 0,
-                                        fontWeight: isThisConnecting
-                                            ? FontWeight.w700
-                                            : FontWeight.normal,
-                                      ),
-                                    ),
-                                  ],
-                                )),
-                                if (!isThisConnecting)
-                                  Text('${r.rssi} dBm', style: TextStyle(
-                                    color: r.rssi > -60 ? AppTheme.success : r.rssi > -80 ? AppTheme.warning : AppTheme.error,
-                                    fontSize: 12, fontFamily: 'monospace',
-                                  )),
-                              ],
-                            ),
-                          ),
-                        );
-                      },
-                    ),
-            ),
-          ],
+      body: IosPage(
+        title: 'Connect',
+        leading: CupertinoNavigationBarBackButton(
+          color: AppTheme.accent,
+          onPressed: () => context.go('/home'),
         ),
+        slivers: [
+          if (_error != null)
+            SliverToBoxAdapter(
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                child: Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: AppTheme.error.withValues(alpha: 0.1),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Text(_error!, style: const TextStyle(color: AppTheme.error, fontSize: 11, fontFamily: 'monospace')),
+                ),
+              ),
+            ),
+          SliverToBoxAdapter(
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              child: SizedBox(
+                width: double.infinity,
+                child: CupertinoButton.filled(
+                  onPressed: _scanning ? null : _startScan,
+                  child: Text(_scanning ? 'Scanning...' : 'Scan for OUI-SPY'),
+                ),
+              ),
+            ),
+          ),
+          if (_scanning)
+            SliverToBoxAdapter(
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+                child: LinearProgressIndicator(color: AppTheme.accent, backgroundColor: t.border),
+              ),
+            ),
+          if (sorted.isEmpty)
+            SliverToBoxAdapter(
+              child: IosEmpty(
+                icon: CupertinoIcons.bluetooth,
+                title: _scanning ? 'Searching' : 'No devices found',
+                message: _scanning ? 'Looking for OUI-SPY nodes nearby.' : 'Tap Scan to find devices.',
+              ),
+            )
+          else
+            IosSliverSection(
+              header: '${sorted.length} device${sorted.length == 1 ? '' : 's'} found',
+              itemCount: sorted.length,
+              itemBuilder: (context, index) {
+                final r = sorted[index];
+                final id = r.device.remoteId.toString();
+                final isThisConnecting = _connecting && _connectingId == id;
+                final isOtherConnecting = _connecting && _connectingId != id;
+                final rssiColor = r.rssi > -60 ? AppTheme.success : r.rssi > -80 ? AppTheme.warning : AppTheme.error;
+                return IosRow(
+                  leading: isThisConnecting
+                      ? const SizedBox(
+                          width: 28, height: 28,
+                          child: CupertinoActivityIndicator(),
+                        )
+                      : const IosIcon(CupertinoIcons.bluetooth, AppTheme.accent),
+                  title: r.advertisementData.advName.isNotEmpty
+                      ? r.advertisementData.advName
+                      : (r.device.platformName.isNotEmpty
+                          ? r.device.platformName
+                          : (r.advertisementData.serviceUuids.contains(GattUuids.service)
+                              ? 'OUI-SPY node'
+                              : '(unnamed)')),
+                  subtitle: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      if (isMgr(r))
+                        Text('Manager', style: TextStyle(color: AppTheme.success, fontSize: 13)),
+                      Text(
+                        isThisConnecting ? 'Connecting...' : id,
+                        style: TextStyle(
+                          color: isThisConnecting ? AppTheme.accent : t.textDim,
+                          fontSize: 13,
+                          fontFamily: 'monospace',
+                        ),
+                      ),
+                    ],
+                  ),
+                  detail: isThisConnecting
+                      ? null
+                      : Text('${r.rssi} dBm', style: TextStyle(
+                          color: rssiColor, fontSize: 13, fontFamily: 'monospace',
+                        )),
+                  disabled: isOtherConnecting,
+                  onTap: _connecting ? null : () => _connectDevice(r),
+                );
+              },
+            ),
+        ],
       ),
     );
   }

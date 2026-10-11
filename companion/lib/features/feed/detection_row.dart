@@ -1,4 +1,4 @@
-import 'package:flutter/gestures.dart';
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -13,767 +13,24 @@ import 'package:oui_spy/core/oui/oui_lookup_service.dart';
 import 'package:oui_spy/core/radio_classifier.dart';
 import 'package:oui_spy/core/services/faa_service.dart';
 import 'package:oui_spy/core/wardrive_state.dart';
+import 'package:oui_spy/features/devices/devices_screen.dart' show rssiColor;
 import 'package:oui_spy/theme/app_theme.dart';
+import 'package:oui_spy/widgets/ios.dart';
 
-class DetectionRow extends ConsumerWidget {
-  const DetectionRow({super.key, required this.detection});
-  final Detection detection;
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final t = AppTheme.of(context);
-    final engine = detection.engine;
-    final hasGps = detection.latitude != null;
-    final timeDiff = DateTime.now().difference(detection.appTimestamp);
-    final timeStr = _formatTimeDiff(timeDiff);
-    final manufacturer = ref.watch(ouiLookupProvider).lookup(detection.macAddress);
-    final connected = ref.watch(appStateProvider).isConnected;
-    final nodeLabel = detection.sourceNodeId.isEmpty
-        ? ''
-        : ref.watch(appStateProvider).labelForNode(detection.sourceNodeId);
-
-    return Listener(
-      onPointerDown: (event) {
-        if (event.kind == PointerDeviceKind.mouse &&
-            event.buttons == kSecondaryMouseButton) {
-          _showActions(context, ref);
-        }
-      },
-      child: GestureDetector(
-      behavior: HitTestBehavior.opaque,
-      onTap: () => _showActions(context, ref),
-      onLongPress: () {
-        HapticFeedback.mediumImpact();
-        _showActions(context, ref);
-      },
-      child: Container(
-      decoration: BoxDecoration(
-        border: Border(bottom: BorderSide(color: t.border, width: 0.5)),
-      ),
-      child: Container(
-        padding: const EdgeInsets.fromLTRB(10, 7, 10, 7),
-        decoration: BoxDecoration(
-          border: Border(
-            left: BorderSide(color: engine.color, width: 3),
-          ),
-        ),
-        child: Builder(builder: (_) {
-          final headline = _headline(detection, manufacturer);
-          final headlineIsMac = headline == detection.macAddress.toUpperCase();
-          return Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Row(
-                crossAxisAlignment: CrossAxisAlignment.center,
-                children: [
-                  Expanded(
-                    child: Text.rich(
-                      TextSpan(children: [
-                        TextSpan(
-                          text: headline,
-                          style: TextStyle(
-                            color: detection.isBleDetection
-                                ? const Color(0xFF4FA8FF)
-                                : t.textPrimary,
-                            fontSize: 15,
-                            fontFamily: headlineIsMac ? 'monospace' : null,
-                            fontWeight: FontWeight.w700,
-                            letterSpacing: headlineIsMac ? 0.5 : 0,
-                            height: 1.1,
-                          ),
-                        ),
-                        if (manufacturer != null && manufacturer.isNotEmpty) ...[
-                          TextSpan(
-                            text: '  ·  ',
-                            style: TextStyle(
-                              color: t.textDim.withValues(alpha: 0.55),
-                              fontSize: 13,
-                              fontWeight: FontWeight.w700,
-                            ),
-                          ),
-                          TextSpan(
-                            text: manufacturer,
-                            style: TextStyle(
-                              color: t.textDim,
-                              fontSize: 12,
-                              fontWeight: FontWeight.w500,
-                            ),
-                          ),
-                        ],
-                      ]),
-                      overflow: TextOverflow.ellipsis,
-                      softWrap: true,
-                      maxLines: 2,
-                    ),
-                  ),
-                  if (detection.sourceNodeId.isNotEmpty) ...[
-                    const SizedBox(width: 6),
-                    Container(
-                      constraints: const BoxConstraints(maxWidth: 120),
-                      padding:
-                          const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                      decoration: BoxDecoration(
-                        color: AppTheme.warning.withValues(alpha: 0.14),
-                        borderRadius: BorderRadius.circular(4),
-                      ),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          const Icon(Icons.hub,
-                              size: 11, color: AppTheme.warning),
-                          const SizedBox(width: 3),
-                          Flexible(
-                            child: Text(
-                              nodeLabel.isNotEmpty
-                                  ? nodeLabel
-                                  : detection.sourceNodeId,
-                              overflow: TextOverflow.ellipsis,
-                              softWrap: false,
-                              style: const TextStyle(
-                                color: AppTheme.warning,
-                                fontSize: 11,
-                                fontFamily: 'monospace',
-                                fontWeight: FontWeight.w700,
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
-                  const SizedBox(width: 8),
-                  _RssiBlock(rssi: detection.rssi),
-                ],
-              ),
-              const SizedBox(height: 3),
-              Row(
-                crossAxisAlignment: CrossAxisAlignment.center,
-                children: [
-                  Expanded(
-                    child: SingleChildScrollView(
-                      scrollDirection: Axis.horizontal,
-                      child: _DetailLine(
-                        detection: detection,
-                        engine: engine,
-                        manufacturer: manufacturer,
-                        showMac: !headlineIsMac,
-                        t: t,
-                      ),
-                    ),
-                  ),
-                  if (detection.isWifiDetection &&
-                      (detection.wardrive?.authMode ?? 0) > 0) ...[
-                    const SizedBox(width: 8),
-                    _AuthPill(authMode: detection.wardrive!.authMode),
-                  ],
-                  const SizedBox(width: 8),
-                  Text(timeStr,
-                      style: TextStyle(
-                        color: t.textDim,
-                        fontSize: 11,
-                        fontFamily: 'monospace',
-                        fontWeight: FontWeight.w700,
-                      )),
-                  const SizedBox(width: 4),
-                  _ActionIcon(
-                      icon: Icons.gps_fixed,
-                      color: AppTheme.foxhunter,
-                      tooltip: connected ? 'Foxhunt' : 'Foxhunt (node disconnected)',
-                      onTap: connected ? () => _startFoxhunt(context, ref) : null,
-                    ),
-                  _ActionIcon(
-                    icon: detection.approxGps ? Icons.location_searching : Icons.location_on,
-                    color: !hasGps
-                        ? AppTheme.gpsNone
-                        : detection.approxGps
-                            ? AppTheme.gpsFair
-                            : AppTheme.gpsGood,
-                    tooltip: !hasGps
-                        ? 'No GPS fix'
-                        : detection.approxGps
-                            ? 'Last-known GPS (approx)'
-                            : 'Show on map',
-                    onTap: hasGps ? () => _zoomOnMap(context, ref) : null,
-                  ),
-                ],
-              ),
-              if (detection.flock != null) ...[
-                const SizedBox(height: 2),
-                _FlockConfidenceLine(
-                  confidence: detection.flock!.confidence(detection.method),
-                  method: detection.method,
-                ),
-              ],
-            ],
-          );
-        }),
-      ),
-    ),
-    ),
-    );
-  }
-
-  void _zoomOnMap(BuildContext context, WidgetRef ref) =>
-      detectionZoomOnMap(context, ref, detection);
-
-  void _startFoxhunt(BuildContext context, WidgetRef ref) =>
-      detectionStartFoxhunt(context, ref, detection);
-
-  void _showActions(BuildContext context, WidgetRef ref) =>
-      showDetectionDetails(context, ref, detection);
-
-  String _formatTimeDiff(Duration diff) {
-    if (diff.inSeconds < 60) return '${diff.inSeconds}s';
-    if (diff.inMinutes < 60) return '${diff.inMinutes}m';
-    if (diff.inHours < 24) return '${diff.inHours}h';
-    return DateFormat('MMM d yyyy').format(detection.appTimestamp);
-  }
+String _ago(DateTime ts) {
+  final d = DateTime.now().difference(ts);
+  if (d.inSeconds < 60) return '${d.inSeconds < 0 ? 0 : d.inSeconds}s ago';
+  if (d.inMinutes < 60) return '${d.inMinutes}m ago';
+  if (d.inHours < 24) return '${d.inHours}h ago';
+  return DateFormat('MMM d').format(ts);
 }
 
-void detectionZoomOnMap(
-    BuildContext context, WidgetRef ref, Detection detection) {
-  if (detection.latitude == null || detection.longitude == null) return;
-  ref.read(wardriveProvider).requestZoom(
-        detection.latitude!,
-        detection.longitude!,
-        detection: detection,
-      );
-  context.go('/wardrive');
-}
-
-void detectionStartFoxhunt(
-    BuildContext context, WidgetRef ref, Detection detection) {
-  ref.read(appStateProvider).setFoxhunterTarget(
-        detection.macAddress,
-        channel: detection.channel,
-      );
-  ScaffoldMessenger.of(context).showSnackBar(
-    SnackBar(
-      content: Text(
-          'Foxhunting ${detection.macAddress.toUpperCase().substring(0, 8)}...'),
-      backgroundColor: AppTheme.foxhunter,
-    ),
-  );
-}
-
-void showDetectionDetails(
-    BuildContext context, WidgetRef ref, Detection detection,
-    {bool showMapAction = true,
-    VoidCallback? onDelete,
-    VoidCallback? onShowMap}) {
-    final nodeLabel = detection.sourceNodeId.isEmpty
-        ? ''
-        : ref.read(appStateProvider).labelForNode(detection.sourceNodeId);
-    final t = AppTheme.of(context);
-    final vendor = ref.read(ouiLookupProvider).lookup(detection.macAddress);
-    final connected = ref.read(appStateProvider).isConnected;
-    if (detection.flock != null &&
-        detection.latitude != null &&
-        detection.longitude != null) {
-      ref
-          .read(deflockProvider)
-          .ensureAround(detection.latitude!, detection.longitude!);
-    }
-    showModalBottomSheet(
-      context: context,
-      backgroundColor: t.surface,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(12)),
-      ),
-      isScrollControlled: true,
-      builder: (ctx) => ConstrainedBox(
-        constraints: BoxConstraints(
-          maxHeight: MediaQuery.of(ctx).size.height * 0.88,
-        ),
-        child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              detection.macAddress.toUpperCase(),
-              style: TextStyle(
-                color: t.textPrimary, fontSize: 14,
-                fontFamily: 'monospace', fontWeight: FontWeight.w600,
-              ),
-            ),
-            if (vendor != null)
-              Text(vendor,
-                  style: TextStyle(color: t.textSecondary, fontSize: 12)),
-            if (detection.deviceName.isNotEmpty)
-              Text(detection.deviceName,
-                  style: TextStyle(color: t.textSecondary, fontSize: 12)),
-            const SizedBox(height: 8),
-            Flexible(
-              child: SingleChildScrollView(
-                child: _DetailSummary(detection: detection, t: t, manufacturer: vendor, nodeLabel: nodeLabel),
-              ),
-            ),
-            const SizedBox(height: 12),
-            if (connected)
-              ListTile(
-                leading: const Icon(Icons.gps_fixed, color: AppTheme.foxhunter),
-                title: const Text('Foxhunt This Device',
-                    style: TextStyle(color: AppTheme.foxhunter)),
-                subtitle: Text('Track by RSSI proximity',
-                    style: TextStyle(color: t.textDim, fontSize: 11)),
-                onTap: () {
-                  Navigator.pop(ctx);
-                  detectionStartFoxhunt(context, ref, detection);
-                },
-              ),
-            if (showMapAction && detection.latitude != null)
-              ListTile(
-                leading: const Icon(Icons.map, color: AppTheme.gpsGood),
-                title: const Text('Show on Map',
-                    style: TextStyle(color: AppTheme.gpsGood)),
-                subtitle: Text('Zoom to detection location',
-                    style: TextStyle(color: t.textDim, fontSize: 11)),
-                onTap: () {
-                  Navigator.pop(ctx);
-                  if (onShowMap != null) {
-                    onShowMap();
-                  } else {
-                    detectionZoomOnMap(context, ref, detection);
-                  }
-                },
-              ),
-            ListTile(
-              leading: Icon(Icons.copy, color: t.textSecondary),
-              title: Text('Copy MAC', style: TextStyle(color: t.textPrimary)),
-              onTap: () {
-                Clipboard.setData(ClipboardData(text: detection.macAddress.toUpperCase()));
-                Navigator.pop(ctx);
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(
-                    content: const Text(
-                      'MAC copied',
-                      style: TextStyle(color: Colors.white),
-                    ),
-                    backgroundColor: t.surfaceLight,
-                    duration: const Duration(seconds: 1),
-                  ),
-                );
-              },
-            ),
-            ListTile(
-              leading: const Icon(Icons.delete_outline, color: AppTheme.error),
-              title: const Text('Delete Detection',
-                  style: TextStyle(color: AppTheme.error)),
-              subtitle: Text('Remove all MACs of this device',
-                  style: TextStyle(color: t.textDim, fontSize: 11)),
-              onTap: () {
-                Navigator.pop(ctx);
-                if (onDelete != null) {
-                  onDelete();
-                  return;
-                }
-                ref.read(appStateProvider).removeDetectionGroup(detection);
-                ref.read(wardriveProvider).removeDetectionGroup(detection);
-              },
-            ),
-            if (detection.odid?.uavId != null &&
-                detection.odid!.uavId!.isNotEmpty)
-              _FaaLookupTile(
-                uasId: detection.odid!.uavId!,
-                t: t,
-                onResult: (reg) {
-                  Navigator.pop(ctx);
-                  showModalBottomSheet<void>(
-                    context: context,
-                    backgroundColor: t.surface,
-                    shape: const RoundedRectangleBorder(
-                      borderRadius: BorderRadius.vertical(top: Radius.circular(12)),
-                    ),
-                    isScrollControlled: true,
-                    builder: (_) => _FaaResultSheet(
-                      reg: reg,
-                      uasId: detection.odid!.uavId!,
-                      t: t,
-                    ),
-                  );
-                },
-              ),
-          ],
-        ),
-        ),
-      ),
-    );
-}
-
-/// Detail summary shown in bottom sheet.
-class _DetailSummary extends ConsumerWidget {
-  const _DetailSummary({required this.detection, required this.t, this.manufacturer, this.nodeLabel = ''});
-  final Detection detection;
-  final ResolvedTheme t;
-  final String? manufacturer;
-  final String nodeLabel;
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final rows = <Widget>[];
-
-    if (manufacturer != null) {
-      rows.add(_detailRow(context, 'Vendor', manufacturer!));
-    }
-    rows.add(_detailRow(context, 'Engine', detection.engine.label));
-    rows.add(_detailRow(context, 'Method', methodLabel(detection.method)));
-    final why = detection.detector?.filterDescription?.trim() ?? '';
-    if (why.isNotEmpty) {
-      rows.add(_detailRow(
-        context,
-        switch (detection.method) {
-          'probe_ssid' => 'Probing for',
-          'ble_watchlist' || 'wifi_watchlist' => 'Watchlist',
-          _ => 'Matched',
-        },
-        why,
-      ));
-    }
-    rows.add(_detailRow(context, 'RSSI', '${detection.rssi} dBm'));
-    if (detection.channel > 0) {
-      rows.add(_detailRow(context, 'Channel', '${detection.channel}'));
-    }
-    rows.add(_detailRow(context, 'Seen', '\u00d7${detection.count}'));
-    if (detection.sourceNodeId.isNotEmpty) {
-      final lbl = nodeLabel.isNotEmpty && nodeLabel != detection.sourceNodeId
-          ? '$nodeLabel  (${detection.sourceNodeId})'
-          : detection.sourceNodeId;
-      rows.add(_detailRow(context, 'Source Node', lbl));
-    }
-    if (detection.ssid.isNotEmpty) {
-      rows.add(_detailRow(context, 'SSID', detection.ssid));
-    }
-    if (detection.wardrive != null) {
-      rows.add(_detailRow(context, 'Security', _authLabel(detection.wardrive!.authMode)));
-    }
-    if (detection.flock?.isRaven == true) {
-      rows.add(_detailRow(context, 'Type', 'Raven (ext battery)'));
-    }
-    if (detection.flock != null) {
-      final fc = detection.flock!.confidence(detection.method);
-      rows.add(_detailRow(context, 'Confidence', fc.label(detection.method)));
-    }
-    final flockSigs = _flockSignalLabels(detection.flock);
-    if (flockSigs.isNotEmpty) {
-      rows.add(_detailRow(context, 'Signals', flockSigs.join(', ')));
-    }
-    final lat = detection.latitude;
-    final lon = detection.longitude;
-    if (detection.flock != null && lat != null && lon != null) {
-      final df = ref.watch(deflockProvider);
-      final match = df.match(lat, lon);
-      final busy = df.loading && match.verdict == AlprMapVerdict.unknown;
-      rows.add(_detailRow(context, 'DeFlock',
-          busy ? 'Checking the map…' : '${match.label} — ${match.detail}'));
-      if (osmContributionAllowed(
-          detection.flock!.confidence(detection.method), match.verdict)) {
-        rows.add(_detailRow(
-            context, 'Add to OSM', DeflockProvider.osmNoteUrl(lat, lon)));
-      }
-    }
-    final odid = detection.odid;
-    if (odid != null) {
-      if (odid.uavId != null && odid.uavId!.isNotEmpty) {
-        rows.add(_detailRow(context, 'UAV ID', odid.uavId!));
-      }
-      if (odid.operatorId != null && odid.operatorId!.isNotEmpty) {
-        rows.add(_detailRow(context, 'Operator ID', odid.operatorId!));
-      }
-      final hasDronePos = odid.droneLat != null &&
-          odid.droneLon != null &&
-          !(odid.droneLat == 0 && odid.droneLon == 0);
-      if (hasDronePos) {
-        rows.add(_detailRow(context, 'Drone Pos',
-            '${odid.droneLat!.toStringAsFixed(5)}, ${odid.droneLon!.toStringAsFixed(5)}'));
-      } else {
-        rows.add(_detailRow(context, 'Drone Pos', 'No GPS fix'));
-        rows.add(_detailRow(context, 'Est. Range',
-            '${rssiRangeLabel(detection.rssi, isBle: detection.isBleDetection)} (RSSI)'));
-      }
-      if (odid.altitudeMsl != null) {
-        rows.add(_detailRow(context, 'Alt MSL', '${odid.altitudeMsl} m'));
-      }
-      if (odid.heightAgl != null) {
-        rows.add(_detailRow(context, 'Height AGL', '${odid.heightAgl} m'));
-      }
-      if (odid.droneSpeed != null) {
-        rows.add(_detailRow(context, 'Speed', '${odid.droneSpeed} m/s'));
-      }
-      if (odid.droneHeading != null) {
-        rows.add(_detailRow(context, 'Heading', '${odid.droneHeading}°'));
-      }
-      if (odid.pilotLat != null &&
-          odid.pilotLon != null &&
-          !(odid.pilotLat == 0 && odid.pilotLon == 0)) {
-        rows.add(_detailRow(context, 'Pilot Pos',
-            '${odid.pilotLat!.toStringAsFixed(5)}, ${odid.pilotLon!.toStringAsFixed(5)}'));
-      }
-      if (odid.uaType != null && odid.uaType! > 0) {
-        rows.add(_detailRow(context, 'UA Type', _odidUaType(odid.uaType!)));
-      }
-      if (odid.idType != null && odid.idType! > 0) {
-        rows.add(_detailRow(context, 'ID Type', _odidIdType(odid.idType!)));
-      }
-      if (odid.selfId != null && odid.selfId!.isNotEmpty) {
-        final selfIdLabel = (odid.selfIdType != null && odid.selfIdType! > 0)
-            ? 'Self-ID (${odid.selfIdType})'
-            : 'Self-ID';
-        rows.add(_detailRow(context, selfIdLabel, odid.selfId!));
-      }
-      if (odid.vertSpeed != null) {
-        rows.add(_detailRow(context, 'Vert Speed', '${odid.vertSpeed} m/s'));
-      }
-      if (odid.altitudeBaro != null) {
-        rows.add(_detailRow(context, 'Alt Baro', '${odid.altitudeBaro} m'));
-      }
-      if (odid.operatorAlt != null) {
-        rows.add(_detailRow(context, 'Operator Alt', '${odid.operatorAlt} m'));
-      }
-      if (odid.opLocationType != null) {
-        rows.add(_detailRow(context, 'Op Location', _odidOpLocationType(odid.opLocationType!)));
-      }
-      if (odid.heightType != null) {
-        rows.add(_detailRow(context, 'Height Ref', _odidHeightType(odid.heightType!)));
-      }
-      if (odid.status != null && odid.status! > 0) {
-        rows.add(_detailRow(context, 'UA Status', _odidStatus(odid.status!)));
-      }
-      if (odid.classification != null || odid.categoryEu != null || odid.classEu != null) {
-        final cls = odid.classification;
-        final isEu = cls == 1;
-        if (!isEu && cls != null) {
-          rows.add(_detailRow(context, 'Classification', 'Undeclared'));
-        }
-        if (isEu) {
-          if (odid.categoryEu != null) {
-            rows.add(_detailRow(context, 'EU Category', _odidCategoryEu(odid.categoryEu!)));
-          }
-          if (odid.classEu != null) {
-            rows.add(_detailRow(context, 'EU Class', _odidClassEu(odid.classEu!)));
-          }
-        }
-      }
-      if (odid.horizAcc != null || odid.vertAcc != null || odid.baroAcc != null || odid.speedAcc != null) {
-        final parts = <String>[];
-        if (odid.horizAcc != null && odid.horizAcc! > 0) parts.add('H:${odid.horizAcc}');
-        if (odid.vertAcc != null && odid.vertAcc! > 0) parts.add('V:${odid.vertAcc}');
-        if (odid.baroAcc != null && odid.baroAcc! > 0) parts.add('B:${odid.baroAcc}');
-        if (odid.speedAcc != null && odid.speedAcc! > 0) parts.add('S:${odid.speedAcc}');
-        if (parts.isNotEmpty) {
-          rows.add(_detailRow(context, 'Accuracy', parts.join('  ')));
-        }
-      }
-      if (odid.areaCount != null && odid.areaCount! > 0) {
-        final area = 'count:${odid.areaCount}'
-            '  r:${odid.areaRadius ?? 0}m'
-            '  ceil:${odid.areaCeiling ?? 0}m'
-            '  floor:${odid.areaFloor ?? 0}m';
-        rows.add(_detailRow(context, 'Op Area', area));
-      }
-      if (odid.locTimestamp != null && odid.locTimestamp! > 0) {
-        final secs = odid.locTimestamp! ~/ 10;
-        final tenths = odid.locTimestamp! % 10;
-        rows.add(_detailRow(context, 'Loc Timestamp', '${secs}s.$tenths after hour'));
-      }
-    }
-    if (detection.latitude != null) {
-      rows.add(_detailRow(context, 'Location',
-          '${detection.latitude!.toStringAsFixed(5)}, ${detection.longitude!.toStringAsFixed(5)}'));
-    }
-
-    return Container(
-      padding: const EdgeInsets.all(8),
-      decoration: BoxDecoration(
-        color: t.surfaceLight,
-        borderRadius: BorderRadius.circular(6),
-        border: Border.all(color: t.border, width: 0.5),
-      ),
-      child: Column(
-        children: [
-          ...rows,
-          Padding(
-            padding: const EdgeInsets.only(top: 6),
-            child: Text(
-              'tap any row to copy',
-              style: TextStyle(
-                color: t.textDim,
-                fontSize: 9,
-                fontStyle: FontStyle.italic,
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  void _copyValue(BuildContext context, String label, String value) {
-    Clipboard.setData(ClipboardData(text: value));
-    HapticFeedback.lightImpact();
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(
-          '$label copied',
-          style: const TextStyle(color: Colors.white),
-        ),
-        backgroundColor: t.surfaceLight,
-        duration: const Duration(seconds: 1),
-      ),
-    );
-  }
-
-  Widget _detailRow(BuildContext context, String label, String value) {
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        borderRadius: BorderRadius.circular(4),
-        splashColor: t.textDim.withValues(alpha: 0.08),
-        highlightColor: t.textDim.withValues(alpha: 0.05),
-        onTap: () => _copyValue(context, label, value),
-        onLongPress: () => _copyValue(context, label, value),
-        onSecondaryTapDown: (_) => _copyValue(context, label, value),
-        child: Padding(
-          padding: const EdgeInsets.symmetric(vertical: 4, horizontal: 4),
-          child: Row(
-            children: [
-              SizedBox(
-                width: 85,
-                child: Text(
-                  label,
-                  style: TextStyle(
-                    color: t.textDim,
-                    fontSize: 11,
-                    fontWeight: FontWeight.w500,
-                  ),
-                ),
-              ),
-              Expanded(
-                child: Text(
-                  value,
-                  style: TextStyle(
-                    color: t.textPrimary,
-                    fontSize: 11,
-                    fontFamily: 'monospace',
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  String _authLabel(int mode) {
-    return switch (mode) {
-      0 => 'Open (no encryption)',
-      1 => 'WEP',
-      2 => 'WPA-PSK',
-      3 => 'WPA2-PSK',
-      4 => 'WPA/WPA2-PSK',
-      5 => 'WPA2-Enterprise',
-      6 => 'WPA3-SAE',
-      _ => 'WPA2-PSK',
-    };
-  }
-
-  static String _odidUaType(int v) => const {
-        0: 'None', 1: 'Aeroplane', 2: 'Multirotor', 3: 'Gyroplane',
-        4: 'Hybrid Lift', 5: 'Ornithopter', 6: 'Glider', 7: 'Kite',
-        8: 'Free Balloon', 9: 'Captive Balloon', 10: 'Airship',
-        11: 'Free Fall/Parachute', 12: 'Rocket', 13: 'Tethered Powered',
-        14: 'Ground Obstacle', 15: 'Other',
-      }[v] ?? 'Unknown ($v)';
-
-  static String _odidIdType(int v) => const {
-        0: 'None', 1: 'Serial Number', 2: 'CAA Registration',
-        3: 'UTM (UUID)', 4: 'Specific Session ID',
-      }[v] ?? 'Unknown ($v)';
-
-  static String _odidOpLocationType(int v) => const {
-        0: 'Takeoff', 1: 'Live GNSS', 2: 'Fixed',
-      }[v] ?? 'Unknown ($v)';
-
-  static String _odidHeightType(int v) =>
-      v == 0 ? 'Above Takeoff' : v == 1 ? 'AGL' : 'Unknown ($v)';
-
-  static String _odidStatus(int v) => const {
-        0: 'Undeclared', 1: 'Ground', 2: 'Airborne',
-        3: 'Emergency', 4: 'Remote ID System Failure',
-      }[v] ?? 'Unknown ($v)';
-
-  static String _odidCategoryEu(int v) => const {
-        0: 'Undeclared', 1: 'Open', 2: 'Specific', 3: 'Certified',
-      }[v] ?? 'Unknown ($v)';
-
-  static String _odidClassEu(int v) {
-    if (v == 0) return 'Undeclared';
-    if (v >= 1 && v <= 6) return 'EU C${v - 1}';
-    return 'Unknown ($v)';
-  }
-}
-
-Color _rssiColor(int rssi) {
-  final normalized = ((rssi + 100) / 70).clamp(0.0, 1.0);
-  return Color.lerp(AppTheme.error, AppTheme.success, normalized)!;
-}
-
-class _ActionIcon extends StatelessWidget {
-  const _ActionIcon({
-    required this.icon,
-    required this.color,
-    required this.tooltip,
-    required this.onTap,
-  });
-  final IconData icon;
-  final Color color;
-  final String tooltip;
-  final VoidCallback? onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    final enabled = onTap != null;
-    final fg = enabled ? color : color.withValues(alpha: 0.3);
-    return Tooltip(
-      message: tooltip,
-      child: Material(
-        color: Colors.transparent,
-        shape: const CircleBorder(),
-        child: InkWell(
-          customBorder: const CircleBorder(),
-          onTap: onTap,
-          child: SizedBox(
-            width: 32,
-            height: 32,
-            child: Icon(icon, size: 19, color: fg),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-String _headline(Detection d, String? manufacturer) {
+String detectionHeadline(Detection d) {
+  if (d.engine == Engine.detector) return detectorTitle(d);
   if (d.wardrive != null && d.wardrive!.ssid.isNotEmpty) return d.wardrive!.ssid;
+  if (d.ssid.isNotEmpty) return d.ssid;
   if (d.deviceName.isNotEmpty) return d.deviceName;
   return d.macAddress.toUpperCase();
-}
-
-List<String> _flockSignalLabels(FlockExtension? flock) {
-  if (flock == null || flock.signals == 0) return const [];
-  return [
-    if (flock.hasSignal(FlockSignal.oui)) 'OUI',
-    if (flock.hasSignal(FlockSignal.name)) 'NAME',
-    if (flock.hasSignal(FlockSignal.serial)) 'SERIAL',
-    if (flock.hasSignal(FlockSignal.mfg)) 'XUNTONG',
-    if (flock.hasSignal(FlockSignal.tn)) 'TN',
-    if (flock.hasSignal(FlockSignal.ravenUuid)) 'RAVEN-UUID',
-    if (flock.hasSignal(FlockSignal.gatt)) 'FLOCK-GATT',
-    if (flock.hasSignal(FlockSignal.dfu)) 'NORDIC-DFU',
-  ];
 }
 
 String detectorTitle(Detection d) {
@@ -787,597 +44,175 @@ String detectorTitle(Detection d) {
 }
 
 String methodLabel(String method) => switch (method) {
-  'oui_addr1' => 'ADDR1 (DST)',
-  'oui_addr2' => 'ADDR2 (SRC)',
-  'oui_addr3' => 'ADDR3 (BSSID)',
+  'oui_addr1' => 'OUI in destination address',
+  'oui_addr2' => 'OUI in source address',
+  'oui_addr3' => 'OUI in BSSID',
   'ssid' => 'SSID',
-  'wildcard_probe' => 'PROBE REQ',
-  'oui_match' => 'BLE OUI',
-  'name_match' => 'BLE NAME',
-  'mfg_id' => 'MFG DATA',
-  'raven_uuid' => 'RAVEN UUID',
-  'gatt_uuid' => 'FLOCK GATT',
-  'nordic_dfu' => 'NORDIC DFU',
-  'tracker' => 'FIND MY',
-  'flipper' => 'FLIPPER',
-  'deauth_storm' => 'DEAUTH',
-  'probe_ssid' => 'PROBE',
-  'pwnagotchi' => 'PWNAGOTCHI',
-  'glasses' => 'META GLASSES',
-  'axon' => 'AXON',
-  'ble_watchlist' => 'WATCHLIST',
-  'wifi_watchlist' => 'WATCHLIST',
-  'ble_proximity' => 'PROXIMITY',
-  'wifi_proximity' => 'PROXIMITY',
-  'wifi_ap' => 'WIFI AP',
-  'ble_adv' => 'BLE ADV',
-  'unitree_ble' => 'UNITREE',
-  'pcap' => 'PCAP',
-  _ => method.toUpperCase(),
+  'wildcard_probe' => 'Probe request',
+  'wildcard_probe_ie_sig' => 'Probe request signature',
+  'oui_match' => 'Bluetooth OUI',
+  'name_match' => 'Bluetooth name',
+  'mfg_id' => 'Manufacturer data',
+  'raven_uuid' => 'Raven service UUID',
+  'gatt_uuid' => 'Flock GATT service',
+  'nordic_dfu' => 'Nordic DFU service',
+  'tracker' => 'Find My tracker',
+  'flipper' => 'Flipper Zero',
+  'deauth_storm' => 'Deauth storm',
+  'probe_ssid' => 'Probe request',
+  'pwnagotchi' => 'Pwnagotchi',
+  'glasses' => 'Meta glasses',
+  'axon' => 'Axon',
+  'ble_watchlist' || 'wifi_watchlist' => 'Watchlist',
+  'ble_proximity' || 'wifi_proximity' => 'Proximity',
+  'wifi_ap' => 'Wi-Fi access point',
+  'ble_adv' => 'Bluetooth advertisement',
+  'unitree_ble' => 'Unitree robot',
+  'odid_ble' => 'Remote ID over Bluetooth',
+  'odid_nan' => 'Remote ID over Wi-Fi NAN',
+  'odid_beacon' => 'Remote ID over Wi-Fi beacon',
+  'pcap' => 'Packet capture',
+  _ => method,
 };
 
+String _authLabel(int mode) => switch (mode) {
+  0 => 'Open (no encryption)',
+  1 => 'WEP',
+  2 => 'WPA-PSK',
+  3 => 'WPA2-PSK',
+  4 => 'WPA/WPA2-PSK',
+  5 => 'WPA2-Enterprise',
+  6 => 'WPA3-SAE',
+  _ => 'WPA2-PSK',
+};
+
+List<String> _flockSignalLabels(FlockExtension? flock) {
+  if (flock == null || flock.signals == 0) return const [];
+  return [
+    if (flock.hasSignal(FlockSignal.oui)) 'OUI',
+    if (flock.hasSignal(FlockSignal.name)) 'name',
+    if (flock.hasSignal(FlockSignal.serial)) 'serial',
+    if (flock.hasSignal(FlockSignal.mfg)) 'XUNTONG manufacturer data',
+    if (flock.hasSignal(FlockSignal.tn)) 'TN serial',
+    if (flock.hasSignal(FlockSignal.ravenUuid)) 'Raven UUID',
+    if (flock.hasSignal(FlockSignal.gatt)) 'Flock GATT',
+    if (flock.hasSignal(FlockSignal.dfu)) 'Nordic DFU',
+  ];
+}
+
 Color _flockConfidenceColor(FlockConfidence c) => switch (c) {
-  FlockConfidence.verified => AppTheme.success,
-  FlockConfidence.high => AppTheme.success,
+  FlockConfidence.verified || FlockConfidence.high => AppTheme.success,
   FlockConfidence.suspected => AppTheme.warning,
 };
 
-class _FlockConfidenceLine extends StatelessWidget {
-  const _FlockConfidenceLine({required this.confidence, required this.method});
-  final FlockConfidence confidence;
-  final String method;
+void detectionZoomOnMap(BuildContext context, WidgetRef ref, Detection detection) {
+  if (detection.latitude == null || detection.longitude == null) return;
+  ref.read(wardriveProvider).requestZoom(detection.latitude!, detection.longitude!, detection: detection);
+  context.go('/wardrive');
+}
+
+void detectionStartFoxhunt(BuildContext context, WidgetRef ref, Detection detection) {
+  ref.read(appStateProvider).setFoxhunterTarget(detection.macAddress, channel: detection.channel);
+  ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Foxhunting ${detection.macAddress.toUpperCase()}')));
+}
+
+void showDetectionDetails(
+  BuildContext context,
+  WidgetRef ref,
+  Detection detection, {
+  bool showMapAction = true,
+  VoidCallback? onDelete,
+  VoidCallback? onShowMap,
+}) {
+  if (detection.flock != null && detection.latitude != null && detection.longitude != null) {
+    ref.read(deflockProvider).ensureAround(detection.latitude!, detection.longitude!);
+  }
+  Navigator.of(context).push(CupertinoPageRoute<void>(
+    builder: (_) => DetectionDetailPage(
+      detection: detection,
+      showMapAction: showMapAction,
+      onDelete: onDelete,
+      onShowMap: onShowMap,
+    ),
+  ));
+}
+
+class DetectionRow extends ConsumerWidget {
+  const DetectionRow({super.key, required this.detection, this.onTap});
+  final Detection detection;
+  final VoidCallback? onTap;
 
   @override
-  Widget build(BuildContext context) {
-    final color = _flockConfidenceColor(confidence);
-    return Text(
-      confidence.label(method),
-      style: TextStyle(
-        color: color,
-        fontSize: 11,
-        fontFamily: 'monospace',
-        fontWeight: FontWeight.w800,
+  Widget build(BuildContext context, WidgetRef ref) {
+    final t = AppTheme.of(context);
+    final d = detection;
+    final vendor = ref.watch(ouiLookupProvider).lookup(d.macAddress);
+    final app = ref.watch(appStateProvider);
+    final node = d.sourceNodeId.isEmpty ? '' : app.labelForNode(d.sourceNodeId);
+    final headline = detectionHeadline(d);
+    final mac = d.macAddress.toUpperCase();
+    final generic = d.method == 'wifi_ap' || d.method == 'ble_adv';
+    final idLine = [
+      if (headline != mac) mac,
+      if (vendor != null && vendor.isNotEmpty) vendor,
+    ].join(' · ');
+    final meta = [
+      d.engine.label,
+      if (!generic) methodLabel(d.method),
+      if (d.channel > 0) 'ch ${d.channel}',
+      if (d.wardrive != null && d.isWifiDetection) _authLabel(d.wardrive!.authMode),
+      if (d.count > 1) '${d.count}×',
+      if (node.isNotEmpty) node,
+    ].join(' · ');
+    final (flag, flagColor) = _flag(d);
+    return IosRow(
+      leading: Icon(d.isBleDetection ? CupertinoIcons.bluetooth : CupertinoIcons.wifi, color: d.engine.color, size: 24),
+      title: headline,
+      subtitle: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          if (idLine.isNotEmpty) Text(idLine, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(color: t.textSecondary)),
+          Text(meta, maxLines: 1, overflow: TextOverflow.ellipsis),
+          if (flag != null) Text(flag, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(color: flagColor, fontWeight: FontWeight.w600)),
+        ],
       ),
+      detail: _RssiAge(rssi: d.rssi, ts: d.appTimestamp),
+      chevron: true,
+      onTap: onTap ?? () => showDetectionDetails(context, ref, d),
     );
+  }
+
+  static (String?, Color) _flag(Detection d) {
+    if (OuiLookupService.isLawEnforcement(d.macAddress)) return ('Law enforcement hardware', AppTheme.warning);
+    if (d.flock?.isValidated == true) return ('Flock · validated', AppTheme.success);
+    if (d.flock?.isRaven == true) return ('Raven gunshot sensor${(d.flock!.ravenFirmware ?? '').isNotEmpty ? ' · fw ${d.flock!.ravenFirmware}' : ''}', AppTheme.warning);
+    if (d.flock != null) {
+      final c = d.flock!.confidence(d.method);
+      return (c.label(d.method), _flockConfidenceColor(c));
+    }
+    if (d.unipwn != null) return ('${d.unipwn!.robotType}${d.unipwn!.exploited ? ' · exploited' : ''}', Engine.uniPwn.color);
+    if ((d.odid?.uavId ?? '').isNotEmpty) {
+      return ('UAV ${d.odid!.uavId}${d.odid!.altitudeMsl != null ? ' · ${d.odid!.altitudeMsl} m' : ''}', Engine.skySpy.color);
+    }
+    return (null, AppTheme.accent);
   }
 }
 
-class _RssiBlock extends StatelessWidget {
-  const _RssiBlock({required this.rssi});
+class _RssiAge extends StatelessWidget {
+  const _RssiAge({required this.rssi, required this.ts});
   final int rssi;
+  final DateTime ts;
 
   @override
   Widget build(BuildContext context) {
     final t = AppTheme.of(context);
-    final color = _rssiColor(rssi);
-    final norm = ((rssi + 100) / 70).clamp(0.0, 1.0);
-    final activeBars = (norm * 5).round().clamp(0, 5);
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      crossAxisAlignment: CrossAxisAlignment.center,
-      children: [
-        Text(
-          '$rssi',
-          style: TextStyle(
-            color: color,
-            fontSize: 16,
-            fontFamily: 'monospace',
-            fontWeight: FontWeight.w800,
-            height: 1.0,
-          ),
-        ),
-        const SizedBox(width: 4),
-        Row(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.end,
-          children: List.generate(5, (i) {
-            final on = i < activeBars;
-            return Container(
-              width: 2.5,
-              height: 3.0 + i * 1.8,
-              margin: const EdgeInsets.only(right: 1.2),
-              decoration: BoxDecoration(
-                color: on ? color : t.border,
-                borderRadius: BorderRadius.circular(0.5),
-              ),
-            );
-          }),
-        ),
-      ],
-    );
-  }
-}
-
-class _DetailLine extends StatelessWidget {
-  const _DetailLine({
-    required this.detection,
-    required this.engine,
-    required this.manufacturer,
-    required this.showMac,
-    required this.t,
-  });
-  final Detection detection;
-  final Engine engine;
-  final String? manufacturer;
-  final bool showMac;
-  final ResolvedTheme t;
-
-  @override
-  Widget build(BuildContext context) {
-    final tokens = <Widget>[];
-    if (showMac) {
-      tokens.add(Text(
-        detection.macAddress.toUpperCase(),
-        style: TextStyle(
-          color: t.textSecondary,
-          fontSize: 11,
-          fontFamily: 'monospace',
-          fontWeight: FontWeight.w700,
-          letterSpacing: 0.5,
-        ),
-      ));
-      tokens.add(_pipe());
-    }
-    tokens.add(Icon(
-      engine == Engine.skySpy
-          ? Icons.flight
-          : (detection.isWifiDetection ? Icons.wifi : Icons.bluetooth),
-      size: 13,
-      color: engine.color,
-    ));
-    if (OuiLookupService.isLawEnforcement(detection.macAddress)) {
-      tokens.add(const SizedBox(width: 5));
-      tokens.add(const Icon(Icons.local_police, size: 13, color: AppTheme.warning));
-    }
-    final isGenericMethod =
-        detection.method == 'wifi_ap' || detection.method == 'ble_adv';
-    final discovery = methodLabel(detection.method);
-    if (discovery.isNotEmpty && !isGenericMethod) {
-      tokens.add(const SizedBox(width: 5));
-      tokens.add(Text(discovery,
-          style: TextStyle(
-            color: engine.color,
-            fontSize: 11,
-            fontFamily: 'monospace',
-            fontWeight: FontWeight.w800,
-            letterSpacing: 0.3,
-          )));
-    }
-    if (detection.channel > 0) {
-      tokens.add(const SizedBox(width: 5));
-      tokens.add(_mono('${detection.channel}'));
-    }
-    if (detection.count > 1) {
-      tokens.add(_pipe());
-      tokens.add(_mono('x${detection.count}'));
-    }
-    if (detection.flock?.isRaven == true) {
-      tokens.add(_pipe());
-      tokens.add(Icon(Icons.memory, size: 12, color: AppTheme.warning));
-      tokens.add(const SizedBox(width: 3));
-      tokens.add(Text('RAVEN',
-          style: TextStyle(
-              color: AppTheme.warning,
-              fontSize: 11,
-              fontFamily: 'monospace',
-              fontWeight: FontWeight.w800)));
-      final fw = detection.flock?.ravenFirmware;
-      if (fw != null && fw.isNotEmpty) {
-        tokens.add(_pipe());
-        tokens.add(_mono(fw));
-      }
-    }
-    if (detection.flock?.isValidated == true) {
-      tokens.add(_pipe());
-      tokens.add(Icon(Icons.verified_user, size: 12, color: AppTheme.success));
-      tokens.add(const SizedBox(width: 3));
-      tokens.add(Text('VALIDATED',
-          style: TextStyle(
-              color: AppTheme.success,
-              fontSize: 11,
-              fontFamily: 'monospace',
-              fontWeight: FontWeight.w800)));
-    }
-    if (detection.unipwn != null) {
-      tokens.add(_pipe());
-      tokens.add(Icon(Icons.smart_toy, size: 12, color: Engine.uniPwn.color));
-      tokens.add(const SizedBox(width: 3));
-      tokens.add(Text(detection.unipwn!.robotType.toUpperCase(),
-          style: TextStyle(
-              color: Engine.uniPwn.color,
-              fontSize: 11,
-              fontFamily: 'monospace',
-              fontWeight: FontWeight.w800)));
-      if (detection.unipwn!.exploited) {
-        tokens.add(_pipe());
-        tokens.add(Icon(Icons.verified, size: 12, color: AppTheme.success));
-        tokens.add(const SizedBox(width: 3));
-        tokens.add(Text('PWNED',
-            style: TextStyle(
-                color: AppTheme.success,
-                fontSize: 11,
-                fontFamily: 'monospace',
-                fontWeight: FontWeight.w800)));
-      }
-    }
-    if (detection.odid?.uavId != null && detection.odid!.uavId!.isNotEmpty) {
-      tokens.add(_pipe());
-      tokens.add(Icon(Icons.flight, size: 12, color: Engine.skySpy.color));
-      tokens.add(const SizedBox(width: 3));
-      tokens.add(Text(detection.odid!.uavId!,
-          style: TextStyle(
-              color: Engine.skySpy.color,
-              fontSize: 11,
-              fontFamily: 'monospace',
-              fontWeight: FontWeight.w700)));
-      if (detection.odid!.altitudeMsl != null) {
-        tokens.add(_pipe());
-        tokens.add(_mono('${detection.odid!.altitudeMsl}m'));
-      }
-    }
-    if (detection.detector != null) {
-      final d = detection.detector!;
-      if (d.filterDescription != null && d.filterDescription!.isNotEmpty) {
-        tokens.add(_pipe());
-        tokens.add(Text(d.filterDescription!,
-            style: TextStyle(
-                color: AppTheme.accent,
-                fontSize: 11,
-                fontFamily: 'monospace',
-                fontWeight: FontWeight.w700)));
-      }
-      tokens.add(_pipe());
-      tokens.add(_mono(d.isFullMac ? 'FULL' : 'OUI'));
-    }
-    return Row(mainAxisSize: MainAxisSize.min, children: tokens);
-  }
-
-  Widget _mono(String s) => Text(s,
-      style: TextStyle(
-        color: t.textDim,
-        fontSize: 11,
-        fontFamily: 'monospace',
-        fontWeight: FontWeight.w600,
-      ));
-
-  Widget _pipe() => Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 5),
-        child: Text('•',
-            style: TextStyle(
-              color: t.textDim.withValues(alpha: 0.45),
-              fontSize: 10,
-              fontWeight: FontWeight.w700,
-            )),
-      );
-
-}
-
-(String, Color) _authMeta(int mode) => switch (mode) {
-      0 => ('OPEN', AppTheme.error),
-      1 => ('WEP', AppTheme.warning),
-      2 => ('WPA', AppTheme.warning),
-      3 => ('WPA2', AppTheme.success),
-      4 => ('WPA/2', AppTheme.success),
-      5 => ('ENT', AppTheme.accent),
-      6 => ('WPA3', AppTheme.success),
-      _ => ('WPA2', AppTheme.success),
-    };
-
-class _AuthPill extends StatelessWidget {
-  const _AuthPill({required this.authMode});
-  final int authMode;
-
-  @override
-  Widget build(BuildContext context) {
-    final (label, color) = _authMeta(authMode);
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
-      decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.14),
-        borderRadius: BorderRadius.circular(4),
-        border: Border.all(color: color.withValues(alpha: 0.5), width: 0.8),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(authMode == 0 ? Icons.lock_open : Icons.lock,
-              size: 11, color: color),
-          const SizedBox(width: 3),
-          Text(label,
-              style: TextStyle(
-                color: color,
-                fontSize: 10,
-                fontFamily: 'monospace',
-                fontWeight: FontWeight.w800,
-                letterSpacing: 0.5,
-              )),
-        ],
-      ),
-    );
-  }
-}
-
-class _FaaLookupTile extends ConsumerStatefulWidget {
-  const _FaaLookupTile({
-    required this.uasId,
-    required this.t,
-    required this.onResult,
-  });
-
-  final String uasId;
-  final ResolvedTheme t;
-  final void Function(FaaRegistration) onResult;
-
-  @override
-  ConsumerState<_FaaLookupTile> createState() => _FaaLookupTileState();
-}
-
-class _FaaLookupTileState extends ConsumerState<_FaaLookupTile> {
-  bool _loading = false;
-  String? _error;
-
-  Future<void> _lookup() async {
-    setState(() {
-      _loading = true;
-      _error = null;
-    });
-    try {
-      final svc = ref.read(faaServiceProvider);
-      final reg = await svc.lookup(widget.uasId);
-      if (!mounted) return;
-      if (reg == null) {
-        setState(() => _error = 'Not found in FAA database');
-        return;
-      }
-      widget.onResult(reg);
-    } on FaaLookupException catch (e) {
-      if (!mounted) return;
-      setState(() => _error = e.message);
-    } catch (e) {
-      if (!mounted) return;
-      setState(() => _error = 'Lookup failed: $e');
-    } finally {
-      if (mounted) setState(() => _loading = false);
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
     return Column(
-      mainAxisSize: MainAxisSize.min,
-      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisAlignment: MainAxisAlignment.center,
+      crossAxisAlignment: CrossAxisAlignment.end,
       children: [
-        ListTile(
-          leading: _loading
-              ? const SizedBox(
-                  width: 20,
-                  height: 20,
-                  child: CircularProgressIndicator(
-                    strokeWidth: 2,
-                    color: AppTheme.skySpy,
-                  ),
-                )
-              : const Icon(Icons.policy_outlined, color: AppTheme.skySpy),
-          title: Text(
-            'FAA RemoteID Lookup',
-            style: TextStyle(color: widget.t.textPrimary),
-          ),
-          subtitle: _error != null
-              ? Text(_error!,
-                  style: const TextStyle(color: AppTheme.error, fontSize: 11))
-              : Text('Query ${widget.uasId}',
-                  style: TextStyle(color: widget.t.textDim, fontSize: 11,
-                      fontFamily: 'monospace'),
-                  overflow: TextOverflow.ellipsis),
-          onTap: _loading ? null : _lookup,
-        ),
+        Text('$rssi dBm', style: TextStyle(color: rssiColor(rssi), fontSize: 15, fontWeight: FontWeight.w600)),
+        Text(_ago(ts), style: TextStyle(color: t.textDim, fontSize: 13)),
       ],
-    );
-  }
-}
-
-class _FaaResultSheet extends StatelessWidget {
-  const _FaaResultSheet({
-    required this.reg,
-    required this.uasId,
-    required this.t,
-  });
-
-  final FaaRegistration reg;
-  final String uasId;
-  final ResolvedTheme t;
-
-  @override
-  Widget build(BuildContext context) {
-    final cacheAge = DateTime.now().difference(reg.cachedAt);
-    final cacheLabel = cacheAge.inSeconds < 5
-        ? 'live'
-        : 'cached ${_formatAge(cacheAge)} ago';
-
-    final rows = <_FaaRow>[];
-    if (reg.status.isNotEmpty) rows.add(_FaaRow('Status', reg.status));
-    if (reg.displayName.isNotEmpty) rows.add(_FaaRow('Aircraft', reg.displayName));
-    if (reg.brand.isNotEmpty && reg.makeName.isNotEmpty && reg.brand != reg.makeName) {
-      rows.add(_FaaRow('Make', reg.makeName));
-    }
-    if (reg.series.isNotEmpty) rows.add(_FaaRow('Series', reg.series));
-    if (reg.manufacturerCode.isNotEmpty) rows.add(_FaaRow('Mfr Code', reg.manufacturerCode));
-    if (reg.productType.isNotEmpty) rows.add(_FaaRow('Type', reg.productType));
-    if (reg.operationRules.isNotEmpty) rows.add(_FaaRow('Rules', reg.operationRules));
-    if (reg.complianceCategories.isNotEmpty) rows.add(_FaaRow('Compliance', reg.complianceCategories));
-    if (reg.trackingNumber.isNotEmpty) rows.add(_FaaRow('Tracking #', reg.trackingNumber));
-    if (reg.updatedAt.isNotEmpty) rows.add(_FaaRow('Updated', _formatDate(reg.updatedAt)));
-
-    return ConstrainedBox(
-      constraints: BoxConstraints(
-        maxHeight: MediaQuery.of(context).size.height * 0.75,
-      ),
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: SingleChildScrollView(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                children: [
-                  const Icon(Icons.policy_outlined, color: AppTheme.skySpy, size: 18),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: Text(
-                      'FAA REGISTRATION',
-                      style: TextStyle(
-                        color: AppTheme.skySpy,
-                        fontSize: 14,
-                        fontWeight: FontWeight.w700,
-                        letterSpacing: 1,
-                      ),
-                    ),
-                  ),
-                  Text(cacheLabel,
-                      style: TextStyle(
-                          color: t.textDim, fontSize: 10, fontStyle: FontStyle.italic)),
-                ],
-              ),
-              const SizedBox(height: 4),
-              Text(
-                uasId,
-                style: TextStyle(
-                    color: t.textSecondary,
-                    fontSize: 11,
-                    fontFamily: 'monospace'),
-              ),
-              const SizedBox(height: 12),
-              if (rows.isEmpty)
-                Center(
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(vertical: 16),
-                    child: Text(
-                      'No registration data found',
-                      style: TextStyle(color: t.textDim, fontSize: 13),
-                    ),
-                  ),
-                )
-              else
-                Container(
-                  padding: const EdgeInsets.all(8),
-                  decoration: BoxDecoration(
-                    color: t.surfaceLight,
-                    borderRadius: BorderRadius.circular(6),
-                    border: Border.all(color: t.border, width: 0.5),
-                  ),
-                  child: Column(
-                    children: rows
-                        .map((r) => _buildRow(context, r))
-                        .toList(),
-                  ),
-                ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildRow(BuildContext context, _FaaRow r) {
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        borderRadius: BorderRadius.circular(4),
-        onTap: () {
-          Clipboard.setData(ClipboardData(text: r.value));
-          HapticFeedback.lightImpact();
-          ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-            content: Text('${r.label} copied',
-                style: const TextStyle(color: Colors.white)),
-            backgroundColor: t.surfaceLight,
-            duration: const Duration(seconds: 1),
-          ));
-        },
-        child: Padding(
-          padding: const EdgeInsets.symmetric(vertical: 4, horizontal: 4),
-          child: Row(
-            children: [
-              SizedBox(
-                width: 90,
-                child: Text(r.label,
-                    style: TextStyle(
-                        color: t.textDim,
-                        fontSize: 11,
-                        fontWeight: FontWeight.w500)),
-              ),
-              Expanded(
-                child: Text(r.value,
-                    style: TextStyle(
-                        color: t.textPrimary,
-                        fontSize: 11,
-                        fontFamily: 'monospace')),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  String _formatAge(Duration d) {
-    if (d.inSeconds < 60) return '${d.inSeconds}s';
-    if (d.inMinutes < 60) return '${d.inMinutes}m';
-    return '${d.inHours}h';
-  }
-
-  String _formatDate(String iso) {
-    try {
-      return DateFormat('yyyy-MM-dd').format(DateTime.parse(iso));
-    } on FormatException {
-      return iso;
-    }
-  }
-}
-
-class _FaaRow {
-  const _FaaRow(this.label, this.value);
-  final String label;
-  final String value;
-}
-
-String _odidTransportLabel(String method) => switch (method) {
-  'odid_ble' => 'BLE',
-  'odid_nan' => 'WiFi NAN',
-  'odid_beacon' => 'WiFi Beacon',
-  _ => method.toUpperCase(),
-};
-
-class _TransportBadge extends StatelessWidget {
-  const _TransportBadge({required this.method});
-  final String method;
-
-  @override
-  Widget build(BuildContext context) {
-    final label = _odidTransportLabel(method);
-    final color = switch (method) {
-      'odid_ble' => const Color(0xFF4FA8FF),
-      'odid_nan' => Engine.skySpy.color,
-      'odid_beacon' => Engine.skySpy.color.withValues(alpha: 0.7),
-      _ => Engine.skySpy.color,
-    };
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
-      decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.13),
-        borderRadius: BorderRadius.circular(4),
-        border: Border.all(color: color.withValues(alpha: 0.45), width: 0.7),
-      ),
-      child: Text(
-        label,
-        style: TextStyle(
-          color: color,
-          fontSize: 9,
-          fontFamily: 'monospace',
-          fontWeight: FontWeight.w800,
-          letterSpacing: 0.3,
-        ),
-      ),
     );
   }
 }
@@ -1390,172 +225,378 @@ class DroneDetectionRow extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final t = AppTheme.of(context);
     final d = group.representative;
-    final timeDiff = DateTime.now().difference(d.appTimestamp);
-    final timeStr = _formatTimeDiffDrone(timeDiff);
-    final nodeLabel = d.sourceNodeId.isEmpty
-        ? ''
-        : ref.watch(appStateProvider).labelForNode(d.sourceNodeId);
-    final hasGps = d.odid?.droneLat != null && d.odid!.droneLat != 0;
+    final node = d.sourceNodeId.isEmpty ? '' : ref.watch(appStateProvider).labelForNode(d.sourceNodeId);
+    final transports = {for (final m in group.methods) methodLabel(m).replaceFirst('Remote ID over ', '')}.join(', ');
+    return IosRow(
+      leading: Icon(CupertinoIcons.airplane, color: Engine.skySpy.color, size: 24),
+      title: group.uavId,
+      subtitle: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(group.macs.map((m) => m.toUpperCase()).join(', '), maxLines: 2, overflow: TextOverflow.ellipsis, style: TextStyle(color: t.textSecondary)),
+          Text([
+            'Remote ID over $transports',
+            if (d.odid?.altitudeMsl != null) '${d.odid!.altitudeMsl} m MSL',
+            if (node.isNotEmpty) node,
+          ].join(' · '), maxLines: 1, overflow: TextOverflow.ellipsis),
+        ],
+      ),
+      detail: _RssiAge(rssi: d.rssi, ts: d.appTimestamp),
+      chevron: true,
+      onTap: () => showDetectionDetails(context, ref, d),
+    );
+  }
+}
 
-    final methodsUnique = <String>[];
-    final seenMethods = <String>{};
-    for (final m in group.methods) {
-      if (seenMethods.add(m)) methodsUnique.add(m);
+class DetectionDetailPage extends ConsumerStatefulWidget {
+  const DetectionDetailPage({super.key, required this.detection, this.showMapAction = true, this.onDelete, this.onShowMap});
+
+  final Detection detection;
+  final bool showMapAction;
+  final VoidCallback? onDelete;
+  final VoidCallback? onShowMap;
+
+  @override
+  ConsumerState<DetectionDetailPage> createState() => _DetectionDetailPageState();
+}
+
+class _DetectionDetailPageState extends ConsumerState<DetectionDetailPage> {
+  bool _faaLoading = false;
+  String? _faaError;
+
+  Detection get d => widget.detection;
+
+  void _copy(String label, String value) {
+    Clipboard.setData(ClipboardData(text: value));
+    HapticFeedback.lightImpact();
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('$label copied'), duration: const Duration(seconds: 1)));
+  }
+
+  Future<void> _faaLookup(String uasId) async {
+    setState(() {
+      _faaLoading = true;
+      _faaError = null;
+    });
+    try {
+      final reg = await ref.read(faaServiceProvider).lookup(uasId);
+      if (!mounted) return;
+      if (reg == null) {
+        setState(() => _faaError = 'Not found in the FAA database');
+        return;
+      }
+      Navigator.of(context).push(CupertinoPageRoute<void>(builder: (_) => _FaaPage(reg: reg, uasId: uasId)));
+    } on FaaLookupException catch (e) {
+      if (mounted) setState(() => _faaError = e.message);
+    } catch (e) {
+      if (mounted) setState(() => _faaError = 'Lookup failed: $e');
+    } finally {
+      if (mounted) setState(() => _faaLoading = false);
     }
+  }
 
-    return GestureDetector(
-      behavior: HitTestBehavior.opaque,
-      onTap: () => _showDroneDetails(context, ref),
-      onLongPress: () {
-        HapticFeedback.mediumImpact();
-        _showDroneDetails(context, ref);
-      },
-      child: Container(
-        decoration: BoxDecoration(
-          border: Border(bottom: BorderSide(color: t.border, width: 0.5)),
-        ),
-        child: Container(
-          padding: const EdgeInsets.fromLTRB(10, 7, 10, 7),
-          decoration: BoxDecoration(
-            border: Border(
-              left: BorderSide(color: Engine.skySpy.color, width: 3),
+  Future<void> _confirmDelete() async {
+    final ok = await showCupertinoDialog<bool>(
+      context: context,
+      builder: (ctx) => CupertinoAlertDialog(
+        title: const Text('Delete this detection?'),
+        content: const Text('Removes every MAC grouped with this device from the feed and the wardrive session.'),
+        actions: [
+          CupertinoDialogAction(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
+          CupertinoDialogAction(isDestructiveAction: true, onPressed: () => Navigator.pop(ctx, true), child: const Text('Delete')),
+        ],
+      ),
+    );
+    if (ok != true || !mounted) return;
+    Navigator.of(context).pop();
+    if (widget.onDelete != null) {
+      widget.onDelete!();
+      return;
+    }
+    ref.read(appStateProvider).removeDetectionGroup(d);
+    ref.read(wardriveProvider).removeDetectionGroup(d);
+  }
+
+  List<(String, String)> _fields() {
+    final vendor = ref.read(ouiLookupProvider).lookup(d.macAddress);
+    final node = d.sourceNodeId.isEmpty ? '' : ref.read(appStateProvider).labelForNode(d.sourceNodeId);
+    final out = <(String, String)>[
+      ('MAC address', d.macAddress.toUpperCase()),
+      if (vendor != null) ('Vendor', vendor),
+      if (d.deviceName.isNotEmpty) ('Name', d.deviceName),
+      if (d.ssid.isNotEmpty) ('SSID', d.ssid),
+      ('Engine', d.engine.label),
+      ('Matched by', methodLabel(d.method)),
+    ];
+    final why = d.detector?.filterDescription?.trim() ?? '';
+    if (why.isNotEmpty) {
+      out.add((switch (d.method) {
+        'probe_ssid' => 'Probing for',
+        'ble_watchlist' || 'wifi_watchlist' => 'Watchlist entry',
+        _ => 'Matched',
+      }, why));
+    }
+    if (d.detector != null) out.add(('Match type', d.detector!.isFullMac ? 'Full MAC' : 'OUI prefix'));
+    out.add(('Signal', '${d.rssi} dBm'));
+    if (d.channel > 0) out.add(('Channel', '${d.channel}'));
+    out.add(('Times seen', '${d.count}'));
+    out.add(('Last seen', DateFormat('MMM d, HH:mm:ss').format(d.appTimestamp)));
+    if (d.sourceNodeId.isNotEmpty) {
+      out.add(('Heard by node', node.isNotEmpty && node != d.sourceNodeId ? '$node (${d.sourceNodeId})' : d.sourceNodeId));
+    }
+    if (d.wardrive != null) out.add(('Security', _authLabel(d.wardrive!.authMode)));
+    if (d.flock?.isRaven == true) out.add(('Type', 'Raven gunshot sensor'));
+    if (d.flock != null) out.add(('Confidence', d.flock!.confidence(d.method).label(d.method)));
+    final sigs = _flockSignalLabels(d.flock);
+    if (sigs.isNotEmpty) out.add(('Flock signals', sigs.join(', ')));
+    if (d.unipwn != null) out.add(('Robot', '${d.unipwn!.robotType}${d.unipwn!.exploited ? ' · exploited' : ''}'));
+    final lat = d.latitude;
+    final lon = d.longitude;
+    if (d.flock != null && lat != null && lon != null) {
+      final df = ref.watch(deflockProvider);
+      final match = df.match(lat, lon);
+      final busy = df.loading && match.verdict == AlprMapVerdict.unknown;
+      out.add(('DeFlock map', busy ? 'Checking the map…' : '${match.label} · ${match.detail}'));
+      if (osmContributionAllowed(d.flock!.confidence(d.method), match.verdict)) {
+        out.add(('Add to OpenStreetMap', DeflockProvider.osmNoteUrl(lat, lon)));
+      }
+    }
+    final o = d.odid;
+    if (o != null) {
+      if ((o.uavId ?? '').isNotEmpty) out.add(('UAV ID', o.uavId!));
+      if ((o.operatorId ?? '').isNotEmpty) out.add(('Operator ID', o.operatorId!));
+      final hasPos = o.droneLat != null && o.droneLon != null && !(o.droneLat == 0 && o.droneLon == 0);
+      if (hasPos) {
+        out.add(('Drone position', '${o.droneLat!.toStringAsFixed(5)}, ${o.droneLon!.toStringAsFixed(5)}'));
+      } else {
+        out.add(('Drone position', 'No GPS fix'));
+        out.add(('Estimated range', '${rssiRangeLabel(d.rssi, isBle: d.isBleDetection)} (from signal)'));
+      }
+      if (o.altitudeMsl != null) out.add(('Altitude MSL', '${o.altitudeMsl} m'));
+      if (o.heightAgl != null) out.add(('Height AGL', '${o.heightAgl} m'));
+      if (o.droneSpeed != null) out.add(('Speed', '${o.droneSpeed} m/s'));
+      if (o.droneHeading != null) out.add(('Heading', '${o.droneHeading}°'));
+      if (o.pilotLat != null && o.pilotLon != null && !(o.pilotLat == 0 && o.pilotLon == 0)) {
+        out.add(('Pilot position', '${o.pilotLat!.toStringAsFixed(5)}, ${o.pilotLon!.toStringAsFixed(5)}'));
+      }
+      if (o.uaType != null && o.uaType! > 0) out.add(('Aircraft type', _odidUaType(o.uaType!)));
+      if (o.idType != null && o.idType! > 0) out.add(('ID type', _odidIdType(o.idType!)));
+      if ((o.selfId ?? '').isNotEmpty) {
+        out.add((o.selfIdType != null && o.selfIdType! > 0 ? 'Self-ID (${o.selfIdType})' : 'Self-ID', o.selfId!));
+      }
+      if (o.vertSpeed != null) out.add(('Vertical speed', '${o.vertSpeed} m/s'));
+      if (o.altitudeBaro != null) out.add(('Barometric altitude', '${o.altitudeBaro} m'));
+      if (o.operatorAlt != null) out.add(('Operator altitude', '${o.operatorAlt} m'));
+      if (o.opLocationType != null) out.add(('Operator location', _odidOpLocationType(o.opLocationType!)));
+      if (o.heightType != null) out.add(('Height reference', o.heightType == 0 ? 'Above takeoff' : o.heightType == 1 ? 'Above ground' : 'Unknown (${o.heightType})'));
+      if (o.status != null && o.status! > 0) out.add(('Aircraft status', _odidStatus(o.status!)));
+      if (o.classification != null) {
+        if (o.classification == 1) {
+          if (o.categoryEu != null) out.add(('EU category', _odidCategoryEu(o.categoryEu!)));
+          if (o.classEu != null) out.add(('EU class', o.classEu == 0 ? 'Undeclared' : (o.classEu! >= 1 && o.classEu! <= 6 ? 'EU C${o.classEu! - 1}' : 'Unknown (${o.classEu})')));
+        } else {
+          out.add(('Classification', 'Undeclared'));
+        }
+      }
+      final acc = [
+        if ((o.horizAcc ?? 0) > 0) 'horizontal ${o.horizAcc}',
+        if ((o.vertAcc ?? 0) > 0) 'vertical ${o.vertAcc}',
+        if ((o.baroAcc ?? 0) > 0) 'baro ${o.baroAcc}',
+        if ((o.speedAcc ?? 0) > 0) 'speed ${o.speedAcc}',
+      ];
+      if (acc.isNotEmpty) out.add(('Accuracy codes', acc.join(' · ')));
+      if ((o.areaCount ?? 0) > 0) {
+        out.add(('Operating area', '${o.areaCount} aircraft · radius ${o.areaRadius ?? 0} m · ceiling ${o.areaCeiling ?? 0} m · floor ${o.areaFloor ?? 0} m'));
+      }
+      if ((o.locTimestamp ?? 0) > 0) out.add(('Location time', '${o.locTimestamp! ~/ 10}.${o.locTimestamp! % 10}s after the hour'));
+    }
+    if (lat != null && lon != null) {
+      out.add((d.approxGps ? 'Location (phone, approximate)' : 'Location', '${lat.toStringAsFixed(5)}, ${lon.toStringAsFixed(5)}'));
+    }
+    return out;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final t = AppTheme.of(context);
+    final connected = ref.watch(appStateProvider).isConnected;
+    final hasGps = d.latitude != null;
+    final uas = d.odid?.uavId ?? '';
+    final (flag, _) = DetectionRow._flag(d);
+    return Scaffold(
+      backgroundColor: t.background,
+      body: IosPage(
+        title: detectionHeadline(d),
+        slivers: [
+          SliverToBoxAdapter(
+            child: IosSection(children: [
+              IosRow(
+                leading: Icon(d.isBleDetection ? CupertinoIcons.bluetooth : CupertinoIcons.wifi, color: d.engine.color, size: 26),
+                title: d.engine.label,
+                subtitle: Text([methodLabel(d.method), ?flag].join('\n')),
+                detail: _RssiAge(rssi: d.rssi, ts: d.appTimestamp),
+              ),
+            ]),
+          ),
+          SliverToBoxAdapter(
+            child: IosSection(children: [
+              IosRow(
+                leading: const IosIcon(CupertinoIcons.scope, AppTheme.foxhunter),
+                title: 'Foxhunt this device',
+                subtitle: Text(connected ? 'Track it by signal strength' : 'Connect a node first'),
+                chevron: connected,
+                disabled: !connected,
+                onTap: connected
+                    ? () {
+                        Navigator.of(context).pop();
+                        detectionStartFoxhunt(context, ref, d);
+                      }
+                    : null,
+              ),
+              if (widget.showMapAction)
+                IosRow(
+                  leading: const IosIcon(CupertinoIcons.map_fill, AppTheme.gpsGood),
+                  title: 'Show on map',
+                  subtitle: Text(hasGps ? (d.approxGps ? 'Phone location when it was logged' : 'Where it was detected') : 'No GPS fix for this detection'),
+                  chevron: hasGps,
+                  disabled: !hasGps,
+                  onTap: hasGps
+                      ? () {
+                          Navigator.of(context).pop();
+                          if (widget.onShowMap != null) {
+                            widget.onShowMap!();
+                          } else {
+                            detectionZoomOnMap(context, ref, d);
+                          }
+                        }
+                      : null,
+                ),
+              IosRow(
+                leading: IosIcon(CupertinoIcons.doc_on_doc_fill, t.textDim),
+                title: 'Copy MAC address',
+                onTap: () => _copy('MAC address', d.macAddress.toUpperCase()),
+              ),
+              if (uas.isNotEmpty)
+                IosRow(
+                  leading: IosIcon(CupertinoIcons.doc_text_search, Engine.skySpy.color),
+                  title: 'FAA registration lookup',
+                  subtitle: Text(_faaError ?? 'Look up $uas', style: _faaError != null ? const TextStyle(color: AppTheme.error) : null),
+                  trailing: _faaLoading ? const CupertinoActivityIndicator() : const CupertinoListTileChevron(),
+                  onTap: _faaLoading ? null : () => _faaLookup(uas),
+                ),
+            ]),
+          ),
+          SliverToBoxAdapter(
+            child: IosSection(
+              header: 'Details',
+              footer: 'Tap a row to copy it.',
+              children: [
+                for (final (k, v) in _fields())
+                  IosRow(
+                    title: k,
+                    subtitle: Text(v, style: TextStyle(color: t.textSecondary, fontSize: 15)),
+                    onTap: () => _copy(k, v),
+                  ),
+              ],
             ),
           ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Row(
-                crossAxisAlignment: CrossAxisAlignment.center,
-                children: [
-                  Icon(Icons.flight, size: 14, color: Engine.skySpy.color),
-                  const SizedBox(width: 6),
-                  Expanded(
-                    child: Text(
-                      group.uavId,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                        color: Engine.skySpy.color,
-                        fontSize: 14,
-                        fontFamily: 'monospace',
-                        fontWeight: FontWeight.w700,
-                        letterSpacing: 0.5,
-                        height: 1.1,
-                      ),
-                    ),
-                  ),
-                  if (d.sourceNodeId.isNotEmpty) ...[
-                    const SizedBox(width: 6),
-                    Container(
-                      constraints: const BoxConstraints(maxWidth: 120),
-                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                      decoration: BoxDecoration(
-                        color: AppTheme.warning.withValues(alpha: 0.14),
-                        borderRadius: BorderRadius.circular(4),
-                      ),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          const Icon(Icons.hub, size: 11, color: AppTheme.warning),
-                          const SizedBox(width: 3),
-                          Flexible(
-                            child: Text(
-                              nodeLabel.isNotEmpty ? nodeLabel : d.sourceNodeId,
-                              overflow: TextOverflow.ellipsis,
-                              softWrap: false,
-                              style: const TextStyle(
-                                color: AppTheme.warning,
-                                fontSize: 11,
-                                fontFamily: 'monospace',
-                                fontWeight: FontWeight.w700,
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
-                  const SizedBox(width: 8),
-                  _RssiBlock(rssi: d.rssi),
-                ],
+          SliverToBoxAdapter(
+            child: IosSection(children: [
+              IosRow(
+                leading: const IosIcon(CupertinoIcons.trash_fill, AppTheme.error),
+                title: 'Delete detection',
+                subtitle: const Text('Removes every MAC grouped with this device'),
+                onTap: _confirmDelete,
               ),
-              const SizedBox(height: 4),
-              Wrap(
-                spacing: 6,
-                runSpacing: 4,
-                children: [
-                  for (int i = 0; i < group.macs.length; i++)
-                    Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Text(
-                          group.macs[i].toUpperCase(),
-                          style: TextStyle(
-                            color: t.textSecondary,
-                            fontSize: 10,
-                            fontFamily: 'monospace',
-                            fontWeight: FontWeight.w600,
-                            letterSpacing: 0.3,
-                          ),
-                        ),
-                        const SizedBox(width: 4),
-                        _TransportBadge(method: group.methods[i]),
-                      ],
-                    ),
-                ],
-              ),
-              const SizedBox(height: 3),
-              Row(
-                crossAxisAlignment: CrossAxisAlignment.center,
-                children: [
-                  Wrap(
-                    spacing: 4,
-                    children: methodsUnique.map((m) => _TransportBadge(method: m)).toList(),
-                  ),
-                  if (d.odid?.altitudeMsl != null) ...[
-                    const SizedBox(width: 8),
-                    Text(
-                      '${d.odid!.altitudeMsl}m MSL',
-                      style: TextStyle(
-                        color: t.textDim,
-                        fontSize: 10,
-                        fontFamily: 'monospace',
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                  ],
-                  const Spacer(),
-                  Text(timeStr,
-                      style: TextStyle(
-                        color: t.textDim,
-                        fontSize: 11,
-                        fontFamily: 'monospace',
-                        fontWeight: FontWeight.w700,
-                      )),
-                  const SizedBox(width: 4),
-                  _ActionIcon(
-                    icon: Icons.location_on,
-                    color: hasGps ? AppTheme.gpsGood : AppTheme.gpsNone,
-                    tooltip: hasGps ? 'Show on map' : 'No GPS fix',
-                    onTap: hasGps ? () => detectionZoomOnMap(context, ref, d) : null,
-                  ),
-                ],
-              ),
-            ],
+            ]),
           ),
-        ),
+        ],
       ),
     );
   }
 
-  void _showDroneDetails(BuildContext context, WidgetRef ref) {
-    showDetectionDetails(context, ref, group.representative);
-  }
+  static String _odidUaType(int v) => const {
+        0: 'None', 1: 'Aeroplane', 2: 'Multirotor', 3: 'Gyroplane',
+        4: 'Hybrid lift', 5: 'Ornithopter', 6: 'Glider', 7: 'Kite',
+        8: 'Free balloon', 9: 'Captive balloon', 10: 'Airship',
+        11: 'Free fall / parachute', 12: 'Rocket', 13: 'Tethered powered',
+        14: 'Ground obstacle', 15: 'Other',
+      }[v] ?? 'Unknown ($v)';
 
-  String _formatTimeDiffDrone(Duration diff) {
-    if (diff.inSeconds < 60) return '${diff.inSeconds}s';
-    if (diff.inMinutes < 60) return '${diff.inMinutes}m';
-    return '${diff.inHours}h';
-  }
+  static String _odidIdType(int v) => const {
+        0: 'None', 1: 'Serial number', 2: 'CAA registration',
+        3: 'UTM (UUID)', 4: 'Specific session ID',
+      }[v] ?? 'Unknown ($v)';
+
+  static String _odidOpLocationType(int v) => const {
+        0: 'Takeoff point', 1: 'Live GNSS', 2: 'Fixed',
+      }[v] ?? 'Unknown ($v)';
+
+  static String _odidStatus(int v) => const {
+        0: 'Undeclared', 1: 'On the ground', 2: 'Airborne',
+        3: 'Emergency', 4: 'Remote ID system failure',
+      }[v] ?? 'Unknown ($v)';
+
+  static String _odidCategoryEu(int v) => const {
+        0: 'Undeclared', 1: 'Open', 2: 'Specific', 3: 'Certified',
+      }[v] ?? 'Unknown ($v)';
 }
 
+class _FaaPage extends StatelessWidget {
+  const _FaaPage({required this.reg, required this.uasId});
+
+  final FaaRegistration reg;
+  final String uasId;
+
+  @override
+  Widget build(BuildContext context) {
+    final t = AppTheme.of(context);
+    final age = DateTime.now().difference(reg.cachedAt);
+    String date(String iso) {
+      try {
+        return DateFormat('yyyy-MM-dd').format(DateTime.parse(iso));
+      } on FormatException {
+        return iso;
+      }
+    }
+
+    final rows = <(String, String)>[
+      if (reg.status.isNotEmpty) ('Status', reg.status),
+      if (reg.displayName.isNotEmpty) ('Aircraft', reg.displayName),
+      if (reg.brand.isNotEmpty && reg.makeName.isNotEmpty && reg.brand != reg.makeName) ('Make', reg.makeName),
+      if (reg.series.isNotEmpty) ('Series', reg.series),
+      if (reg.manufacturerCode.isNotEmpty) ('Manufacturer code', reg.manufacturerCode),
+      if (reg.productType.isNotEmpty) ('Type', reg.productType),
+      if (reg.operationRules.isNotEmpty) ('Operation rules', reg.operationRules),
+      if (reg.complianceCategories.isNotEmpty) ('Compliance', reg.complianceCategories),
+      if (reg.trackingNumber.isNotEmpty) ('Tracking number', reg.trackingNumber),
+      if (reg.updatedAt.isNotEmpty) ('Updated', date(reg.updatedAt)),
+    ];
+    return Scaffold(
+      backgroundColor: t.background,
+      body: IosPage(
+        title: 'FAA registration',
+        slivers: [
+          SliverToBoxAdapter(
+            child: IosSection(
+              header: uasId,
+              footer: age.inSeconds < 5 ? 'Live result' : 'Cached ${age.inMinutes < 60 ? '${age.inMinutes}m' : '${age.inHours}h'} ago',
+              children: rows.isEmpty
+                  ? [const IosRow(title: 'No registration data found')]
+                  : [
+                      for (final (k, v) in rows)
+                        IosRow(
+                          title: k,
+                          subtitle: Text(v, style: TextStyle(color: t.textSecondary, fontSize: 15)),
+                          onTap: () {
+                            Clipboard.setData(ClipboardData(text: v));
+                            ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('$k copied'), duration: const Duration(seconds: 1)));
+                          },
+                        ),
+                    ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}

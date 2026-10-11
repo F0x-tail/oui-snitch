@@ -1,20 +1,27 @@
+import 'dart:io';
+
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:intl/intl.dart';
 import 'package:oui_spy/core/app_state.dart';
-import 'package:oui_spy/core/wardrive_state.dart';
 import 'package:oui_spy/core/classify/adv_decoder.dart';
 import 'package:oui_spy/core/classify/device_explain.dart';
 import 'package:oui_spy/core/classify/device_registry.dart';
-import 'package:oui_spy/core/classify/flood.dart';
 import 'package:oui_spy/core/classify/fleet_decode.dart';
 import 'package:oui_spy/core/classify/observation.dart';
 import 'package:oui_spy/core/classify/presence_class.dart';
-import 'package:oui_spy/core/db/app_database.dart' show databaseProvider;
 import 'package:oui_spy/core/classify/signature_engine.dart';
+import 'package:oui_spy/core/db/app_database.dart' show databaseProvider;
+import 'package:oui_spy/core/export/devices_csv.dart';
 import 'package:oui_spy/core/oui/oui_lookup_service.dart';
+import 'package:oui_spy/core/wardrive_state.dart';
 import 'package:oui_spy/theme/app_theme.dart';
 import 'package:oui_spy/widgets/command_bar.dart';
+import 'package:oui_spy/widgets/ios.dart';
+import 'package:path_provider/path_provider.dart';
+import 'package:share_plus/share_plus.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 enum DeviceSort { recent, rssi, confidence }
@@ -37,8 +44,46 @@ String _ago(int ms) {
   final s = (DateTime.now().millisecondsSinceEpoch - ms) ~/ 1000;
   if (s < 60) return '${s < 0 ? 0 : s}s';
   if (s < 3600) return '${s ~/ 60}m';
-  return '${s ~/ 3600}h';
+  if (s < 86400) return '${s ~/ 3600}h';
+  return '${s ~/ 86400}d';
 }
+
+const _flockSigs = {'fleet-flock-cameras', 'fleet-fs-ext-battery', 'fleet-penguin'};
+
+class DeviceFacts {
+  DeviceFacts(this.device, this.vendor);
+
+  final ClassifiedDevice device;
+  final String? vendor;
+
+  Observation get o => device.obs;
+  bool get ble => o.kind == RadioKind.ble;
+  bool get flock => (vendor?.startsWith('Flock Safety') ?? false) || device.signatures.any((s) => _flockSigs.contains(s.id));
+  SignatureClass? get kind => device.signatures.isEmpty ? null : device.signatures.first.kind;
+  String get group => flock ? 'Flock' : (kind?.label ?? 'Unclassified');
+  Color get color => kind == null ? AppTheme.gpsNone : classColor(kind!);
+  String get title =>
+      device.signatureNames.firstOrNull ??
+      (o.name.isNotEmpty ? o.name : null) ??
+      DeviceExplain.listLabel(o, vendor: vendor) ??
+      'Unknown ${ble ? 'Bluetooth' : 'Wi-Fi'} device';
+  String get address => o.mac.isNotEmpty ? o.mac : 'iOS ID ${o.key.substring(4)}';
+  String get heardBy => (device.sources.toList()..sort()).map((s) => s == 'esp32' ? 'Node' : 'Phone').join(' + ');
+}
+
+int _groupRank(DeviceFacts f) => f.flock
+    ? 0
+    : switch (f.kind) {
+        SignatureClass.lawEnforcement => 1,
+        SignatureClass.surveillance => 2,
+        SignatureClass.camera => 3,
+        SignatureClass.drone => 4,
+        SignatureClass.finder => 5,
+        SignatureClass.glasses => 6,
+        SignatureClass.hacking => 7,
+        null => 99,
+        _ => 50,
+      };
 
 class DevicesScreen extends ConsumerStatefulWidget {
   const DevicesScreen({super.key});
@@ -48,52 +93,44 @@ class DevicesScreen extends ConsumerStatefulWidget {
 }
 
 class _DevicesScreenState extends ConsumerState<DevicesScreen> {
+  final _search = TextEditingController();
+  String _query = '';
   SignatureClass? _class;
   bool _unclassifiedOnly = false;
   RadioKind? _radio;
   String? _source;
   DeviceSort _sort = DeviceSort.recent;
-  bool _sortAscending = false;
 
-  bool _matches(ClassifiedDevice d) {
-    if (_radio != null && d.obs.kind != _radio) return false;
-    if (_source != null && !d.sources.contains(_source)) return false;
-    if (_unclassifiedOnly) return d.signatures.isEmpty;
-    if (_class != null) return d.signatures.any((s) => s.kind == _class);
-    return true;
+  @override
+  void dispose() {
+    _search.dispose();
+    super.dispose();
   }
 
-  int get _filterCount =>
-      (_radio != null ? 1 : 0) +
-      (_source != null ? 1 : 0) +
-      (_class != null || _unclassifiedOnly ? 1 : 0);
+  bool _matches(DeviceFacts f) {
+    final d = f.device;
+    if (_radio != null && d.obs.kind != _radio) return false;
+    if (_source != null && !d.sources.contains(_source)) return false;
+    if (_unclassifiedOnly && d.signatures.isNotEmpty) return false;
+    if (_class != null && !d.signatures.any((s) => s.kind == _class)) return false;
+    final q = _query.trim().toLowerCase();
+    if (q.isEmpty) return true;
+    return [f.title, d.obs.name, d.obs.mac, f.vendor ?? '', ...d.signatureNames].any((s) => s.toLowerCase().contains(q));
+  }
 
-  static String _sourceLabel(String? s) => switch (s) {
-    'esp32' => 'NODE',
-    'phone' => 'PHONE',
-    _ => 'ALL',
-  };
+  bool get _filtered => _source != null || _class != null || _unclassifiedOnly;
 
   Future<bool> _ensurePhoneScan(BuildContext ctx) async {
     final src = ref.read(phoneBleSourceProvider);
     if (src.active) return true;
-    final yes = await showDialog<bool>(
+    final yes = await showCupertinoDialog<bool>(
       context: ctx,
-      builder: (d) => AlertDialog(
+      builder: (d) => CupertinoAlertDialog(
         title: const Text('Scan with this phone?'),
-        content: const Text(
-          "Use this phone's Bluetooth to listen for nearby devices too, in addition to the connected node. "
-          'This uses more battery.',
-        ),
+        content: const Text("This phone's Bluetooth also listens for nearby devices, alongside the connected node. Uses more battery."),
         actions: [
-          TextButton(
-            onPressed: () => Navigator.of(d).pop(false),
-            child: const Text('NOT NOW'),
-          ),
-          TextButton(
-            onPressed: () => Navigator.of(d).pop(true),
-            child: const Text('SCAN'),
-          ),
+          CupertinoDialogAction(onPressed: () => Navigator.of(d).pop(false), child: const Text('Not now')),
+          CupertinoDialogAction(isDefaultAction: true, onPressed: () => Navigator.of(d).pop(true), child: const Text('Scan')),
         ],
       ),
     );
@@ -104,10 +141,7 @@ class _DevicesScreenState extends ConsumerState<DevicesScreen> {
     return true;
   }
 
-  Future<void> _openFilterSheet(
-    Map<SignatureClass, int> counts,
-    int unclassified,
-  ) {
+  Future<void> _openFilterSheet(Map<SignatureClass, int> counts, int unclassified) {
     return showCommandSheet<void>(
       context: context,
       builder: (ctx) => StatefulBuilder(
@@ -118,45 +152,41 @@ class _DevicesScreenState extends ConsumerState<DevicesScreen> {
           }
 
           final t = AppTheme.of(ctx);
-          final gap = barGap(ctx);
           return CommandSheet(
-            title: 'FILTER',
-            trailing: _filterCount == 0
+            title: 'Filter',
+            trailing: !_filtered
                 ? null
-                : TextButton(
+                : CupertinoButton(
+                    padding: const EdgeInsets.symmetric(horizontal: 8),
                     onPressed: () => apply(() {
-                      _radio = null;
                       _source = null;
                       _class = null;
                       _unclassifiedOnly = false;
                     }),
-                    child: Text(
-                      'RESET',
-                      style: barLabelStyle(ctx, AppTheme.accent),
-                    ),
+                    child: const Text('Reset'),
                   ),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
                 CommandSheetGroup(
-                  label: 'HEARD BY',
-                  child: Wrap(
-                    spacing: gap,
-                    runSpacing: gap,
+                  label: 'Heard by',
+                  child: CommandOptionList(
                     children: [
                       for (final s in <String?>[null, 'esp32', 'phone'])
-                        CommandChip(
-                          label: _sourceLabel(s),
+                        CommandOption(
+                          label: switch (s) {
+                            'esp32' => 'Node',
+                            'phone' => 'This phone',
+                            _ => 'All',
+                          },
                           selected: _source == s,
                           color: switch (s) {
                             'esp32' => AppTheme.warning,
                             'phone' => AppTheme.skySpy,
-                            _ => kPillAll,
+                            _ => AppTheme.accent,
                           },
                           onTap: () async {
-                            if (s == 'phone' && !await _ensurePhoneScan(ctx)) {
-                              return;
-                            }
+                            if (s == 'phone' && !await _ensurePhoneScan(ctx)) return;
                             apply(() => _source = s);
                           },
                         ),
@@ -164,37 +194,11 @@ class _DevicesScreenState extends ConsumerState<DevicesScreen> {
                   ),
                 ),
                 CommandSheetGroup(
-                  label: 'RADIO',
-                  child: Wrap(
-                    spacing: gap,
-                    runSpacing: gap,
+                  label: 'Class',
+                  child: CommandOptionList(
                     children: [
-                      for (final r in <RadioKind?>[
-                        null,
-                        RadioKind.ble,
-                        RadioKind.wifi,
-                      ])
-                        CommandChip(
-                          label: r == null
-                              ? 'ALL'
-                              : (r == RadioKind.ble ? 'BLE' : 'WIFI'),
-                          selected: _radio == r,
-                          color: r == null
-                              ? kPillAll
-                              : (r == RadioKind.ble ? kPillBle : kPillWifi),
-                          onTap: () => apply(() => _radio = r),
-                        ),
-                    ],
-                  ),
-                ),
-                CommandSheetGroup(
-                  label: 'CLASS',
-                  child: Wrap(
-                    spacing: gap,
-                    runSpacing: gap,
-                    children: [
-                      CommandChip(
-                        label: 'ALL',
+                      CommandOption(
+                        label: 'All',
                         selected: _class == null && !_unclassifiedOnly,
                         color: AppTheme.accent,
                         onTap: () => apply(() {
@@ -204,8 +208,8 @@ class _DevicesScreenState extends ConsumerState<DevicesScreen> {
                       ),
                       for (final k in SignatureClass.values)
                         if ((counts[k] ?? 0) > 0)
-                          CommandChip(
-                            label: k.label.toUpperCase(),
+                          CommandOption(
+                            label: k.label,
                             count: counts[k],
                             selected: _class == k,
                             color: classColor(k),
@@ -215,8 +219,8 @@ class _DevicesScreenState extends ConsumerState<DevicesScreen> {
                             }),
                           ),
                       if (unclassified > 0)
-                        CommandChip(
-                          label: 'UNCLASSIFIED',
+                        CommandOption(
+                          label: 'Unclassified',
                           count: unclassified,
                           selected: _unclassifiedOnly,
                           color: t.textDim,
@@ -236,74 +240,81 @@ class _DevicesScreenState extends ConsumerState<DevicesScreen> {
     );
   }
 
-  static String _sortLabel(DeviceSort s) => switch (s) {
-    DeviceSort.recent => 'TIME',
-    DeviceSort.rssi => 'RSSI',
-    DeviceSort.confidence => 'CONF',
-  };
-
-  Future<void> _openSortSheet() => showSortSheet<DeviceSort>(
-        context: context,
-        options: DeviceSort.values,
-        label: _sortLabel,
-        current: () => _sort,
-        ascending: () => _sortAscending,
-        onPick: (s) => setState(() {
-          if (_sort == s) {
-            _sortAscending = !_sortAscending;
-          } else {
-            _sort = s;
-            _sortAscending = false;
-          }
-        }),
-        onToggleDirection: () => setState(() => _sortAscending = !_sortAscending),
+  Future<void> _exportCsv(List<ClassifiedDevice> items) async {
+    final messenger = ScaffoldMessenger.of(context);
+    final box = context.findRenderObject() as RenderBox?;
+    final origin = box != null ? box.localToGlobal(Offset.zero) & box.size : const Rect.fromLTWH(0, 0, 100, 100);
+    try {
+      final oui = ref.read(ouiLookupProvider);
+      final csv = DevicesCsv.generate(items, vendorOf: oui.lookup);
+      final dir = await getTemporaryDirectory();
+      final ts = DateFormat('yyyyMMdd_HHmmss').format(DateTime.now());
+      final file = File('${dir.path}/oui_spy_devices_$ts.csv');
+      await file.writeAsString(csv);
+      await Share.shareXFiles(
+        [XFile(file.path, mimeType: 'text/csv')],
+        subject: 'OUI-SPY Devices Export (${items.length} devices)',
+        sharePositionOrigin: origin,
       );
+    } catch (e) {
+      messenger.showSnackBar(SnackBar(content: Text('Export failed: $e')));
+    }
+  }
 
-  Future<void> _openActionSheet() {
-    return showCommandSheet<void>(
+  Future<void> _openMore(List<ClassifiedDevice> shown) {
+    final phone = ref.read(phoneBleSourceProvider).active;
+    String sortName(DeviceSort s) => switch (s) {
+      DeviceSort.recent => 'Last heard',
+      DeviceSort.rssi => 'Signal strength',
+      DeviceSort.confidence => 'Confidence',
+    };
+    return showCupertinoModalPopup<void>(
       context: context,
-      builder: (ctx) => CommandSheet(
-        title: 'ACTIONS',
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            CommandSheetTile(
-              icon: Icons.phone_iphone,
-              label: ref.read(phoneBleSourceProvider).active
-                  ? 'STOP SCANNING WITH PHONE'
-                  : 'SCAN WITH THIS PHONE',
-              subtitle: ref.read(phoneBleSourceProvider).active
-                  ? "This phone's Bluetooth is listening too"
-                  : "Also listen with this phone's Bluetooth",
-              color: ref.read(phoneBleSourceProvider).active
-                  ? AppTheme.accent
-                  : null,
-              onTap: () async {
-                Navigator.pop(ctx);
-                final src = ref.read(phoneBleSourceProvider);
-                if (src.active) {
-                  src.setActive(false);
-                  final p = await SharedPreferences.getInstance();
-                  await p.setBool(DeviceRegistry.phoneScanPref, false);
-                  if (_source == 'phone') _source = null;
-                } else {
-                  await _ensurePhoneScan(context);
-                }
-                if (mounted) setState(() {});
-              },
-            ),
-            CommandSheetTile(
-              icon: Icons.delete_sweep,
-              label: 'CLEAR LIST',
-              subtitle: 'Forget every device on this tab',
-              color: AppTheme.error,
-              onTap: () {
-                Navigator.pop(ctx);
-                ref.read(deviceRegistryProvider).clear();
-              },
-            ),
-          ],
-        ),
+      builder: (ctx) => CupertinoActionSheet(
+        title: Text('${shown.length} devices shown · sorted by ${sortName(_sort).toLowerCase()}'),
+        actions: [
+          for (final s in DeviceSort.values)
+            if (s != _sort)
+              CupertinoActionSheetAction(
+                onPressed: () {
+                  Navigator.pop(ctx);
+                  setState(() => _sort = s);
+                },
+                child: Text('Sort by ${sortName(s).toLowerCase()}'),
+              ),
+          CupertinoActionSheetAction(
+            onPressed: () {
+              Navigator.pop(ctx);
+              if (shown.isNotEmpty) _exportCsv(shown);
+            },
+            child: const Text('Export CSV'),
+          ),
+          CupertinoActionSheetAction(
+            onPressed: () async {
+              Navigator.pop(ctx);
+              final src = ref.read(phoneBleSourceProvider);
+              if (src.active) {
+                src.setActive(false);
+                final p = await SharedPreferences.getInstance();
+                await p.setBool(DeviceRegistry.phoneScanPref, false);
+                if (_source == 'phone') _source = null;
+              } else {
+                await _ensurePhoneScan(context);
+              }
+              if (mounted) setState(() {});
+            },
+            child: Text(phone ? 'Stop scanning with this phone' : 'Also scan with this phone'),
+          ),
+          CupertinoActionSheetAction(
+            isDestructiveAction: true,
+            onPressed: () {
+              Navigator.pop(ctx);
+              ref.read(deviceRegistryProvider).clear();
+            },
+            child: const Text('Clear list'),
+          ),
+        ],
+        cancelButton: CupertinoActionSheetAction(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
       ),
     );
   }
@@ -311,488 +322,299 @@ class _DevicesScreenState extends ConsumerState<DevicesScreen> {
   @override
   Widget build(BuildContext context) {
     final reg = ref.watch(deviceRegistryProvider);
-    final t = AppTheme.of(context);
-    final all = reg.devices.toList();
+    final oui = ref.read(ouiLookupProvider);
+    final all = [
+      for (final d in reg.devices) DeviceFacts(d, d.obs.mac.isEmpty ? null : oui.lookup(d.obs.mac)),
+    ];
     final counts = <SignatureClass, int>{};
     var unclassified = 0;
-    for (final d in all) {
-      if (d.signatures.isEmpty) unclassified++;
-      for (final k in {for (final s in d.signatures) s.kind}) {
+    for (final f in all) {
+      if (f.device.signatures.isEmpty) unclassified++;
+      for (final k in {for (final s in f.device.signatures) s.kind}) {
         counts[k] = (counts[k] ?? 0) + 1;
       }
     }
-    final shown = all.where(_matches).toList();
-    final guesses = {for (final d in shown) d.obs.key: d.guess};
-    shown.sort(switch (_sort) {
-      DeviceSort.recent => (a, b) => b.obs.lastSeenMs.compareTo(
-        a.obs.lastSeenMs,
-      ),
-      DeviceSort.rssi => (a, b) => b.obs.rssi.compareTo(a.obs.rssi),
-      DeviceSort.confidence =>
-        (a, b) => guesses[a.obs.key]!.confidence.index.compareTo(
-          guesses[b.obs.key]!.confidence.index,
-        ),
-    });
-    final ordered = _sortAscending ? shown.reversed.toList() : shown;
+    final bleCount = all.where((f) => f.ble).length;
+    final shown = all.where(_matches).toList()
+      ..sort(switch (_sort) {
+        DeviceSort.recent => (a, b) => b.o.lastSeenMs.compareTo(a.o.lastSeenMs),
+        DeviceSort.rssi => (a, b) => b.o.rssi.compareTo(a.o.rssi),
+        DeviceSort.confidence => (a, b) => a.device.guess.confidence.index.compareTo(b.device.guess.confidence.index),
+      });
+    final groups = <String, List<DeviceFacts>>{};
+    for (final f in shown) {
+      groups.putIfAbsent(f.group, () => []).add(f);
+    }
+    final order = groups.keys.toList()..sort((a, b) => _groupRank(groups[a]!.first).compareTo(_groupRank(groups[b]!.first)));
     final flood = reg.pairingFlood.notice;
-    return Scaffold(
-      backgroundColor: t.background,
-      body: SafeArea(
-        bottom: false,
-        child: Column(
-          children: [
-            CommandHeader(
-              title: 'DEVICES',
-              count: _filterCount > 0 ? '${shown.length}/${all.length}' : '${all.length}',
-              actions: [
-                CommandBarAction(
-                  icon: Icons.filter_alt,
-                  label: 'Filter',
-                  active: _filterCount > 0,
-                  onTap: () => _openFilterSheet(counts, unclassified),
-                ),
-                CommandBarAction(
-                  icon: _sortAscending ? Icons.arrow_upward : Icons.arrow_downward,
-                  label: 'Sort: ${_sortLabel(_sort)}',
-                  onTap: _openSortSheet,
-                ),
-                CommandBarAction(
-                  icon: Icons.more_vert,
-                  label: 'More',
-                  onTap: _openActionSheet,
-                ),
-              ],
-              chips: [
-                          if (_radio != null)
-                            CommandActiveChip(
-                              label: _radio == RadioKind.ble ? 'BLE' : 'WIFI',
-                              color: AppTheme.accent,
-                              onClear: () => setState(() => _radio = null),
-                            ),
-                          if (_source != null)
-                            CommandActiveChip(
-                              label: _sourceLabel(_source),
-                              color: AppTheme.accent,
-                              onClear: () => setState(() => _source = null),
-                            ),
-                          if (_class != null || _unclassifiedOnly)
-                            CommandActiveChip(
-                              label: _unclassifiedOnly
-                                  ? 'UNCLASSIFIED'
-                                  : _class!.label.toUpperCase(),
-                              color: AppTheme.accent,
-                              onClear: () => setState(() {
-                                _class = null;
-                                _unclassifiedOnly = false;
-                              }),
-                            ),
-              ],
-            ),
-            if (flood != null)
-              _FloodBanner(notice: flood, onDismiss: reg.pairingFlood.dismiss),
-            const Divider(height: 1),
-            Expanded(
-              child: shown.isEmpty
-                  ? CommandEmptyState(
-                      icon: Icons.devices_other,
-                      title: 'NO DEVICES',
-                      message: reg.ready
-                          ? 'Devices heard by the connected node or this phone appear here, grouped by signature class.'
-                          : 'Loading signature catalog.',
-                    )
-                  : Align(
-                      alignment: Alignment.topCenter,
-                      child: ConstrainedBox(
-                        constraints: const BoxConstraints(maxWidth: 860),
-                        child: ListView.builder(
-                          padding: EdgeInsets.symmetric(vertical: barGap(context)),
-                          itemCount: ordered.length,
-                          itemBuilder: (context, i) => _DeviceRow(
-                            device: ordered[i],
-                            guess: guesses[ordered[i].obs.key]!,
-                          ),
-                        ),
-                      ),
-                    ),
-            ),
-          ],
+
+    return IosPage(
+      title: 'Devices',
+      actions: [
+        IosNavButton(
+          icon: _filtered ? CupertinoIcons.line_horizontal_3_decrease_circle_fill : CupertinoIcons.line_horizontal_3_decrease_circle,
+          tooltip: 'Filter',
+          onPressed: () => _openFilterSheet(counts, unclassified),
         ),
-      ),
-    );
-  }
-}
-
-class _FloodBanner extends StatelessWidget {
-  const _FloodBanner({required this.notice, required this.onDismiss});
-
-  final FloodNotice notice;
-  final VoidCallback onDismiss;
-
-  @override
-  Widget build(BuildContext context) {
-    final gap = barGap(context);
-    return Material(
-      color: AppTheme.error.withValues(alpha: 0.14),
-      child: InkWell(
-        onTap: onDismiss,
-        child: Padding(
-          padding: EdgeInsets.symmetric(horizontal: gap * 2, vertical: gap),
-          child: Row(
-            children: [
-              Icon(
-                Icons.warning_amber,
-                size: barIconSize(context),
-                color: AppTheme.error,
+        IosNavButton(icon: CupertinoIcons.ellipsis_circle, tooltip: 'More', onPressed: () => _openMore([for (final f in shown) f.device])),
+      ],
+      slivers: [
+        SliverToBoxAdapter(
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(16, 4, 16, 8),
+            child: Column(children: [
+              IosSearch(
+                controller: _search,
+                placeholder: 'Name, MAC, vendor',
+                onChanged: (v) => setState(() => _query = v),
               ),
-              SizedBox(width: gap),
-              Expanded(
-                child: Text(
-                  notice.families.isEmpty
-                      ? notice.line()
-                      : '${notice.line()} · ${notice.families.join(', ')}',
-                  style: barLabelStyle(context, AppTheme.error),
-                ),
+              const SizedBox(height: 10),
+              IosSegments<int>(
+                value: _radio == null ? 0 : (_radio == RadioKind.ble ? 1 : 2),
+                segments: {0: 'All ${all.length}', 1: 'BLE $bleCount', 2: 'Wi-Fi ${all.length - bleCount}'},
+                onChanged: (v) => setState(() => _radio = v == 0 ? null : (v == 1 ? RadioKind.ble : RadioKind.wifi)),
               ),
-            ],
+            ]),
           ),
         ),
-      ),
+        if (flood != null)
+          SliverToBoxAdapter(
+            child: IosSection(children: [
+              IosRow(
+                leading: const IosIcon(CupertinoIcons.exclamationmark_triangle_fill, AppTheme.error),
+                title: 'Pairing flood',
+                subtitle: Text(flood.families.isEmpty ? flood.line() : '${flood.line()} · ${flood.families.join(', ')}'),
+                trailing: const Icon(CupertinoIcons.xmark_circle_fill, size: 20),
+                onTap: reg.pairingFlood.dismiss,
+              ),
+            ]),
+          ),
+        if (shown.isEmpty)
+          SliverToBoxAdapter(
+            child: IosEmpty(
+              icon: CupertinoIcons.dot_radiowaves_left_right,
+              title: all.isEmpty ? 'No devices yet' : 'No matches',
+              message: all.isEmpty
+                  ? (reg.ready
+                      ? 'Devices heard by the connected node or this phone appear here, grouped by what they are.'
+                      : 'Loading the signature catalog.')
+                  : 'Nothing matches the current search or filter.',
+              action: all.isEmpty
+                  ? CupertinoButton.filled(
+                      onPressed: () => _ensurePhoneScan(context).then((_) {
+                        if (mounted) setState(() {});
+                      }),
+                      child: const Text('Scan with this phone'),
+                    )
+                  : CupertinoButton(
+                      onPressed: () => setState(() {
+                        _search.clear();
+                        _query = '';
+                        _radio = null;
+                        _source = null;
+                        _class = null;
+                        _unclassifiedOnly = false;
+                      }),
+                      child: const Text('Clear search and filters'),
+                    ),
+            ),
+          ),
+        for (final g in order)
+          SliverToBoxAdapter(
+            child: IosSection(
+              header: '$g · ${groups[g]!.length}',
+              children: [for (final f in groups[g]!) _DeviceRow(facts: f)],
+            ),
+          ),
+      ],
     );
   }
 }
 
 class _DeviceRow extends ConsumerWidget {
-  const _DeviceRow({required this.device, required this.guess});
+  const _DeviceRow({required this.facts});
 
-  final ClassifiedDevice device;
-  final Guess guess;
+  final DeviceFacts facts;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final t = AppTheme.of(context);
-    final gap = barGap(context);
-    final o = device.obs;
-    final vendor = o.mac.isEmpty
-        ? null
-        : ref.read(ouiLookupProvider).lookup(o.mac);
-    final title =
-        DeviceExplain.listLabel(
-          o,
-          signatureNames: device.signatureNames,
-          vendor: vendor,
-        ) ??
-        (o.name.isNotEmpty ? o.name : (o.mac.isNotEmpty ? o.mac : o.key));
-    final withYou = ref.read(deviceRegistryProvider).withYou(device);
+    final f = facts;
+    final o = f.o;
+    final withYou = ref.read(deviceRegistryProvider).withYou(f.device);
     final live = [
-      for (final s in device.signatures)
-        if (s.decode case final d?) ...FleetDecode.decode(d, o).where((f) => f.live),
+      for (final s in f.device.signatures)
+        if (s.decode case final d?) ...FleetDecode.decode(d, o).where((x) => x.live),
     ];
-    final ble = o.kind == RadioKind.ble;
-    final kinds = {for (final s in device.signatures) s.kind}.toList();
-    final accent = kinds.isEmpty ? t.textDim : classColor(kinds.first);
-    final sub = [
-      if (o.name.isNotEmpty && o.name != title) o.name,
-      if (vendor != null && vendor != title) vendor,
-      if (o.mac.isNotEmpty) o.mac,
+    final meta = [
+      if (f.vendor != null && !f.title.toLowerCase().contains(f.vendor!.toLowerCase())) f.vendor!,
+      if (o.name.isNotEmpty && o.name != f.title) o.name,
+      if (f.heardBy.isNotEmpty) f.heardBy,
     ].join(' · ');
-    final text = Theme.of(context).textTheme;
-    Widget tag(String label, Color c, {IconData? icon}) => Container(
-          padding: EdgeInsets.symmetric(horizontal: gap * 0.7, vertical: gap * 0.25),
-          decoration: BoxDecoration(
-            color: c.withValues(alpha: 0.14),
-            borderRadius: BorderRadius.circular(gap * 0.8),
-            border: Border.all(color: c.withValues(alpha: 0.5), width: 0.8),
-          ),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              if (icon != null) ...[
-                Icon(icon, size: barIconSize(context) * 0.6, color: c),
-                SizedBox(width: gap * 0.3),
-              ],
-              Text(label, style: barLabelStyle(context, c).copyWith(fontSize: (text.labelSmall?.fontSize ?? 11) * 0.95)),
-            ],
-          ),
-        );
-    final auth = o.authMode;
-    final authMeta = auth == null ? null : wifiAuthMeta(auth);
-    return Padding(
-      padding: EdgeInsets.symmetric(horizontal: gap * 1.5, vertical: gap * 0.4),
-      child: Material(
-        color: t.surface,
-        borderRadius: BorderRadius.circular(gap * 1.6),
-        clipBehavior: Clip.antiAlias,
-        child: InkWell(
-          onTap: () => showCommandSheet<void>(
-            context: context,
-            builder: (_) => DeviceDetailSheet(device: device, vendor: vendor),
-          ),
-          child: Container(
-            decoration: BoxDecoration(
-              border: Border(left: BorderSide(color: accent, width: gap * 0.6)),
-            ),
-            padding: EdgeInsets.fromLTRB(gap * 1.4, gap * 1.1, gap * 1.4, gap * 1.1),
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Container(
-                  width: kMinInteractiveDimension * 0.8,
-                  height: kMinInteractiveDimension * 0.8,
-                  decoration: BoxDecoration(
-                    color: accent.withValues(alpha: 0.16),
-                    shape: BoxShape.circle,
-                  ),
-                  child: Icon(
-                    ble ? Icons.bluetooth : Icons.wifi,
-                    size: barIconSize(context) * 0.9,
-                    color: accent,
-                  ),
-                ),
-                SizedBox(width: gap * 1.4),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        title,
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                        style: text.bodyMedium?.copyWith(
-                          color: t.textPrimary,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                      if (sub.isNotEmpty)
-                        Padding(
-                          padding: EdgeInsets.only(top: gap * 0.2),
-                          child: Text(
-                            sub,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: text.bodySmall?.copyWith(color: t.textDim),
-                          ),
-                        ),
-                      SizedBox(height: gap * 0.7),
-                      Wrap(
-                        spacing: gap * 0.6,
-                        runSpacing: gap * 0.6,
-                        children: [
-                          for (final k in kinds) tag(k.label.toUpperCase(), classColor(k)),
-                          if (kinds.isEmpty) tag('UNCLASSIFIED', t.textDim),
-                          tag(ble ? 'BLE' : 'WIFI', ble ? kPillBle : kPillWifi),
-                          if (authMeta != null)
-                            tag(authMeta.$1, authMeta.$2, icon: auth == 0 ? Icons.lock_open : Icons.lock),
-                          if (!ble && o.channel > 0) tag('CH ${o.channel}', t.textSecondary),
-                          if (o.hiddenSsid) tag('HIDDEN', AppTheme.warning),
-                          if (o.randomized) tag('RANDOM MAC', t.textDim),
-                          for (final f in live)
-                            tag(f.display.toUpperCase(), f.emphasis ? AppTheme.error : AppTheme.accent),
-                          if (withYou) tag('WITH YOU', AppTheme.error, icon: Icons.directions_walk),
-                        ],
-                      ),
-                    ],
-                  ),
-                ),
-                SizedBox(width: gap),
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.end,
-                  children: [
-                    Text(
-                      '${o.rssi}',
-                      style: text.titleSmall?.copyWith(
-                        color: rssiColor(o.rssi),
-                        fontFamily: 'monospace',
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
-                    Text('dBm', style: text.labelSmall?.copyWith(color: t.textDim)),
-                    SizedBox(height: gap * 0.5),
-                    Icon(Icons.circle, size: gap, color: confidenceColor(guess.confidence)),
-                    SizedBox(height: gap * 0.3),
-                    Text(_ago(o.lastSeenMs), style: text.labelSmall?.copyWith(color: t.textDim)),
-                  ],
-                ),
-              ],
-            ),
-          ),
-        ),
+    final flags = [
+      if (withYou) 'With you',
+      for (final x in live) x.display,
+      if (o.hiddenSsid) 'Hidden SSID',
+    ];
+    return IosRow(
+      leading: Icon(f.ble ? CupertinoIcons.bluetooth : CupertinoIcons.wifi, color: f.color, size: 24),
+      title: f.title,
+      subtitle: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(f.address, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(color: t.textSecondary)),
+          if (meta.isNotEmpty) Text(meta, maxLines: 1, overflow: TextOverflow.ellipsis),
+          if (flags.isNotEmpty)
+            Text(flags.join(' · '), maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: AppTheme.error, fontWeight: FontWeight.w600)),
+        ],
       ),
+      detail: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        crossAxisAlignment: CrossAxisAlignment.end,
+        children: [
+          Text('${o.rssi} dBm', style: TextStyle(color: rssiColor(o.rssi), fontSize: 15, fontWeight: FontWeight.w600)),
+          Text('${_ago(o.lastSeenMs)} ago', style: TextStyle(color: t.textDim, fontSize: 13)),
+        ],
+      ),
+      chevron: true,
+      onTap: () => Navigator.of(context).push(CupertinoPageRoute<void>(builder: (_) => DeviceDetailPage(facts: f))),
     );
   }
 }
 
-class DeviceDetailSheet extends ConsumerWidget {
-  const DeviceDetailSheet({super.key, required this.device, this.vendor});
+class DeviceDetailPage extends ConsumerWidget {
+  const DeviceDetailPage({super.key, required this.facts});
 
-  final ClassifiedDevice device;
-  final String? vendor;
-
-  void _foxhunt(BuildContext context, WidgetRef ref) {
-    final o = device.obs;
-    Navigator.of(context).maybePop();
-    ref.read(appStateProvider).setFoxhunterTarget(o.mac, channel: o.channel);
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text('Foxhunting ${o.mac.substring(0, 8)}...'),
-        backgroundColor: AppTheme.foxhunter,
-      ),
-    );
-  }
-
-  void _showOnMap(BuildContext context, WidgetRef ref) {
-    final fix = device.obs.gpsTrail.last;
-    Navigator.of(context).maybePop();
-    ref.read(wardriveProvider).requestZoom(fix.lat, fix.lon);
-    context.go('/wardrive');
-  }
+  final DeviceFacts facts;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final t = AppTheme.of(context);
-    final gap = barGap(context);
-    final o = device.obs;
-    final g = device.guess;
+    final f = facts;
+    final o = f.o;
+    final g = f.device.guess;
     final connected = ref.read(appStateProvider).isConnected;
-    final canFoxhunt = o.mac.isNotEmpty;
-    final body = Theme.of(
-      context,
-    ).textTheme.bodySmall?.copyWith(color: t.textSecondary);
     final fields = [
       for (final m in o.mfgRecords) ...AdvPayloadDecoder.decodeManufacturer(m),
       for (final s in o.serviceData) ...AdvPayloadDecoder.decodeService(s),
     ];
     final decoded = [
-      for (final s in device.signatures)
+      for (final s in f.device.signatures)
         if (s.decode case final d?) ...FleetDecode.decode(d, o),
     ];
-    Widget kv(String k, String v) => Padding(
-      padding: EdgeInsets.only(bottom: gap * 0.75),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          SizedBox(
-            width: MediaQuery.sizeOf(context).width * 0.32,
-            child: Text(
-              k,
-              style: barLabelStyle(context, t.textDim, bold: false),
-            ),
-          ),
-          Expanded(child: SelectableText(v, style: body)),
-        ],
-      ),
-    );
-    return CommandSheet(
-      title: 'DEVICE',
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Text(
-            g.headline,
-            style: Theme.of(context).textTheme.titleMedium?.copyWith(
-              color: confidenceColor(g.confidence),
-              fontWeight: FontWeight.w700,
-            ),
-          ),
-          SizedBox(height: gap * 0.5),
-          Text(g.because, style: body),
-          SizedBox(height: gap),
-          CommandSheetTile(
-            icon: Icons.map,
-            label: 'SHOW ON MAP',
-            subtitle: o.gpsTrail.isEmpty
-                ? 'No GPS fix for this device yet'
-                : null,
-            color: AppTheme.gpsGood,
-            onTap: o.gpsTrail.isEmpty ? null : () => _showOnMap(context, ref),
-          ),
-          if (canFoxhunt)
-            CommandSheetTile(
-              icon: Icons.gps_fixed,
-              label: 'FOXHUNT',
-              subtitle: connected ? null : 'Node disconnected',
-              color: AppTheme.foxhunter,
-              onTap: connected ? () => _foxhunt(context, ref) : null,
-            ),
-          SizedBox(height: gap),
-          CommandSheetGroup(
-            label: 'IDENTITY',
-            child: Column(
+    Widget kv(String k, String v, {bool code = false}) => IosRow(
+          title: k,
+          subtitle: SelectableText(v, style: TextStyle(color: t.textSecondary, fontSize: 15, height: 1.3, fontFamily: code ? 'monospace' : null)),
+        );
+    return Scaffold(
+      backgroundColor: t.background,
+      body: IosPage(
+        title: f.title,
+        slivers: [
+          SliverToBoxAdapter(
+            child: IosSection(
               children: [
-                if (o.mac.isNotEmpty) kv('Address', o.mac),
-                if (o.mac.isEmpty) kv('Phone ID', o.key.substring(4)),
-                if (vendor != null) kv('Vendor', vendor!),
-                if (o.name.isNotEmpty) kv('Name', o.name),
-                kv('Address type', DeviceExplain.addressExplain(o)),
-                kv(
-                  'Signal',
-                  '${DeviceExplain.rssiExplain(o.rssi)} (${o.rssiMin} to ${o.rssiMax})',
+                IosRow(
+                  leading: Icon(f.ble ? CupertinoIcons.bluetooth : CupertinoIcons.wifi, color: f.color, size: 26),
+                  title: g.headline,
+                  subtitle: Text(g.because),
+                  detail: Text('${o.rssi} dBm', style: TextStyle(color: rssiColor(o.rssi), fontSize: 17, fontWeight: FontWeight.w600)),
                 ),
-                kv('Heard by', device.sources.join(', ')),
-                if (o.mac.isNotEmpty && !o.randomized)
-                  FutureBuilder<List<int>>(
-                    future: ref
-                        .read(databaseProvider)
-                        .sightingTimesForMac(o.mac),
-                    builder: (context, snap) {
-                      final ts = snap.data;
-                      if (ts == null) return const SizedBox.shrink();
-                      final now = DateTime.now().millisecondsSinceEpoch;
-                      const p = PresenceParams();
-                      final s = PresenceStats.fromSightings(ts, now, p);
-                      if (s == null) {
-                        return kv('Presence', 'Not in saved history yet');
-                      }
-                      return kv(
-                        'Presence',
-                        '${classifyPresence(s, now, p).label} · ${s.visitsInWindow} visit'
-                            '${s.visitsInWindow == 1 ? '' : 's'} in 7 days · ${ts.length} sightings saved',
-                      );
-                    },
-                  ),
               ],
             ),
           ),
-          if (device.signatures.isNotEmpty)
-            CommandSheetGroup(
-              label: 'SIGNATURES',
-              child: Column(
-                children: [
-                  for (final s in device.signatures)
-                    kv(
-                      s.kind.label,
-                      [
-                        s.name,
-                        if (s.attentionNote.isNotEmpty) s.attentionNote,
-                      ].join('\n'),
-                    ),
-                ],
+          SliverToBoxAdapter(
+            child: IosSection(children: [
+              IosRow(
+                leading: const IosIcon(CupertinoIcons.map_fill, AppTheme.gpsGood),
+                title: 'Show on map',
+                subtitle: Text(o.gpsTrail.isEmpty ? 'No GPS fix for this device yet' : '${o.gpsTrail.length} GPS fix${o.gpsTrail.length == 1 ? '' : 'es'}'),
+                chevron: o.gpsTrail.isNotEmpty,
+                disabled: o.gpsTrail.isEmpty,
+                onTap: o.gpsTrail.isEmpty
+                    ? null
+                    : () {
+                        final fix = o.gpsTrail.last;
+                        ref.read(wardriveProvider).requestZoom(fix.lat, fix.lon);
+                        Navigator.of(context).pop();
+                        context.go('/wardrive');
+                      },
               ),
+              if (o.mac.isNotEmpty)
+                IosRow(
+                  leading: const IosIcon(CupertinoIcons.scope, AppTheme.foxhunter),
+                  title: 'Foxhunt',
+                  subtitle: Text(connected ? 'Track this device by signal strength' : 'Connect a node first'),
+                  chevron: connected,
+                  disabled: !connected,
+                  onTap: connected
+                      ? () {
+                          ref.read(appStateProvider).setFoxhunterTarget(o.mac, channel: o.channel);
+                          Navigator.of(context).pop();
+                          ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Foxhunting ${o.mac}')));
+                        }
+                      : null,
+                ),
+            ]),
+          ),
+          SliverToBoxAdapter(
+            child: IosSection(header: 'Identity', children: [
+              kv(o.mac.isNotEmpty ? 'Address' : 'iOS ID', o.mac.isNotEmpty ? o.mac : o.key.substring(4), code: true),
+              kv('Address type', DeviceExplain.addressExplain(o)),
+              if (f.vendor != null) kv('Vendor', f.vendor!),
+              if (o.name.isNotEmpty) kv('Name', o.name),
+              kv('Radio', f.ble ? 'Bluetooth LE' : 'Wi-Fi${o.channel > 0 ? ' · channel ${o.channel}' : ''}'),
+              if (o.authMode != null) kv('Security', wifiAuthMeta(o.authMode!).$1),
+            ]),
+          ),
+          SliverToBoxAdapter(
+            child: IosSection(header: 'Signal and time', children: [
+              kv('Signal', '${DeviceExplain.rssiExplain(o.rssi)} · range ${o.rssiMin} to ${o.rssiMax} dBm'),
+              kv('Last heard', '${_ago(o.lastSeenMs)} ago'),
+              kv('First heard', '${_ago(o.firstSeenMs)} ago'),
+              kv('Heard by', f.heardBy),
+              if (o.mac.isNotEmpty && !o.randomized)
+                FutureBuilder<List<int>>(
+                  future: ref.read(databaseProvider).sightingTimesForMac(o.mac),
+                  builder: (context, snap) {
+                    final ts = snap.data;
+                    if (ts == null) return kv('Presence', 'Loading…');
+                    final now = DateTime.now().millisecondsSinceEpoch;
+                    const p = PresenceParams();
+                    final s = PresenceStats.fromSightings(ts, now, p);
+                    if (s == null) return kv('Presence', 'Not in saved history yet');
+                    return kv('Presence',
+                        '${classifyPresence(s, now, p).label} · ${s.visitsInWindow} visit${s.visitsInWindow == 1 ? '' : 's'} in 7 days · ${ts.length} sightings saved');
+                  },
+                ),
+            ]),
+          ),
+          if (f.device.signatures.isNotEmpty)
+            SliverToBoxAdapter(
+              child: IosSection(header: 'Matched signatures', children: [
+                for (final s in f.device.signatures)
+                  IosRow(
+                    leading: Icon(CupertinoIcons.checkmark_seal_fill, color: classColor(s.kind)),
+                    title: s.name,
+                    subtitle: Text([s.kind.label, if (s.attentionNote.isNotEmpty) s.attentionNote].join('\n')),
+                  ),
+              ]),
             ),
           if (decoded.isNotEmpty)
-            CommandSheetGroup(
-              label: 'DECODED',
-              child: Column(
-                children: [
-                  for (final f in decoded) kv(f.label, f.note.isEmpty ? f.display : '${f.display}\n${f.note}'),
-                ],
-              ),
+            SliverToBoxAdapter(
+              child: IosSection(header: 'Decoded', children: [
+                for (final d in decoded) kv(d.label, d.note.isEmpty ? d.display : '${d.display}\n${d.note}'),
+              ]),
             ),
           if (fields.isNotEmpty)
-            CommandSheetGroup(
-              label: 'ADVERTISEMENT',
-              child: Column(
-                children: [for (final f in fields) kv(f.label, f.value)],
-              ),
+            SliverToBoxAdapter(
+              child: IosSection(header: 'Advertisement', children: [for (final x in fields) kv(x.label, x.value)]),
             ),
           if (o.serviceUuids.isNotEmpty)
-            CommandSheetGroup(
-              label: 'SERVICES',
-              child: Column(
-                children: [
-                  for (final u in o.serviceUuids)
-                    kv(u, DeviceExplain.uuidGloss(u) ?? ''),
-                ],
-              ),
+            SliverToBoxAdapter(
+              child: IosSection(header: 'Services', children: [
+                for (final u in o.serviceUuids) kv(u, DeviceExplain.uuidGloss(u) ?? 'Unknown service'),
+              ]),
             ),
         ],
       ),
