@@ -1,4 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:oui_spy/core/classify/device_explain.dart';
 import 'package:oui_spy/core/classify/device_registry.dart';
 import 'package:oui_spy/core/classify/observation.dart';
 import 'package:oui_spy/core/classify/signature_engine.dart';
@@ -17,7 +18,7 @@ void main() {
     expect(ClassAlert.of(d), ClassAlert.cameras);
     final (title, body) = NotificationService.classNotificationText(d, ClassAlert.cameras);
     expect(title, 'Flock Safety');
-    expect(body, 'Surveillance cameras · B4:1E:52 · -61dBm');
+    expect(body, 'Surveillance cameras\nB4:1E:52:11:22:33\nSignal -61 dBm (${DeviceExplain.rssiBand(-61)})');
   });
 
   test('vendor classification (factory MAC, Axon) -> law-enforcement alert', () {

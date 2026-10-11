@@ -1550,6 +1550,20 @@ class BleManager {
 
   // -- Private --
 
+  Detection _withWatchlistDesc(Detection d) {
+    if (d.engine != Engine.detector || (d.method != 'ble_watchlist' && d.method != 'wifi_watchlist')) return d;
+    if ((d.detector?.filterDescription ?? '').trim().isNotEmpty) return d;
+    final entries = _watchlistGetter?.call();
+    if (entries == null) return d;
+    final mac = d.macAddress.toUpperCase();
+    final hit = entries.where((e) => e.isFullMac && e.identifier.toUpperCase() == mac).firstOrNull ??
+        entries.where((e) => e.isOui && mac.startsWith(e.identifier.toUpperCase())).firstOrNull;
+    if (hit == null || hit.description.isEmpty) return d;
+    return d.copyWith(
+      detector: (d.detector ?? const DetectorExtension()).copyWith(filterDescription: hit.description),
+    );
+  }
+
   void _onDetection(List<int> data) {
     if (_importing) {
       _importTimer?.cancel();
@@ -1570,7 +1584,7 @@ class BleManager {
         return;
       }
       if (data.length < 14) return;
-      final detection = BleProtocol.decodeDetection(
+      final detection = _withWatchlistDesc(BleProtocol.decodeDetection(
         data,
         sessionId: _sessionId,
         nodeId: _nodeId,
@@ -1579,7 +1593,7 @@ class BleManager {
         longitude: null,
         accuracy: null,
         satelliteCount: null,
-      );
+      ));
       _importSeen++;
       _importedDetections.add(detection);
       _noteAway(detection);
@@ -1587,7 +1601,7 @@ class BleManager {
     }
     if (data.length < 14) return;
     final isAway = data.isNotEmpty && (data[0] & 0x80) != 0;
-    final detection = BleProtocol.decodeDetection(
+    final detection = _withWatchlistDesc(BleProtocol.decodeDetection(
       data,
       sessionId: _sessionId,
       nodeId: _nodeId,
@@ -1596,7 +1610,7 @@ class BleManager {
       longitude: isAway ? null : _lastLon,
       accuracy: isAway ? null : _lastAccuracy,
       satelliteCount: isAway ? null : _lastSatCount,
-    );
+    ));
     _detections.add(detection);
     if (isAway) {
       _noteAway(detection);
