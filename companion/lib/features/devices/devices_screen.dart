@@ -25,7 +25,31 @@ Color confidenceColor(Confidence c) => switch (c) {
   Confidence.low => AppTheme.gpsNone,
 };
 
-Color classColor(SignatureClass k) => pillColor(k.index + 1);
+const _classColors = <SignatureClass, Color>{
+  SignatureClass.finder: Color(0xFFE66B9B),
+  SignatureClass.beacon: AppTheme.wardrive,
+  SignatureClass.signage: Color(0xFF8890A8),
+  SignatureClass.wearable: AppTheme.skySpy,
+  SignatureClass.surveillance: AppTheme.error,
+  SignatureClass.drone: AppTheme.warning,
+  SignatureClass.hacking: AppTheme.uniPwn,
+  SignatureClass.bodyworn: AppTheme.flockWifi,
+  SignatureClass.lawEnforcement: Color(0xFF3B82F6),
+  SignatureClass.vehicle: Color(0xFF84CC16),
+  SignatureClass.glasses: AppTheme.wdgwars,
+  SignatureClass.audio: AppTheme.flockBle,
+  SignatureClass.camera: Color(0xFFF97316),
+  SignatureClass.thermostat: AppTheme.foxhunter,
+  SignatureClass.lock: Color(0xFFEAB308),
+  SignatureClass.health: Color(0xFFEC4899),
+  SignatureClass.home: AppTheme.wdgwarsAlt,
+  SignatureClass.isp: Color(0xFF06B6D4),
+  SignatureClass.mesh: Color(0xFF14B8A6),
+  SignatureClass.phone: AppTheme.accent,
+  SignatureClass.other: AppTheme.textDim,
+};
+
+Color classColor(SignatureClass k) => _classColors[k] ?? AppTheme.textDim;
 
 Color rssiColor(int rssi) => rssi >= -60
     ? AppTheme.success
@@ -547,14 +571,22 @@ class _DeviceRow extends ConsumerWidget {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(
-                        title,
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                        style: text.bodyMedium?.copyWith(
-                          color: t.textPrimary,
-                          fontWeight: FontWeight.w600,
-                        ),
+                      Row(
+                        children: [
+                          Icon(Icons.circle, size: gap * 0.8, color: confidenceColor(guess.confidence)),
+                          SizedBox(width: gap * 0.5),
+                          Expanded(
+                            child: Text(
+                              title,
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
+                              style: text.bodyMedium?.copyWith(
+                                color: t.textPrimary,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ),
+                        ],
                       ),
                       if (sub.isNotEmpty)
                         Padding(
@@ -588,28 +620,21 @@ class _DeviceRow extends ConsumerWidget {
                   ),
                 ),
                 SizedBox(width: gap),
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.end,
+                Row(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.baseline,
+                  textBaseline: TextBaseline.alphabetic,
                   children: [
-                    Row(
-                      mainAxisSize: MainAxisSize.min,
-                      crossAxisAlignment: CrossAxisAlignment.baseline,
-                      textBaseline: TextBaseline.alphabetic,
-                      children: [
-                        Text(
-                          '${o.rssi}',
-                          style: text.titleSmall?.copyWith(
-                            color: rssiColor(o.rssi),
-                            fontFamily: 'monospace',
-                            fontWeight: FontWeight.w700,
-                          ),
-                        ),
-                        SizedBox(width: gap * 0.3),
-                        Text('dBm', style: text.labelSmall?.copyWith(color: t.textDim)),
-                      ],
+                    Text(
+                      '${o.rssi}',
+                      style: text.titleMedium?.copyWith(
+                        color: rssiColor(o.rssi),
+                        fontFamily: 'monospace',
+                        fontWeight: FontWeight.w700,
+                      ),
                     ),
-                    SizedBox(height: gap * 0.5),
-                    Icon(Icons.circle, size: gap, color: confidenceColor(guess.confidence)),
+                    SizedBox(width: gap * 0.3),
+                    Text('dBm', style: text.labelSmall?.copyWith(color: t.textDim)),
                   ],
                 ),
               ],

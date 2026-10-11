@@ -1,38 +1,61 @@
-# Since v0.6.0
+# Since v0.6.1
 
-## More boards join the mesh
+## App redesign
 
-ESP32-C5 boards (XIAO C5, T-Dongle-C5) and the M5StickC PLUS / PLUS2 are no
-longer standalone-only. They connect to a manager as fleet nodes, with mesh
-relay, wardrive forwarding and ESP-NOW TX all working. C5 NimBLE pools moved
-to PSRAM so the C5 has enough internal RAM for mesh + BLE + WiFi simultaneously.
-The PLUS / PLUS2 fit mesh via TINYRAM wifi tx/cache budget cuts. Only the
-original M5StickC remains standalone.
+Four-tab navigation (Home, Detections, Wardrive, Settings) replaces the
+five-tab layout. All corner radii standardized to 10pt. Dark-first palette
+with muted neon engine colors. Outline/filled icon pairs on the nav bar with
+a top border divider. Screens use cards for dashboards, dense rows for data
+feeds, grouped lists only for settings.
 
-## NimBLE 2.x on all boards
+## Device classifier
 
-All environments now build against NimBLE 2.x. S3 boards reclaim internal RAM
-by routing NimBLE allocations to PSRAM.
+Fieldwatch signature engine classifies BLE devices by vendor OUI, advertised
+service UUIDs, and manufacturer data patterns. Categories include cameras,
+law enforcement (Axon), drones, trackers, smart glasses, medical, industrial,
+and IoT. Raw advertisement bytes decoded and displayed per device. Co-travel
+and flood detection score device behavior over time.
 
-## Per-board OTA
+## Axon / law enforcement detection
 
-Firmware reports its board type over BLE. The companion app reads this and
-selects the correct binary during OTA, instead of relying on a single global
-"latest" version check. The web flasher version manifest source order is
-corrected so each target resolves to the right image.
+Detector engine matches Axon BLE service UUIDs FE6B and FE6C. Foxhunt
+unblocked when Axon presence detected. Presence tones fire on Axon proximity.
 
-## Battery and display
+## Assignable alert melodies
 
-- M5StickC and PLUS: battery percentage from AXP192 ADC, shown on the LCD
-- M5StickC PLUS2: battery from built-in fuel gauge; PWM display dimmer
-  (brightness button now sweeps smoothly instead of toggling between fixed levels)
+Per-engine alert sounds configurable from the app. Melody state synced to
+firmware over GATT. Alert sounds screen with preview playback.
+
+## Inline RSSI and streamlined device rows
+
+Device list shows RSSI and unit inline on one line instead of stacked.
+Last-seen timestamp removed from device rows. Confidence dot retained.
+
+## Classifier accuracy
+
+- iBeacon label changed from "Retail beacons" to "Beacons"
+- Honeywell reclassified from POS to industrial
+- POS description narrowed to payment terminals and barcode scanners
+- Missing noun map entries for `router` and `iot` buckets added so
+  TSV-loaded vendors with those categories are no longer silently dropped
+
+## Notification consolidation
+
+Five granular ClassAlert toggles (cameras, law enforcement, drones, glasses,
+trackers) removed from the settings UI. Class alerts stay always-on by
+default. Four engine-level toggles remain: Flock Safety, Watchlist/Detector,
+Drone/Sky Spy, Foxhunt Proximity.
+
+## OUI-only flock mode
+
+Toggle in device config to report only OUI-matched flock detections, filtering
+out unresolved BLE advertisements.
 
 ## Also
 
-- Boards without SD (StickC family) show wardrive and pcap on the LCD strip
-  when the app is connected; hidden standalone since there is no local storage
-- Upstream Flock GATT, DFU and OUI signatures synced into detection engine
-- WiGLE upload backs off 24 hours on HTTP 429 instead of retrying immediately
-- Manager C3 and WROOM builds link again (#20)
-- C5 BLE link timing fixed on both XIAO and T-Dongle variants
-- C5 WiFi init order no longer races BLE startup
+- Engines started by physical button persist through phone disconnect
+- WiGLE session launchable from home screen without waiting for location fix
+- Offline filter persist uses content-compare instead of count-compare,
+  preventing false no-ops when filter list is replaced with same-length data
+- Per-pill filter colors on detection and device lists
+- Multi-line comments stripped from companion codebase
