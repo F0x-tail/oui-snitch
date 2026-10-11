@@ -871,25 +871,16 @@ class _SessionHistorySheetState extends ConsumerState<_SessionHistorySheet> {
 
   Future<void> _deleteSelected(BuildContext context) async {
     if (_selected.isEmpty) return;
-    final t = AppTheme.of(context);
     final db = ref.read(databaseProvider);
     final count = _selected.length;
-    final confirm = await showDialog<bool>(
+    final confirm = await showCupertinoDialog<bool>(
       context: context,
-      builder: (ctx) => AlertDialog(
-        backgroundColor: t.background,
-        title: Text('Delete $count Sessions', style: TextStyle(color: t.textPrimary)),
-        content: Text(
-          'Delete $count selected sessions and all their detections? This cannot be undone.',
-          style: TextStyle(color: t.textSecondary),
-        ),
+      builder: (ctx) => CupertinoAlertDialog(
+        title: Text('Delete $count sessions'),
+        content: Text('Delete $count selected sessions and all their detections? This cannot be undone.'),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('CANCEL')),
-          ElevatedButton(
-            onPressed: () => Navigator.pop(ctx, true),
-            style: ElevatedButton.styleFrom(backgroundColor: AppTheme.error),
-            child: const Text('DELETE'),
-          ),
+          CupertinoDialogAction(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
+          CupertinoDialogAction(isDestructiveAction: true, onPressed: () => Navigator.pop(ctx, true), child: const Text('Delete')),
         ],
       ),
     );
@@ -958,32 +949,20 @@ class _SessionHistorySheetState extends ConsumerState<_SessionHistorySheet> {
   }
 
   Future<void> _clearAllSessions(BuildContext context, WidgetRef ref) async {
-    final t = AppTheme.of(context);
     final db = ref.read(databaseProvider);
     final sessions = await db.getWardriveSessions();
     final completed = sessions.where((s) => s.endedAt != null).toList();
     if (completed.isEmpty) return;
     if (!context.mounted) return;
 
-    final confirm = await showDialog<bool>(
+    final confirm = await showCupertinoDialog<bool>(
       context: context,
-      builder: (ctx) => AlertDialog(
-        backgroundColor: t.background,
-        title: Text('Clear All Sessions', style: TextStyle(color: t.textPrimary)),
-        content: Text(
-          'Delete all ${completed.length} wardrive sessions and their detections? This cannot be undone.',
-          style: TextStyle(color: t.textSecondary),
-        ),
+      builder: (ctx) => CupertinoAlertDialog(
+        title: const Text('Clear all sessions'),
+        content: Text('Delete all ${completed.length} wardrive sessions and their detections? This cannot be undone.'),
         actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('CANCEL'),
-          ),
-          ElevatedButton(
-            onPressed: () => Navigator.pop(ctx, true),
-            style: ElevatedButton.styleFrom(backgroundColor: AppTheme.error),
-            child: const Text('DELETE ALL'),
-          ),
+          CupertinoDialogAction(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
+          CupertinoDialogAction(isDestructiveAction: true, onPressed: () => Navigator.pop(ctx, true), child: const Text('Delete all')),
         ],
       ),
     );
@@ -994,26 +973,14 @@ class _SessionHistorySheetState extends ConsumerState<_SessionHistorySheet> {
   }
 
   Future<void> _deleteSession(BuildContext context, WidgetRef ref, Session session) async {
-    final t = AppTheme.of(context);
-    final confirm = await showDialog<bool>(
+    final confirm = await showCupertinoDialog<bool>(
       context: context,
-      builder: (ctx) => AlertDialog(
-        backgroundColor: t.background,
-        title: Text('Delete Session', style: TextStyle(color: t.textPrimary)),
-        content: Text(
-          'Delete this session and all its ${session.detectionCount} detections? This cannot be undone.',
-          style: TextStyle(color: t.textSecondary),
-        ),
+      builder: (ctx) => CupertinoAlertDialog(
+        title: const Text('Delete session'),
+        content: Text('Delete this session and all its ${session.detectionCount} detections? This cannot be undone.'),
         actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('CANCEL'),
-          ),
-          ElevatedButton(
-            onPressed: () => Navigator.pop(ctx, true),
-            style: ElevatedButton.styleFrom(backgroundColor: AppTheme.error),
-            child: const Text('DELETE'),
-          ),
+          CupertinoDialogAction(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
+          CupertinoDialogAction(isDestructiveAction: true, onPressed: () => Navigator.pop(ctx, true), child: const Text('Delete')),
         ],
       ),
     );
@@ -1112,32 +1079,17 @@ class _SessionHistorySheetState extends ConsumerState<_SessionHistorySheet> {
 }
 
 Future<bool> _confirmWdgwarsUpload(BuildContext context) async {
-  final t = AppTheme.of(context);
-  final ok = await showDialog<bool>(
+  final ok = await showCupertinoDialog<bool>(
     context: context,
-    builder: (ctx) => AlertDialog(
-      backgroundColor: t.surface,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-      title: Text('Upload to WDGWars?',
-          style: TextStyle(color: t.textPrimary, fontWeight: FontWeight.w700)),
-      content: Text(
+    builder: (ctx) => CupertinoAlertDialog(
+      title: const Text('Upload to WDGWars?'),
+      content: const Text(
         'This publishes this session — network MACs, SSIDs and GPS coordinates — '
         'to the WDGWars map for your gang. Once uploaded it cannot be retracted.',
-        style: TextStyle(color: t.textDim, fontSize: 13),
       ),
       actions: [
-        TextButton(
-          onPressed: () => Navigator.pop(ctx, false),
-          child: Text('CANCEL', style: TextStyle(color: t.textDim)),
-        ),
-        FilledButton(
-          style: FilledButton.styleFrom(
-            backgroundColor: AppTheme.wdgwars,
-            foregroundColor: const Color(0xFF0D1117),
-          ),
-          onPressed: () => Navigator.pop(ctx, true),
-          child: const Text('UPLOAD'),
-        ),
+        CupertinoDialogAction(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
+        CupertinoDialogAction(onPressed: () => Navigator.pop(ctx, true), child: const Text('Upload')),
       ],
     ),
   );
@@ -1145,32 +1097,17 @@ Future<bool> _confirmWdgwarsUpload(BuildContext context) async {
 }
 
 Future<bool> _confirmWigleUpload(BuildContext context) async {
-  final t = AppTheme.of(context);
-  final ok = await showDialog<bool>(
+  final ok = await showCupertinoDialog<bool>(
     context: context,
-    builder: (ctx) => AlertDialog(
-      backgroundColor: t.surface,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-      title: Text('Upload to WiGLE?',
-          style: TextStyle(color: t.textPrimary, fontWeight: FontWeight.w700)),
-      content: Text(
+    builder: (ctx) => CupertinoAlertDialog(
+      title: const Text('Upload to WiGLE?'),
+      content: const Text(
         'This publishes this session — network MACs, SSIDs and GPS coordinates — '
         'to the public WiGLE.net database. Once uploaded it cannot be retracted.',
-        style: TextStyle(color: t.textDim, fontSize: 13),
       ),
       actions: [
-        TextButton(
-          onPressed: () => Navigator.pop(ctx, false),
-          child: Text('CANCEL', style: TextStyle(color: t.textDim)),
-        ),
-        FilledButton(
-          style: FilledButton.styleFrom(
-            backgroundColor: AppTheme.accent,
-            foregroundColor: AppTheme.background,
-          ),
-          onPressed: () => Navigator.pop(ctx, true),
-          child: const Text('UPLOAD'),
-        ),
+        CupertinoDialogAction(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
+        CupertinoDialogAction(onPressed: () => Navigator.pop(ctx, true), child: const Text('Upload')),
       ],
     ),
   );

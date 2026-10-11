@@ -1,5 +1,6 @@
 import 'dart:io';
 
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:geolocator/geolocator.dart';
@@ -144,24 +145,41 @@ class SessionBar extends ConsumerWidget {
                 ),
               ),
               if (!wd.isActive)
-                FilledButton.icon(
+                CupertinoButton.filled(
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                  minimumSize: Size.zero,
                   onPressed: busy ? null : () => startWardriveSession(context, ref),
-                  icon: const Icon(Icons.play_arrow),
-                  label: const Text('START'),
+                  child: const Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(Icons.play_arrow, size: 18, color: CupertinoColors.white),
+                      SizedBox(width: 4),
+                      Text('Start', style: TextStyle(color: CupertinoColors.white, fontSize: 14)),
+                    ],
+                  ),
                 )
               else ...[
-                IconButton(
-                  tooltip: wd.state == WardriveState.paused ? 'Resume' : 'Pause',
+                CupertinoButton(
+                  padding: const EdgeInsets.all(8),
+                  minimumSize: Size.zero,
                   onPressed: busy
                       ? null
                       : () => wd.state == WardriveState.paused ? wd.resumeSession() : wd.pauseSession(),
-                  icon: Icon(wd.state == WardriveState.paused ? Icons.play_arrow : Icons.pause),
+                  child: Icon(wd.state == WardriveState.paused ? Icons.play_arrow : Icons.pause, size: 22),
                 ),
-                FilledButton.icon(
-                  style: FilledButton.styleFrom(backgroundColor: AppTheme.error),
+                CupertinoButton(
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                  minimumSize: Size.zero,
+                  color: AppTheme.error,
                   onPressed: busy ? null : wd.stopSession,
-                  icon: const Icon(Icons.stop),
-                  label: const Text('STOP'),
+                  child: const Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(Icons.stop, size: 18, color: CupertinoColors.white),
+                      SizedBox(width: 4),
+                      Text('Stop', style: TextStyle(color: CupertinoColors.white, fontSize: 14)),
+                    ],
+                  ),
                 ),
               ],
             ],
@@ -274,7 +292,7 @@ Future<bool> confirmRadioRoles(BuildContext context, WidgetRef ref) async {
   final mgrId = AppState.canonicalNodeId(app.nodeId);
   final nodes = app.liveKnownNodes.where((id) => id != mgrId).toList()..sort();
   if (nodes.isEmpty) return true;
-  final result = await showDialog<Map<String, int>>(
+  final result = await showCupertinoDialog<Map<String, int>>(
     context: context,
     builder: (_) => RadioRolePopup(
       nodes: nodes,
@@ -309,42 +327,24 @@ Future<void> _settingsDialog(
   Future<void> Function()? onAction,
   List<Widget> leading = const [],
 }) {
-  final t = AppTheme.of(context);
-  return showDialog<void>(
+  return showCupertinoDialog<void>(
     context: context,
-    builder: (ctx) => AlertDialog(
-      backgroundColor: t.surface,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-      title: Text(
-        title,
-        style: TextStyle(
-          color: t.textPrimary,
-          fontSize: 16,
-          fontWeight: FontWeight.w600,
-        ),
-      ),
-      content: Text(
-        body,
-        style: TextStyle(color: t.textSecondary, fontSize: 13),
-      ),
+    builder: (ctx) => CupertinoAlertDialog(
+      title: Text(title),
+      content: Text(body),
       actions: [
         ...leading,
-        TextButton(
+        CupertinoDialogAction(
           onPressed: () => Navigator.of(ctx).pop(),
-          child: Text(
-            action == null ? 'OK' : 'LATER',
-            style: TextStyle(
-              color: action == null ? AppTheme.accent : t.textDim,
-            ),
-          ),
+          child: Text(action == null ? 'OK' : 'Later'),
         ),
         if (action != null)
-          TextButton(
+          CupertinoDialogAction(
             onPressed: () async {
               Navigator.of(ctx).pop();
               await onAction?.call();
             },
-            child: Text(action, style: const TextStyle(color: AppTheme.accent)),
+            child: Text(action),
           ),
       ],
     ),
@@ -360,21 +360,20 @@ Future<void> _alwaysUpgradeDialog(
 }) async {
   final p = await SharedPreferences.getInstance();
   if (p.getBool(prefKey) == true || !context.mounted) return;
-  final t = AppTheme.of(context);
   await _settingsDialog(
     context,
-    title: 'Enable "Always" Location',
+    title: 'Enable "Always" location',
     body: body,
     action: action,
     onAction: onAction,
     leading: [
       Builder(
-        builder: (ctx) => TextButton(
+        builder: (ctx) => CupertinoDialogAction(
           onPressed: () async {
             await p.setBool(prefKey, true);
             if (ctx.mounted) Navigator.of(ctx).pop();
           },
-          child: Text("DON'T ASK AGAIN", style: TextStyle(color: t.textDim)),
+          child: const Text("Don't ask again"),
         ),
       ),
     ],
@@ -402,186 +401,69 @@ class _RadioRolePopupState extends State<RadioRolePopup> {
     for (final n in widget.nodes) n: widget.initial[n] ?? 0x03,
   };
 
-  static const _wifiColor = Color(0xFF6B8AFF);
-  static const _bleColor = Color(0xFF9B6BFF);
-  static const _bothColor = Color(0xFF5AE6D6);
-
-  static Color _radioColor(int mask) => switch (mask & 0x03) {
-    0x01 => _wifiColor,
-    0x02 => _bleColor,
-    _ => _bothColor,
-  };
-
-  static String _maskLabel(int mask) => switch (mask & 0x03) {
-    0x01 => 'WIFI',
-    0x02 => 'BLE',
-    _ => 'BOTH',
-  };
-
   @override
   Widget build(BuildContext context) {
-    final t = AppTheme.of(context);
-    return AlertDialog(
-      backgroundColor: t.surface,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-      title: Row(
+    return CupertinoAlertDialog(
+      title: const Text('Node radios'),
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
         children: [
-          const Icon(
-            Icons.settings_input_antenna,
-            color: AppTheme.accent,
-            size: 18,
+          const SizedBox(height: 8),
+          const Text(
+            'Assign each node WiFi, BLE, or Both for this wardrive. '
+            'WiFi nodes split channels; BLE nodes cover BLE.',
           ),
-          const SizedBox(width: 8),
-          Text(
-            'NODE RADIOS',
-            style: TextStyle(
-              color: t.textPrimary,
-              fontSize: 15,
-              fontWeight: FontWeight.w700,
-              letterSpacing: 1,
-            ),
-          ),
+          const SizedBox(height: 12),
+          ...widget.nodes.map((id) {
+            final mask = _roles[id] ?? 0x03;
+            return Padding(
+              padding: const EdgeInsets.only(bottom: 10),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    widget.labelFor(id),
+                    style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13),
+                  ),
+                  const SizedBox(height: 6),
+                  SizedBox(
+                    width: double.infinity,
+                    child: CupertinoSlidingSegmentedControl<int>(
+                      groupValue: mask,
+                      onValueChanged: (v) {
+                        if (v != null) setState(() => _roles[id] = v);
+                      },
+                      children: const {
+                        0x01: Padding(
+                          padding: EdgeInsets.symmetric(horizontal: 6, vertical: 4),
+                          child: Text('WiFi', style: TextStyle(fontSize: 12)),
+                        ),
+                        0x02: Padding(
+                          padding: EdgeInsets.symmetric(horizontal: 6, vertical: 4),
+                          child: Text('BLE', style: TextStyle(fontSize: 12)),
+                        ),
+                        0x03: Padding(
+                          padding: EdgeInsets.symmetric(horizontal: 6, vertical: 4),
+                          child: Text('Both', style: TextStyle(fontSize: 12)),
+                        ),
+                      },
+                    ),
+                  ),
+                ],
+              ),
+            );
+          }),
         ],
       ),
-      content: SizedBox(
-        width: double.maxFinite,
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Padding(
-              padding: const EdgeInsets.only(bottom: 12),
-              child: Text(
-                'Assign each node WiFi, BLE, or Both for this wardrive. '
-                'WiFi nodes split channels; BLE nodes cover BLE.',
-                style: TextStyle(fontSize: 12, color: t.textSecondary),
-              ),
-            ),
-            ...widget.nodes.map((id) {
-              final mask = _roles[id] ?? 0x03;
-              final selColor = _radioColor(mask);
-              return Container(
-                margin: const EdgeInsets.only(bottom: 10),
-                padding: const EdgeInsets.fromLTRB(12, 10, 12, 12),
-                decoration: BoxDecoration(
-                  color: t.background,
-                  borderRadius: BorderRadius.circular(10),
-                  border: Border.all(color: selColor.withValues(alpha: 0.35)),
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      children: [
-                        Container(
-                          width: 9,
-                          height: 9,
-                          margin: const EdgeInsets.only(right: 8),
-                          decoration: BoxDecoration(
-                            color: selColor,
-                            shape: BoxShape.circle,
-                            boxShadow: [
-                              BoxShadow(
-                                color: selColor.withValues(alpha: 0.6),
-                                blurRadius: 6,
-                              ),
-                            ],
-                          ),
-                        ),
-                        Expanded(
-                          child: Text(
-                            widget.labelFor(id),
-                            overflow: TextOverflow.ellipsis,
-                            style: TextStyle(
-                              color: t.textPrimary,
-                              fontWeight: FontWeight.w600,
-                              fontSize: 14,
-                            ),
-                          ),
-                        ),
-                        Text(
-                          _maskLabel(mask),
-                          style: TextStyle(
-                            color: selColor,
-                            fontSize: 11,
-                            fontWeight: FontWeight.w700,
-                            letterSpacing: 1,
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 10),
-                    SizedBox(
-                      width: double.infinity,
-                      child: SegmentedButton<int>(
-                        showSelectedIcon: false,
-                        style: ButtonStyle(
-                          visualDensity: VisualDensity.compact,
-                          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                          textStyle: WidgetStateProperty.all(
-                            const TextStyle(
-                              fontSize: 11,
-                              fontWeight: FontWeight.w600,
-                            ),
-                          ),
-                          backgroundColor: WidgetStateProperty.resolveWith(
-                            (states) => states.contains(WidgetState.selected)
-                                ? selColor.withValues(alpha: 0.22)
-                                : Colors.transparent,
-                          ),
-                          side: WidgetStateProperty.all(
-                            BorderSide(color: selColor.withValues(alpha: 0.45)),
-                          ),
-                        ),
-                        segments: const [
-                          ButtonSegment(
-                            value: 0x01,
-                            icon: Icon(Icons.wifi, size: 15, color: _wifiColor),
-                            label: Text('WiFi'),
-                          ),
-                          ButtonSegment(
-                            value: 0x02,
-                            icon: Icon(
-                              Icons.bluetooth,
-                              size: 15,
-                              color: _bleColor,
-                            ),
-                            label: Text('BLE'),
-                          ),
-                          ButtonSegment(
-                            value: 0x03,
-                            icon: Icon(
-                              Icons.sensors,
-                              size: 15,
-                              color: _bothColor,
-                            ),
-                            label: Text('Both'),
-                          ),
-                        ],
-                        selected: {mask},
-                        onSelectionChanged: (s) =>
-                            setState(() => _roles[id] = s.first),
-                      ),
-                    ),
-                  ],
-                ),
-              );
-            }),
-          ],
-        ),
-      ),
       actions: [
-        TextButton(
+        CupertinoDialogAction(
           onPressed: () => Navigator.pop(context),
-          child: Text('CANCEL', style: TextStyle(color: t.textDim)),
+          child: const Text('Cancel'),
         ),
-        FilledButton(
-          style: FilledButton.styleFrom(
-            backgroundColor: AppTheme.accent,
-            foregroundColor: AppTheme.background,
-          ),
+        CupertinoDialogAction(
+          isDefaultAction: true,
           onPressed: () => Navigator.pop(context, _roles),
-          child: const Text('START'),
+          child: const Text('Start'),
         ),
       ],
     );

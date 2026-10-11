@@ -1,5 +1,6 @@
 import 'dart:convert';
 
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_map/flutter_map.dart';
@@ -476,30 +477,12 @@ class _DrawingToolbar extends StatelessWidget {
           ),
           const SizedBox(height: 8),
           // Name field
-          SizedBox(
-            height: 32,
-            child: TextField(
-              onChanged: onNameChanged,
-              style: TextStyle(color: t.textPrimary, fontSize: 12),
-              decoration: InputDecoration(
-                hintText: 'Zone name (optional)',
-                hintStyle: TextStyle(color: t.textDim, fontSize: 12),
-                isDense: true,
-                contentPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(6),
-                  borderSide: BorderSide(color: t.border),
-                ),
-                enabledBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(6),
-                  borderSide: BorderSide(color: t.border),
-                ),
-                focusedBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(6),
-                  borderSide: const BorderSide(color: AppTheme.accent),
-                ),
-              ),
-            ),
+          CupertinoTextField(
+            onChanged: onNameChanged,
+            placeholder: 'Zone name (optional)',
+            style: TextStyle(color: t.textPrimary, fontSize: 12),
+            placeholderStyle: TextStyle(color: t.textDim, fontSize: 12),
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
           ),
           // Circle radius slider
           if (isCircle && hasCircleCenter) ...[
@@ -511,15 +494,11 @@ class _DrawingToolbar extends StatelessWidget {
                   fontWeight: FontWeight.w600, letterSpacing: 1,
                 )),
                 Expanded(
-                  child: SliderTheme(
-                    data: SliderThemeData(overlayShape: SliderComponentShape.noOverlay),
-                    child: Slider(
-                      value: circleRadiusM,
-                      min: 50, max: 5000,
-                      activeColor: AppTheme.accent,
-                      inactiveColor: t.border,
-                      onChanged: onRadiusChanged,
-                    ),
+                  child: CupertinoSlider(
+                    value: circleRadiusM,
+                    min: 50, max: 5000,
+                    activeColor: AppTheme.accent,
+                    onChanged: onRadiusChanged,
                   ),
                 ),
                 SizedBox(
@@ -758,54 +737,17 @@ class _GeofenceRow extends StatelessWidget {
                 ],
               ),
             ),
-            // Toggle
-            GestureDetector(
-              behavior: HitTestBehavior.opaque,
-              onTap: onToggle,
-              child: Container(
-                constraints: const BoxConstraints(minWidth: 56, minHeight: 40),
-                alignment: Alignment.center,
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 16, vertical: 9),
-                decoration: BoxDecoration(
-                  color: enabled
-                      ? AppTheme.success.withValues(alpha: 0.14)
-                      : AppTheme.error.withValues(alpha: 0.14),
-                  borderRadius: BorderRadius.circular(8),
-                  border: Border.all(
-                    color: (enabled ? AppTheme.success : AppTheme.error)
-                        .withValues(alpha: 0.5),
-                  ),
-                ),
-                child: Text(
-                  enabled ? 'ON' : 'OFF',
-                  style: TextStyle(
-                    color: enabled ? AppTheme.success : AppTheme.error,
-                    fontSize: 14, fontWeight: FontWeight.w800,
-                    letterSpacing: 1,
-                  ),
-                ),
-              ),
+            CupertinoSwitch(
+              value: enabled,
+              activeTrackColor: AppTheme.warning,
+              onChanged: (_) => onToggle(),
             ),
             const SizedBox(width: 8),
-            // Delete
-            GestureDetector(
-              behavior: HitTestBehavior.opaque,
-              onTap: onDelete,
-              child: Container(
-                width: 44,
-                height: 44,
-                alignment: Alignment.center,
-                decoration: BoxDecoration(
-                  color: AppTheme.error.withValues(alpha: 0.1),
-                  borderRadius: BorderRadius.circular(8),
-                  border: Border.all(
-                    color: AppTheme.error.withValues(alpha: 0.35),
-                  ),
-                ),
-                child: Icon(Icons.delete_outline, size: 22,
-                    color: AppTheme.error.withValues(alpha: 0.9)),
-              ),
+            CupertinoButton(
+              padding: EdgeInsets.zero,
+              minimumSize: const Size.square(32),
+              onPressed: onDelete,
+              child: const Icon(CupertinoIcons.delete, size: 20, color: AppTheme.error),
             ),
           ],
         ),
