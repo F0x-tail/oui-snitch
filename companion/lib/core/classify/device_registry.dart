@@ -245,6 +245,7 @@ class DeviceRegistry extends ChangeNotifier {
   Iterable<ClassifiedDevice> get devices => _devices.values;
   int get count => _devices.length;
   bool get ready => _engine != null;
+  List<Signature> get catalog => _engine?.signatures ?? const [];
   List<GpsSample> get path => List.unmodifiable(_path);
 
   Future<void> loadCatalog() async {

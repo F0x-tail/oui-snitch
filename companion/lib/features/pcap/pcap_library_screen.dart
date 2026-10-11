@@ -1,5 +1,6 @@
 import 'dart:io';
 
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:path_provider/path_provider.dart';
@@ -7,6 +8,7 @@ import 'package:share_plus/share_plus.dart';
 import 'package:oui_spy/core/ble/ble_manager.dart';
 import 'package:oui_spy/core/app_time.dart';
 import 'package:oui_spy/theme/app_theme.dart';
+import 'package:oui_spy/widgets/ios.dart';
 
 class PcapLibraryScreen extends ConsumerStatefulWidget {
   const PcapLibraryScreen({super.key, this.embedded = false});
@@ -85,21 +87,14 @@ class _PcapLibraryScreenState extends ConsumerState<PcapLibraryScreen> {
   }
 
   Future<void> _confirmDelete(File f) async {
-    final ok = await showDialog<bool>(
+    final ok = await showCupertinoDialog<bool>(
       context: context,
-      builder: (ctx) => AlertDialog(
+      builder: (ctx) => CupertinoAlertDialog(
         title: const Text('Delete capture?'),
         content: Text(f.path.split('/').last),
         actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('CANCEL'),
-          ),
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, true),
-            style: TextButton.styleFrom(foregroundColor: AppTheme.error),
-            child: const Text('DELETE'),
-          ),
+          CupertinoDialogAction(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
+          CupertinoDialogAction(isDestructiveAction: true, onPressed: () => Navigator.pop(ctx, true), child: const Text('Delete')),
         ],
       ),
     );
@@ -107,9 +102,7 @@ class _PcapLibraryScreenState extends ConsumerState<PcapLibraryScreen> {
     final success = await _tryDelete(f);
     if (!mounted) return;
     if (!success) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text('Delete failed')));
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Delete failed')));
     }
     _refresh();
   }
@@ -118,21 +111,14 @@ class _PcapLibraryScreenState extends ConsumerState<PcapLibraryScreen> {
     final list = await _entries;
     if (list.isEmpty) return;
     if (!mounted) return;
-    final ok = await showDialog<bool>(
+    final ok = await showCupertinoDialog<bool>(
       context: context,
-      builder: (ctx) => AlertDialog(
+      builder: (ctx) => CupertinoAlertDialog(
         title: const Text('Delete all captures?'),
         content: Text('${list.length} file(s) will be deleted.'),
         actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('CANCEL'),
-          ),
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, true),
-            style: TextButton.styleFrom(foregroundColor: AppTheme.error),
-            child: const Text('DELETE ALL'),
-          ),
+          CupertinoDialogAction(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
+          CupertinoDialogAction(isDestructiveAction: true, onPressed: () => Navigator.pop(ctx, true), child: const Text('Delete all')),
         ],
       ),
     );
@@ -163,143 +149,79 @@ class _PcapLibraryScreenState extends ConsumerState<PcapLibraryScreen> {
   @override
   Widget build(BuildContext context) {
     final t = AppTheme.of(context);
-    final actions = [
-      IconButton(icon: const Icon(Icons.refresh), onPressed: _refresh),
-      IconButton(
-        icon: const Icon(Icons.delete_sweep, color: AppTheme.error),
-        tooltip: 'Delete all',
-        onPressed: _confirmDeleteAll,
-      ),
-    ];
     return Scaffold(
       backgroundColor: t.background,
-      appBar: widget.embedded
-          ? null
-          : AppBar(
-              backgroundColor: t.background,
-              title: const Text('SAVED PCAPS'),
-              actions: actions,
-            ),
-      body: Container(
-        color: t.background,
-        child: FutureBuilder<List<_PcapEntry>>(
-          future: _entries,
-          builder: (context, snap) {
-            if (snap.connectionState != ConnectionState.done) {
-              return const Center(child: CircularProgressIndicator());
-            }
-            final list = snap.data ?? const [];
-            final header = widget.embedded
-                ? Row(
-                    mainAxisAlignment: MainAxisAlignment.end,
-                    children: actions,
-                  )
-                : const SizedBox.shrink();
-            if (list.isEmpty) {
-              return Column(
-                children: [
-                  header,
-                  Expanded(
-                    child: Center(
-                      child: Text(
-                        'No captures yet',
-                        style: TextStyle(color: t.textDim, fontSize: 13),
-                      ),
-                    ),
-                  ),
-                ],
-              );
-            }
-            return Column(
-              children: [
-                header,
-                Expanded(
-                  child: ListView.separated(
-                    padding: const EdgeInsets.symmetric(vertical: 8),
-                    itemCount: list.length,
-                    separatorBuilder: (_, _) =>
-                        Divider(height: 1, color: t.surface),
-                    itemBuilder: (context, i) {
-                      final e = list[i];
-                      final name = e.file.path.split('/').last;
-                      final isBle = name.contains('_ble_');
-                      final active = _isActiveCapture(e.file);
-                      return ListTile(
-                        leading: Icon(
-                          isBle ? Icons.bluetooth : Icons.wifi,
-                          color: isBle
-                              ? const Color(0xFFB44AFF)
-                              : const Color(0xFF4AB4FF),
-                        ),
-                        title: Row(
-                          children: [
-                            Expanded(
-                              child: Text(
-                                name,
-                                style: TextStyle(
-                                  color: t.textPrimary,
-                                  fontSize: 12,
-                                  fontFamily: 'monospace',
-                                ),
-                              ),
-                            ),
-                            if (active)
-                              Container(
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 6,
-                                  vertical: 2,
-                                ),
-                                decoration: BoxDecoration(
-                                  color: AppTheme.success.withValues(
-                                    alpha: 0.2,
-                                  ),
-                                  borderRadius: BorderRadius.circular(4),
-                                ),
-                                child: const Text(
-                                  'LIVE',
-                                  style: TextStyle(
-                                    color: AppTheme.success,
-                                    fontSize: 9,
-                                    fontWeight: FontWeight.bold,
-                                    letterSpacing: 1.5,
-                                  ),
-                                ),
-                              ),
-                          ],
-                        ),
-                        subtitle: Text(
-                          '${_humanBytes(e.size)}  ·  ${AppTime.dateTimeSeconds(e.modified)}',
-                          style: TextStyle(color: t.textDim, fontSize: 11),
-                        ),
-                        trailing: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            IconButton(
-                              icon: Icon(
-                                Icons.ios_share,
-                                size: 18,
-                                color: t.textPrimary,
-                              ),
-                              onPressed: () => _share(e.file),
-                            ),
-                            IconButton(
-                              icon: const Icon(
-                                Icons.delete_outline,
-                                size: 18,
-                                color: AppTheme.error,
-                              ),
-                              onPressed: () => _confirmDelete(e.file),
-                            ),
-                          ],
-                        ),
-                      );
-                    },
+      body: FutureBuilder<List<_PcapEntry>>(
+        future: _entries,
+        builder: (context, snap) {
+          if (snap.connectionState != ConnectionState.done) {
+            return IosPage(
+              title: 'Saved captures',
+              slivers: [
+                SliverToBoxAdapter(
+                  child: IosEmpty(
+                    icon: CupertinoIcons.arrow_2_circlepath,
+                    title: 'Loading',
+                    message: '',
                   ),
                 ),
               ],
             );
-          },
-        ),
+          }
+          final list = snap.data ?? const [];
+          return IosPage(
+            title: 'Saved captures',
+            actions: [
+              IosNavButton(
+                icon: CupertinoIcons.arrow_2_circlepath,
+                tooltip: 'Refresh',
+                onPressed: _refresh,
+              ),
+              if (list.isNotEmpty)
+                IosNavButton(
+                  icon: CupertinoIcons.trash,
+                  tooltip: 'Delete all',
+                  onPressed: _confirmDeleteAll,
+                ),
+            ],
+            slivers: [
+              if (list.isEmpty)
+                SliverToBoxAdapter(
+                  child: IosEmpty(
+                    icon: CupertinoIcons.tray,
+                    title: 'No captures yet',
+                    message: 'Captures appear here after a packet capture session.',
+                  ),
+                )
+              else
+                IosSliverSection(
+                  header: '${list.length} capture${list.length == 1 ? '' : 's'}',
+                  itemCount: list.length,
+                  itemBuilder: (context, i) {
+                    final e = list[i];
+                    final name = e.file.path.split('/').last;
+                    final isBle = name.contains('_ble_');
+                    final active = _isActiveCapture(e.file);
+                    return IosRow(
+                      leading: IosIcon(
+                        isBle ? Icons.bluetooth : Icons.wifi,
+                        isBle ? AppTheme.flockBle : AppTheme.accent,
+                      ),
+                      title: name,
+                      subtitle: Text('${_humanBytes(e.size)} · ${AppTime.dateTimeSeconds(e.modified)}${active ? ' · Live' : ''}'),
+                      trailing: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          CupertinoButton(padding: EdgeInsets.zero, minimumSize: const Size.square(32), onPressed: () => _share(e.file), child: Icon(CupertinoIcons.share, size: 20, color: t.textPrimary)),
+                          CupertinoButton(padding: EdgeInsets.zero, minimumSize: const Size.square(32), onPressed: () => _confirmDelete(e.file), child: const Icon(CupertinoIcons.delete, size: 20, color: AppTheme.error)),
+                        ],
+                      ),
+                    );
+                  },
+                ),
+            ],
+          );
+        },
       ),
     );
   }

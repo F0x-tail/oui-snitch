@@ -319,6 +319,7 @@ class DeviceExplain {
   ].join(' · ');
 
   static String addressExplain(Observation device, {String? addressType}) {
+    if (device.mac.isEmpty) return 'Not exposed by iOS (app-specific ID only)';
     final local = (int.tryParse(MacUtil.normalize(device.mac).split(':').first, radix: 16) ?? 0) & 0x02 != 0;
     final type = addressType?.toLowerCase();
     if (device.kind == RadioKind.wifi && device.randomized) return 'Custom · fixed';

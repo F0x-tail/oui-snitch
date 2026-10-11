@@ -7,7 +7,10 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:oui_spy/core/debug_log.dart';
 import 'package:oui_spy/core/models/detection.dart';
 import 'package:oui_spy/core/models/engine.dart';
+import 'package:oui_spy/core/classify/device_explain.dart';
 import 'package:oui_spy/core/classify/device_registry.dart';
+import 'package:oui_spy/core/oui/oui_lookup_service.dart';
+import 'package:oui_spy/core/radio_classifier.dart';
 import 'package:oui_spy/core/notifications/class_alerts.dart';
 import 'package:oui_spy/features/feed/detection_row.dart' show detectorTitle, methodLabel;
 
@@ -41,6 +44,8 @@ class NotificationService extends ChangeNotifier {
   bool foxhuntEnabled = false; // foxhunt is high-frequency, off by default
   bool wardriveStatusEnabled = true;
   Set<ClassAlert> classAlerts = ClassAlert.values.toSet();
+  Set<String> mutedSignatures = {};
+  String? Function(String mac)? vendorOf;
   final _classAlerted = <String>{};
 
   // Cooldown per MAC to avoid repeat alerts (seconds)
@@ -190,11 +195,13 @@ class NotificationService extends ChangeNotifier {
     if (!_initialized || !_permissionGranted) return;
     final alert = ClassAlert.of(d);
     if (alert == null || !classAlerts.contains(alert)) return;
+    final hits = d.signatures.where((s) => alert.kinds.contains(s.kind)).toList();
+    if (hits.isNotEmpty && hits.every((s) => mutedSignatures.contains(s.id))) return;
     final key = d.obs.mac.isNotEmpty ? d.obs.mac : d.obs.key;
     if (_classAlerted.contains(key) || _isRateLimited()) return;
     _classAlerted.add(key);
     _recordRateLimit();
-    final (title, body) = classNotificationText(d, alert);
+    final (title, body) = classNotificationText(d, alert, vendorOf: vendorOf);
     _fireNotification(
       id: _notifId(NotifChannel.detector),
       channel: NotifChannel.detector,
@@ -204,16 +211,34 @@ class NotificationService extends ChangeNotifier {
     );
   }
 
-  static (String, String) classNotificationText(ClassifiedDevice d, ClassAlert alert) {
+  static (String, String) classNotificationText(ClassifiedDevice d, ClassAlert alert, {String? Function(String mac)? vendorOf}) {
     final named = d.signatures.where((s) => alert.kinds.contains(s.kind)).map((s) => s.name).firstOrNull;
     final what = named ??
         d.guess.headline.replaceFirst(RegExp(r'^(Most likely|Probably|Could be) '), '');
-    final id = d.obs.mac.isNotEmpty ? _formatMac(d.obs.mac) : (d.obs.name.isNotEmpty ? d.obs.name : 'BLE');
-    return (what, '${alert.label} · $id · ${d.obs.rssi}dBm');
+    final o = d.obs;
+    final vendor = d.vendor ?? (o.mac.isEmpty ? null : vendorOf?.call(o.mac));
+    return (
+      what,
+      [
+        alert.label,
+        if (o.name.isNotEmpty && o.name != what) o.name,
+        o.mac.isNotEmpty ? o.mac.toUpperCase() : 'iOS ID ${o.key.substring(4)}',
+        if (vendor != null && vendor.isNotEmpty) vendor,
+        _signal(o.rssi),
+      ].join('\n'),
+    );
   }
+
+  static String _signal(int rssi) => 'Signal $rssi dBm (${DeviceExplain.rssiBand(rssi)})';
 
   void setClassAlert(ClassAlert a, bool on) {
     on ? classAlerts.add(a) : classAlerts.remove(a);
+    notifyListeners();
+    _savePrefs();
+  }
+
+  void setSignatureAlert(String id, bool on) {
+    on ? mutedSignatures.remove(id) : mutedSignatures.add(id);
     notifyListeners();
     _savePrefs();
   }
@@ -256,7 +281,7 @@ class NotificationService extends ChangeNotifier {
         id: _notifId(NotifChannel.foxhunt),
         channel: NotifChannel.foxhunt,
         title: 'Foxhunt: CLOSE',
-        body: 'Target ${_formatMac(mac)} signal ${rssi}dBm — very close!',
+        body: '${mac.toUpperCase()}\n${_signal(rssi)}',
         groupKey: NotifChannel.foxhunt,
       );
     } else if (rssi > -65 && previousRssi <= -65) {
@@ -265,7 +290,7 @@ class NotificationService extends ChangeNotifier {
         id: _notifId(NotifChannel.foxhunt),
         channel: NotifChannel.foxhunt,
         title: 'Foxhunt: Getting warm',
-        body: 'Target ${_formatMac(mac)} signal ${rssi}dBm',
+        body: '${mac.toUpperCase()}\n${_signal(rssi)}',
         groupKey: NotifChannel.foxhunt,
       );
     }
@@ -313,7 +338,7 @@ class NotificationService extends ChangeNotifier {
   }
 
   void _fireDetectionNotification(Detection det) {
-    final (title, body, channel) = detectionNotificationText(det);
+    final (title, body, channel) = detectionNotificationText(det, vendorOf: vendorOf);
 
     if (title == null || body == null || channel == null) return;
 
@@ -326,30 +351,22 @@ class NotificationService extends ChangeNotifier {
     );
   }
 
-  static (String?, String?, String?) detectionNotificationText(Detection det) {
+  static (String?, String?, String?) detectionNotificationText(Detection det, {String? Function(String mac)? vendorOf}) {
+    final vendor = det.macAddress.isEmpty ? null : vendorOf?.call(det.macAddress);
+    final radio = det.isBleDetection ? 'BLE' : (det.channel > 0 ? 'Wi-Fi ch ${det.channel}' : 'Wi-Fi');
+    String body(List<String?> head) => [
+          ...head.whereType<String>().where((s) => s.isNotEmpty),
+          det.macAddress.toUpperCase(),
+          if (vendor != null && vendor.isNotEmpty) vendor,
+          '$radio · ${_signal(det.rssi)}',
+          'Matched by ${methodLabel(det.method)}',
+        ].join('\n');
+    final name = det.ssid.isNotEmpty ? det.ssid : det.deviceName;
     return switch (det.engine) {
-      Engine.flockBle || Engine.flockWifi => (
-          'Flock Camera Detected',
-          det.engine == Engine.flockBle
-              ? '${_formatMac(det.macAddress)} BLE ${det.rssi}dBm'
-              : '${_formatMac(det.macAddress)} WiFi ch${det.channel} ${det.rssi}dBm',
-          NotifChannel.flock,
-        ),
-      Engine.detector => (
-          detectorTitle(det),
-          '${det.deviceName.isNotEmpty ? '${det.deviceName} ' : ''}${_formatMac(det.macAddress)} · ${det.rssi}dBm · ${methodLabel(det.method)}',
-          NotifChannel.detector,
-        ),
-      Engine.skySpy => (
-          'Drone Detected',
-          '${det.odid?.uavId ?? _formatMac(det.macAddress)} ${det.rssi}dBm',
-          NotifChannel.drone,
-        ),
-      Engine.foxhunter => (
-          'Foxhunt Signal',
-          '${_formatMac(det.macAddress)} ${det.rssi}dBm',
-          NotifChannel.foxhunt,
-        ),
+      Engine.flockBle || Engine.flockWifi => ('Flock camera', body([name]), NotifChannel.flock),
+      Engine.detector => (detectorTitle(det), body([name]), NotifChannel.detector),
+      Engine.skySpy => ('Drone', body([det.odid?.uavId, name]), NotifChannel.drone),
+      Engine.foxhunter => ('Foxhunt signal', body([name]), NotifChannel.foxhunt),
       _ => (null, null, null),
     };
   }
@@ -428,8 +445,6 @@ class NotificationService extends ChangeNotifier {
     return base + seq;
   }
 
-  static String _formatMac(String mac) =>
-      mac.length >= 8 ? mac.substring(0, 8).toUpperCase() : mac.toUpperCase();
 
   // --- Preferences persistence ---
 
@@ -449,6 +464,7 @@ class NotificationService extends ChangeNotifier {
     if (ca != null) {
       classAlerts = {for (final n in ca) ...ClassAlert.values.where((a) => a.name == n)};
     }
+    mutedSignatures = (p.getStringList('notif_muted_sigs') ?? const []).toSet();
     notifyListeners();
   }
 
@@ -465,6 +481,7 @@ class NotificationService extends ChangeNotifier {
     p.setBool('notif_sound', soundEnabled);
     p.setBool('notif_vibration', vibrationEnabled);
     p.setStringList('notif_class_alerts', [for (final a in classAlerts) a.name]);
+    p.setStringList('notif_muted_sigs', mutedSignatures.toList());
   }
 
   void setFlockEnabled(bool v) {
@@ -530,5 +547,5 @@ class NotificationService extends ChangeNotifier {
 
 final notificationServiceProvider =
     ChangeNotifierProvider<NotificationService>((ref) {
-  return NotificationService();
+  return NotificationService()..vendorOf = ref.read(ouiLookupProvider).lookup;
 });

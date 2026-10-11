@@ -1,13 +1,16 @@
 import 'dart:async';
 
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import 'package:oui_spy/core/app_state.dart';
 import 'package:oui_spy/core/ble/ble_manager.dart';
 import 'package:oui_spy/core/engine_control.dart';
 import 'package:oui_spy/core/models/detection.dart';
 import 'package:oui_spy/core/models/engine.dart';
 import 'package:oui_spy/theme/app_theme.dart';
+import 'package:oui_spy/widgets/ios.dart';
 
 class UnipwnScreen extends ConsumerStatefulWidget {
   const UnipwnScreen({super.key});
@@ -67,181 +70,132 @@ class _UnipwnScreenState extends ConsumerState<UnipwnScreen> {
 
     return Scaffold(
       backgroundColor: t.background,
-      appBar: AppBar(
-        title: const Text('UNIPWN'),
-        actions: [
-          Transform.scale(
-            scale: 0.7,
-            child: Switch(
-              value: isActive,
-              onChanged: _toggleEngine,
-              activeTrackColor: AppTheme.uniPwn.withValues(alpha: 0.3),
-              activeThumbColor: AppTheme.uniPwn,
+      body: IosPage(
+        title: 'UniPwn',
+        leading: CupertinoNavigationBarBackButton(
+          color: AppTheme.accent,
+          onPressed: () => context.canPop() ? context.pop() : context.go('/home'),
+        ),
+        slivers: [
+          SliverToBoxAdapter(
+            child: IosSection(
+              footer: 'Scans for Unitree robots over Bluetooth and sends control commands.',
+              children: [
+                IosRow(
+                  leading: const IosIcon(Icons.smart_toy, AppTheme.uniPwn),
+                  title: 'UniPwn',
+                  subtitle: Text(isActive ? 'Scanning' : 'Off'),
+                  trailing: CupertinoSwitch(
+                    value: isActive,
+                    activeTrackColor: AppTheme.uniPwn,
+                    onChanged: _toggleEngine,
+                  ),
+                ),
+                if (state.isManagerConnected)
+                  _UnipwnNodePicker(
+                    selected: _selectedNode,
+                    enabled: !isActive,
+                    onChanged: (v) => setState(() => _selectedNode = v),
+                  ),
+              ],
             ),
           ),
-        ],
-      ),
-      body: Column(
-        children: [
-          if (state.isManagerConnected)
-            Padding(
-              padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
-              child: _UnipwnNodePicker(
-                selected: _selectedNode,
-                enabled: !isActive,
-                onChanged: (v) => setState(() => _selectedNode = v),
+          SliverToBoxAdapter(
+            child: IosSection(
+              header: 'Targets',
+              children: [
+                if (robots.isEmpty)
+                  IosRow(
+                    leading: IosIcon(Icons.smart_toy, t.textDim),
+                    title: isActive ? 'Scanning for robots' : 'Enable to start scanning',
+                  )
+                else
+                  for (final r in robots)
+                    IosRow(
+                      leading: IosIcon(
+                        Icons.smart_toy,
+                        _selectedTarget == r.macAddress ? AppTheme.uniPwn : t.textSecondary,
+                      ),
+                      title: r.unipwn?.robotType ?? 'Unknown',
+                      subtitle: Text('${r.macAddress.toUpperCase()} · ${r.rssi} dBm'),
+                      trailing: _selectedTarget == r.macAddress
+                          ? const Icon(CupertinoIcons.check_mark, size: 20, color: AppTheme.accent)
+                          : null,
+                      onTap: () => setState(() => _selectedTarget = r.macAddress),
+                    ),
+              ],
+            ),
+          ),
+          if (_selectedTarget != null) ...[
+            SliverToBoxAdapter(
+              child: IosSection(
+                header: 'Commands',
+                footer: 'Target: ${_selectedTarget!.toUpperCase()}',
+                children: [
+                  IosRow(
+                    leading: const IosIcon(Icons.terminal, AppTheme.uniPwn),
+                    title: 'Enable SSH',
+                    onTap: () => _sendCommand(0),
+                  ),
+                  IosRow(
+                    leading: const IosIcon(Icons.key, AppTheme.uniPwn),
+                    title: 'Change root password',
+                    onTap: () => _sendCommand(1),
+                  ),
+                  IosRow(
+                    leading: const IosIcon(Icons.numbers, AppTheme.uniPwn),
+                    title: 'Get serial number',
+                    onTap: () => _sendCommand(2),
+                  ),
+                  IosRow(
+                    leading: const IosIcon(Icons.info_outline, AppTheme.uniPwn),
+                    title: 'Get system info',
+                    onTap: () => _sendCommand(4),
+                  ),
+                  IosRow(
+                    leading: const IosIcon(Icons.restart_alt, AppTheme.warning),
+                    title: 'Reboot',
+                    onTap: () => _sendCommand(3),
+                  ),
+                ],
               ),
             ),
-          SizedBox(
-            height: 160,
-            child: robots.isEmpty
-                ? Center(
-                    child: Text(
-                      isActive ? 'SCANNING FOR UNITREE ROBOTS...' : 'ENABLE TO START SCANNING',
-                      style: TextStyle(color: t.textDim, letterSpacing: 1, fontSize: 11),
-                    ),
-                  )
-                : ListView.builder(
-                    scrollDirection: Axis.horizontal,
-                    padding: const EdgeInsets.all(12),
-                    itemCount: robots.length,
-                    itemBuilder: (context, index) {
-                      final r = robots[index];
-                      final selected = _selectedTarget == r.macAddress;
-                      return GestureDetector(
-                        onTap: () => setState(() => _selectedTarget = r.macAddress),
-                        child: Container(
-                          width: 140,
-                          margin: const EdgeInsets.only(right: 8),
-                          padding: const EdgeInsets.all(12),
-                          decoration: BoxDecoration(
-                            color: selected
-                                ? AppTheme.uniPwn.withValues(alpha: 0.1)
-                                : t.surface,
-                            borderRadius: BorderRadius.circular(8),
-                            border: Border.all(
-                              color: selected
-                                  ? AppTheme.uniPwn
-                                  : t.border,
-                              width: selected ? 1.5 : 0.5,
-                            ),
-                          ),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Icon(Icons.smart_toy,
-                                  color: selected ? AppTheme.uniPwn : t.textDim,
-                                  size: 24),
-                              const Spacer(),
-                              Text(
-                                r.unipwn?.robotType ?? '?',
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                style: TextStyle(
-                                  color: selected ? AppTheme.uniPwn : t.textPrimary,
-                                  fontSize: 18,
-                                  fontWeight: FontWeight.w700,
-                                ),
-                              ),
-                              Text(
-                                r.macAddress.length >= 8 ? r.macAddress.substring(0, 8) : r.macAddress,
-                                style: TextStyle(
-                                  color: t.textDim, fontSize: 10, fontFamily: 'monospace',
-                                ),
-                              ),
-                              Text(
-                                '${r.rssi} dBm',
-                                style: TextStyle(
-                                  color: t.textDim, fontSize: 10, fontFamily: 'monospace',
-                                ),
-                              ),
-                            ],
+            SliverToBoxAdapter(
+              child: IosSection(
+                header: 'Custom command',
+                children: [
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 16),
+                    child: Row(
+                      children: [
+                        Expanded(
+                          child: CupertinoTextField(
+                            controller: _customCmdController,
+                            placeholder: 'Shell command',
+                            autocorrect: false,
+                            enableSuggestions: false,
+                            decoration: null,
+                            padding: const EdgeInsets.symmetric(vertical: 14),
+                            style: TextStyle(color: t.textPrimary, fontFamily: 'monospace', fontSize: 15),
+                            placeholderStyle: TextStyle(color: t.textDim, fontFamily: 'monospace', fontSize: 15),
                           ),
                         ),
-                      );
-                    },
-                  ),
-          ),
-          const Divider(),
-          // Exploit controls
-          Expanded(
-            child: _selectedTarget == null
-                ? Center(
-                    child: Text(
-                      'SELECT A TARGET',
-                      style: TextStyle(color: t.textDim, letterSpacing: 2, fontSize: 12),
-                    ),
-                  )
-                : ListView(
-                    padding: const EdgeInsets.all(16),
-                    children: [
-                      Text(
-                        'TARGET: ${_selectedTarget!.toUpperCase()}',
-                        style: const TextStyle(
-                          color: AppTheme.uniPwn,
-                          fontSize: 12,
-                          fontFamily: 'monospace',
-                          letterSpacing: 1,
+                        const SizedBox(width: 12),
+                        CupertinoButton(
+                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                          color: AppTheme.error,
+                          minimumSize: Size.zero,
+                          borderRadius: BorderRadius.circular(8),
+                          onPressed: () => _sendCommand(5, payload: _customCmdController.text),
+                          child: const Text('Run', style: TextStyle(color: CupertinoColors.white, fontSize: 15)),
                         ),
-                      ),
-                      const SizedBox(height: 16),
-                      _ExploitButton(
-                        label: 'ENABLE SSH',
-                        icon: Icons.terminal,
-                        onTap: () => _sendCommand(0),
-                      ),
-                      _ExploitButton(
-                        label: 'CHANGE ROOT PASSWORD',
-                        icon: Icons.key,
-                        onTap: () => _sendCommand(1),
-                      ),
-                      _ExploitButton(
-                        label: 'GET SERIAL NUMBER',
-                        icon: Icons.numbers,
-                        onTap: () => _sendCommand(2),
-                      ),
-                      _ExploitButton(
-                        label: 'GET SYSTEM INFO',
-                        icon: Icons.info_outline,
-                        onTap: () => _sendCommand(4),
-                      ),
-                      _ExploitButton(
-                        label: 'REBOOT',
-                        icon: Icons.restart_alt,
-                        color: AppTheme.warning,
-                        onTap: () => _sendCommand(3),
-                      ),
-                      const SizedBox(height: 16),
-                      // Custom command
-                      Row(
-                        children: [
-                          Expanded(
-                            child: TextField(
-                              controller: _customCmdController,
-                              style: TextStyle(
-                                color: t.textPrimary,
-                                fontFamily: 'monospace',
-                                fontSize: 13,
-                              ),
-                              decoration: const InputDecoration(
-                                hintText: 'Custom shell command',
-                                labelText: 'CUSTOM CMD',
-                              ),
-                            ),
-                          ),
-                          const SizedBox(width: 12),
-                          ElevatedButton(
-                            onPressed: () => _sendCommand(5, payload: _customCmdController.text),
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: AppTheme.error,
-                            ),
-                            child: const Text('EXEC'),
-                          ),
-                        ],
-                      ),
-                    ],
+                      ],
+                    ),
                   ),
-          ),
+                ],
+              ),
+            ),
+          ],
         ],
       ),
     );
@@ -263,86 +217,52 @@ class _UnipwnNodePicker extends ConsumerWidget {
     final appState = ref.watch(appStateProvider);
     final t = AppTheme.of(context);
     final nodes = appState.liveKnownNodes.toList()..sort();
+    String name(String id) {
+      final label = appState.labelForNode(id);
+      return label == id ? id : '$label ($id)';
+    }
     if (nodes.isEmpty) {
-      return Container(
-        padding: const EdgeInsets.all(12),
-        decoration: BoxDecoration(
-          color: t.surface,
-          border: Border.all(color: t.border),
-          borderRadius: BorderRadius.circular(8),
-        ),
-        child: Text('No mesh nodes seen yet.',
-            style: TextStyle(color: t.textDim, fontSize: 12)),
+      return IosRow(
+        leading: IosIcon(CupertinoIcons.device_laptop, t.textDim),
+        title: 'Run from',
+        detail: Text('No nodes seen yet', style: TextStyle(color: t.textDim, fontSize: 17)),
       );
     }
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-      decoration: BoxDecoration(
-        color: t.surface,
-        border: Border.all(color: t.border),
-        borderRadius: BorderRadius.circular(8),
+    final current = nodes.contains(selected) ? selected : null;
+    return IosRow(
+      leading: const IosIcon(CupertinoIcons.device_laptop, AppTheme.accent),
+      title: 'Run from',
+      detail: Text(
+        current == null ? 'Choose' : name(current),
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+        style: TextStyle(color: t.textSecondary, fontSize: 17),
       ),
-      child: Row(
-        children: [
-          Icon(Icons.memory, color: t.textDim, size: 18),
-          const SizedBox(width: 8),
-          Text('EXEC NODE',
-              style: TextStyle(color: t.textDim, fontSize: 11, letterSpacing: 1.5)),
-          const SizedBox(width: 8),
-          Expanded(
-            child: DropdownButton<String>(
-              isExpanded: true,
-              value: nodes.contains(selected) ? selected : null,
-              hint: const Text('— Pick Node —'),
-              underline: const SizedBox.shrink(),
-              onChanged: enabled ? onChanged : null,
-              items: nodes.map((id) {
-                final label = appState.labelForNode(id);
-                return DropdownMenuItem(
-                  value: id,
-                  child: Text(label == id ? id : '$label ($id)',
-                      overflow: TextOverflow.ellipsis, maxLines: 1),
-                );
-              }).toList(),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _ExploitButton extends StatelessWidget {
-  const _ExploitButton({
-    required this.label,
-    required this.icon,
-    required this.onTap,
-    this.color = AppTheme.uniPwn,
-  });
-  final String label;
-  final IconData icon;
-  final VoidCallback onTap;
-  final Color color;
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 8),
-      child: OutlinedButton(
-        onPressed: onTap,
-        style: OutlinedButton.styleFrom(
-          foregroundColor: color,
-          side: BorderSide(color: color.withValues(alpha: 0.4)),
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-        ),
-        child: Row(
-          children: [
-            Icon(icon, size: 18),
-            const SizedBox(width: 12),
-            Text(label, style: const TextStyle(letterSpacing: 1, fontSize: 12)),
-          ],
-        ),
-      ),
+      chevron: enabled,
+      disabled: !enabled,
+      onTap: !enabled
+          ? null
+          : () async {
+              final v = await showCupertinoModalPopup<String>(
+                context: context,
+                builder: (ctx) => CupertinoActionSheet(
+                  title: const Text('Run from which node?'),
+                  actions: [
+                    for (final id in nodes)
+                      CupertinoActionSheetAction(
+                        isDefaultAction: id == current,
+                        onPressed: () => Navigator.pop(ctx, id),
+                        child: Text(name(id)),
+                      ),
+                  ],
+                  cancelButton: CupertinoActionSheetAction(
+                    onPressed: () => Navigator.pop(ctx),
+                    child: const Text('Cancel'),
+                  ),
+                ),
+              );
+              if (v != null) onChanged(v);
+            },
     );
   }
 }
