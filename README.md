@@ -85,7 +85,8 @@ Bottom tabs: **HOME · DETECTIONS · MAP · SETTINGS**.
 
 - **Home**: session bar (targets, radio, START / PAUSE / STOP) and one card per engine. Status bar shows link, GPS fix and node count.
 - **Detections**: LIVE (every hit; filter, sort, search, export), DEVICES (each device classified by vendor, Bluetooth data and signatures), HISTORY (stored log, CSV export). Tap a row to foxhunt or map it.
-- **Classification**: OUI vendor categories, Bluetooth SIG company and service IDs, AntiHunter tables, Fieldwatch signatures. Alerts per class (cameras, law enforcement, drones, glasses, trackers) in SETTINGS → ALERTS.
+- **Classification**: OUI vendor categories, Bluetooth SIG company and service IDs, AntiHunter tables, Fieldwatch signatures. Each device gets a class (trackers, cameras, public safety & fleet, drones, glasses, hacking tools, routers, home & office, …), a confidence dot, and its decoded advertisement (Apple Continuity type, manufacturer data, service UUIDs). Class alerts are on by default.
+- **Phone scan**: off by default. Turn on from the DEVICES menu (SCAN WITH THIS PHONE) to have the phone's own Bluetooth listen alongside the board, 8 s every 20 s. The ESP32 / PHONE filter shows which radio saw each device.
 - **Notifications**: title is the matched target (watchlist name, signature, probed SSID); body is device, MAC prefix, RSSI, method.
 - **Watchlist**: import and export as CSV or JSON in SETTINGS → RULES.
 - **Map**: choose targets (WiGLE / Flock / Drone / Detector) and radio (Wi-Fi / BLE / both), then START. Sessions save as WiGLE CSV, upload to [WiGLE](https://wigle.net) and [WDGWars](https://wdgwars.pl), and replay on the map.

@@ -1,4 +1,5 @@
 #include "ble_coex.h"
+#include "mesh_espnow.h"
 #include <Arduino.h>
 
 #define BLE_COEX_MAX 8
@@ -48,8 +49,16 @@ void bleCoexRegister(NimBLEAdvertisedDeviceCallbacks* cb, bool activeScan) {
     Serial.printf("[BLE-COEX] register (count=%d)\n", count);
 }
 
+void bleCoexPauseForMesh(void) {
+    NimBLEScan* s = NimBLEDevice::getScan();
+    if (s->isScanning()) s->stop();
+}
+
 void bleCoexEnsureScanning(void) {
     if (g_count == 0) return;
+#if CONFIG_IDF_TARGET_ESP32
+    if (meshIsEnabled() && meshInMeshWindow()) return;
+#endif
     NimBLEScan* s = NimBLEDevice::getScan();
     if (s->isScanning()) return;
     s->setActiveScan(g_wantActive);

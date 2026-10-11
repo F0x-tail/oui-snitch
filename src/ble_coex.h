@@ -6,3 +6,4 @@ void bleCoexUnregister(NimBLEAdvertisedDeviceCallbacks* cb);
 NimBLEScan* bleCoexScan(void);
 bool bleCoexActive(void);
 void bleCoexEnsureScanning(void);
+void bleCoexPauseForMesh(void);

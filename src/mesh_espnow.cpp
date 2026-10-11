@@ -5,6 +5,7 @@
 #include "engines/detector.h"
 #include "wifi_ota_handler.h"
 #include "radio_coex.h"
+#include "ble_coex.h"
 #include <stddef.h>
 #include "ble_gatt.h"
 #include <Arduino.h>
@@ -1381,6 +1382,9 @@ static void meshSchedTaskFn(void* arg) {
             esp_wifi_set_channel(MESH_RENDEZVOUS_CH, WIFI_SECOND_CHAN_NONE);
             xSemaphoreGive(txMutex);
         }
+#if CONFIG_IDF_TARGET_ESP32
+        bleCoexPauseForMesh();
+#endif
         if (meshTxTaskHandle) xTaskNotifyGive(meshTxTaskHandle);
         uint32_t t0 = millis();
         for (;;) {
@@ -1449,7 +1453,9 @@ void meshInit(void) {
 #ifdef OUISPY_NIMBLE2
     xTaskCreateWithCaps(retryTaskFn, "meshRetry", 4096, NULL, 1, &retryTaskHandle, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
     xTaskCreateWithCaps(meshTxTaskFn, "meshTx", 4096, NULL, 3, &meshTxTaskHandle, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
+#ifndef OUISPY_ROLE_MANAGER
     xTaskCreatePinnedToCoreWithCaps(meshSchedTaskFn, "meshSched", 4096, NULL, 2, &meshSchedTaskHandle, 0, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
+#endif
 #else
     xTaskCreate(retryTaskFn, "meshRetry", 4096, NULL, 1, &retryTaskHandle);
     xTaskCreate(meshTxTaskFn, "meshTx", 4096, NULL, 3, &meshTxTaskHandle);

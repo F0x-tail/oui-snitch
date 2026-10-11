@@ -705,6 +705,25 @@ static int e2eReadNodeMask(void) {
     return -1;
 }
 
+static bool e2eNodesMatch(const char* ph, uint8_t want, uint8_t mustOff) {
+    MeshLiveNode live[MESH_LIVE_NODES_MAX];
+    size_t n = meshGetLiveNodes(live, MESH_LIVE_NODES_MAX, MESH_NODE_TIMEOUT_MS);
+    int seen = 0;
+    bool ok = true;
+    for (size_t i = 0; i < n; i++) {
+        if (live[i].role == MESH_ROLE_MANAGER) continue;
+        uint8_t d = mgrNodeDenyMask(live[i].id);
+        uint8_t w = (uint8_t)(want & ~d);
+        uint8_t m = live[i].active_engines;
+        bool nok = (m & w) == w && !(m & mustOff) && !(m & d & ~ENGINE_BITMASK(ENGINE_PCAP));
+        Serial.printf("[E2E] %s node=%.4s mask=0x%02X deny=0x%02X want=0x%02X off=0x%02X %s\n",
+                      ph, live[i].id, m, d, w, mustOff, nok ? "ok" : "MISS");
+        ok = ok && nok;
+        seen++;
+    }
+    return seen > 0 && ok;
+}
+
 static void e2eEnableEngine(uint8_t eng) {
     mgrCommandedMask |= (uint8_t)ENGINE_BITMASK(eng);
     mgrCommandedStates[eng] = (uint8_t)ESTATE_SCANNING;
@@ -746,10 +765,11 @@ static void e2eSmokeTask(void* arg) {
     e2eEnableEngine(ENGINE_FLOCK_WIFI);
     e2eEnableEngine(ENGINE_SKYSPY);
     e2eEnableEngine(ENGINE_WARDRIVE);
-    vTaskDelay(pdMS_TO_TICKS(10000));
-    int m = e2eReadNodeMask();
-    Serial.printf("[E2E] A node mask=0x%02X want=0x%02X\n", m, targeted | wbit);
-    if (m < 0 || (m & (targeted | wbit)) != (targeted | wbit)) {
+    for (int t = 0; t < 15; t++) {
+        vTaskDelay(pdMS_TO_TICKS(2000));
+        if (e2eNodesMatch("A", (uint8_t)(targeted | wbit), 0)) break;
+    }
+    if (!e2eNodesMatch("A", (uint8_t)(targeted | wbit), 0)) {
         pass = false; Serial.println("[E2E] A FAIL not all engines started");
     } else Serial.println("[E2E] A PASS all engines incl wigle scanning on node");
 
@@ -759,14 +779,10 @@ static void e2eSmokeTask(void* arg) {
     Serial.printf("[E2E] B mgrCommandedMask after drop=0x%02X\n", mgrCommandedMask);
     for (int t = 0; t < 15; t++) {
         vTaskDelay(pdMS_TO_TICKS(2000));
-        int nm = e2eReadNodeMask();
-        Serial.printf("[E2E] B t=%ds node mask=0x%02X mgrMask=0x%02X\n",
-                      (t + 1) * 2, nm, mgrCommandedMask);
-        if (nm >= 0 && !(nm & wbit)) break;
+        Serial.printf("[E2E] B t=%ds mgrMask=0x%02X\n", (t + 1) * 2, mgrCommandedMask);
+        if (e2eNodesMatch("B", targeted, wbit)) break;
     }
-    m = e2eReadNodeMask();
-    Serial.printf("[E2E] B node mask=0x%02X want=0x%02X (wigle off)\n", m, targeted);
-    if (m < 0 || (m & wbit) || (m & targeted) != targeted) {
+    if (!e2eNodesMatch("B", targeted, wbit)) {
         pass = false; Serial.println("[E2E] B FAIL wigle not dropped or targeted lost");
     } else Serial.println("[E2E] B PASS wigle dropped, flock+drone+detect kept");
 
@@ -776,13 +792,10 @@ static void e2eSmokeTask(void* arg) {
     e2eEnableEngine(ENGINE_WARDRIVE);
     for (int t = 0; t < 12; t++) {
         vTaskDelay(pdMS_TO_TICKS(2000));
-        int nm = e2eReadNodeMask();
-        Serial.printf("[E2E] C t=%ds node mask=0x%02X\n", (t + 1) * 2, nm);
-        if (nm >= 0 && (nm & wbit)) break;
+        Serial.printf("[E2E] C t=%ds\n", (t + 1) * 2);
+        if (e2eNodesMatch("C", (uint8_t)(targeted | wbit), 0)) break;
     }
-    m = e2eReadNodeMask();
-    Serial.printf("[E2E] C node mask=0x%02X want wigle bit 0x%02X\n", m, wbit);
-    if (m < 0 || !(m & wbit)) {
+    if (!e2eNodesMatch("C", (uint8_t)(targeted | wbit), 0)) {
         pass = false; Serial.println("[E2E] C FAIL wigle did not restart");
     } else Serial.println("[E2E] C PASS wigle restarted like before");
     offlineScanEnabled = prevOffline;

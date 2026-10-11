@@ -699,6 +699,14 @@
         path: 'mgr-s3_devkitc/',
         flashSize: '16MB', flashMode: 'keep', flashFreq: 'keep',
       },
+      'mgr-xiao_c5': {
+        role: 'mgr', name: 'XIAO ESP32-C5', chip: 'ESP32-C5', flash: '8MB',
+        experimental: true,
+        label: 'XIAO ESP32-C5 (manager)',
+        path: 'mgr-xiao_c5/',
+        flashSize: '8MB', flashMode: 'keep', flashFreq: 'keep',
+        bootloaderOffset: 0x2000,
+      },
       'mgr-xiao_c3': {
         role: 'mgr', name: 'XIAO ESP32-C3', chip: 'ESP32-C3', flash: '4MB',
         label: 'XIAO ESP32-C3 (manager)',

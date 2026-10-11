@@ -100,6 +100,10 @@ jobs:
             role: mgr
             board: s3_devkitc
             chip: esp32s3
+          - env: v3_node_manager_c5
+            role: mgr
+            board: xiao_c5
+            chip: esp32c5
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
         with:
@@ -168,7 +172,7 @@ jobs:
           for pair in node:xiao_s3 node:s3_devkitc node:xiao_c5 \
                       node:tdongle_s3 node:tdongle_c5 \
                       node:stickc node:stickc_plus node:stickc_plus2 \
-                      mgr:xiao_s3 mgr:s3_devkitc mgr:xiao_c3 mgr:wroom; do
+                      mgr:xiao_s3 mgr:s3_devkitc mgr:xiao_c3 mgr:wroom mgr:xiao_c5; do
             ROLE="${pair%%:*}"; BOARD="${pair##*:}"
             STEM="oui-spy-${ROLE}-${BOARD}-${VERSION}"
             DEST="docs/firmware/${ROLE}-${BOARD}"

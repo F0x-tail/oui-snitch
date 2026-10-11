@@ -36,7 +36,7 @@ class _WatchlistPanelState extends ConsumerState<WatchlistPanel> {
               ),
               const Spacer(),
               IconButton(icon: const Icon(Icons.add), tooltip: 'Add target', onPressed: _showEditDialog),
-              IconButton(icon: const Icon(Icons.file_download), tooltip: 'Import (JSON/CSV)', onPressed: _import),
+              IconButton(icon: const Icon(Icons.playlist_add), tooltip: 'Import list (JSON/CSV)', onPressed: _import),
               IconButton(
                 icon: const Icon(Icons.ios_share),
                 tooltip: 'Export (JSON)',

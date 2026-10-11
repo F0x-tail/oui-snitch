@@ -175,14 +175,17 @@ class DetectionRow extends ConsumerWidget {
                         fontFamily: 'monospace',
                         fontWeight: FontWeight.w700,
                       )),
-                  const SizedBox(width: 4),
+                  const SizedBox(width: 6),
                   _ActionIcon(
+                      label: 'Hunt',
                       icon: Icons.gps_fixed,
                       color: AppTheme.foxhunter,
                       tooltip: connected ? 'Foxhunt' : 'Foxhunt (node disconnected)',
                       onTap: connected ? () => _startFoxhunt(context, ref) : null,
                     ),
+                  const SizedBox(width: 6),
                   _ActionIcon(
+                    label: 'Map',
                     icon: detection.approxGps ? Icons.location_searching : Icons.location_on,
                     color: !hasGps
                         ? AppTheme.gpsNone
@@ -723,11 +726,13 @@ Color _rssiColor(int rssi) {
 
 class _ActionIcon extends StatelessWidget {
   const _ActionIcon({
+    required this.label,
     required this.icon,
     required this.color,
     required this.tooltip,
     required this.onTap,
   });
+  final String label;
   final IconData icon;
   final Color color;
   final String tooltip;
@@ -736,19 +741,32 @@ class _ActionIcon extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final enabled = onTap != null;
-    final fg = enabled ? color : color.withValues(alpha: 0.3);
+    final fg = enabled ? color : color.withValues(alpha: 0.35);
+    final shape = RoundedRectangleBorder(borderRadius: BorderRadius.circular(8));
     return Tooltip(
       message: tooltip,
       child: Material(
-        color: Colors.transparent,
-        shape: const CircleBorder(),
+        color: fg.withValues(alpha: enabled ? 0.16 : 0.08),
+        shape: shape,
         child: InkWell(
-          customBorder: const CircleBorder(),
+          customBorder: shape,
           onTap: onTap,
-          child: SizedBox(
-            width: 32,
-            height: 32,
-            child: Icon(icon, size: 19, color: fg),
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(minHeight: 36),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 10),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(icon, size: 16, color: fg),
+                  const SizedBox(width: 4),
+                  Text(
+                    label,
+                    style: TextStyle(color: fg, fontSize: 12, fontWeight: FontWeight.w700),
+                  ),
+                ],
+              ),
+            ),
           ),
         ),
       ),
@@ -1532,8 +1550,9 @@ class DroneDetectionRow extends ConsumerWidget {
                         fontFamily: 'monospace',
                         fontWeight: FontWeight.w700,
                       )),
-                  const SizedBox(width: 4),
+                  const SizedBox(width: 6),
                   _ActionIcon(
+                    label: 'Map',
                     icon: Icons.location_on,
                     color: hasGps ? AppTheme.gpsGood : AppTheme.gpsNone,
                     tooltip: hasGps ? 'Show on map' : 'No GPS fix',

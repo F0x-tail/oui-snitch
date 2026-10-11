@@ -702,6 +702,7 @@ class DeviceDetailSheet extends ConsumerWidget {
               style: barLabelStyle(context, t.textDim, bold: false),
             ),
           ),
+          SizedBox(width: gap),
           Expanded(child: SelectableText(v, style: body)),
         ],
       ),
