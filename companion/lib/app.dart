@@ -1,10 +1,11 @@
-import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:oui_spy/features/config/config_menu_state.dart';
 import 'package:oui_spy/features/config/device_config.dart';
 import 'package:oui_spy/features/detections/detections_screen.dart';
-import 'package:oui_spy/features/devices/devices_screen.dart';
+import 'package:oui_spy/features/config/widgets/config_nav.dart'
+    show kConfigSectionSheetRoute;
 import 'package:oui_spy/features/engines/detector_screen.dart';
 import 'package:oui_spy/features/engines/foxhunter_screen.dart';
 import 'package:oui_spy/features/engines/skyspy_screen.dart';
@@ -42,12 +43,6 @@ final routerProvider = Provider<GoRouter>((ref) {
             path: '/detections',
             pageBuilder: (context, state) => const NoTransitionPage(
               child: DetectionsScreen(),
-            ),
-          ),
-          GoRoute(
-            path: '/devices',
-            pageBuilder: (context, state) => const NoTransitionPage(
-              child: DevicesScreen(),
             ),
           ),
           GoRoute(
@@ -113,6 +108,7 @@ class _OuiSpyAppState extends ConsumerState<OuiSpyApp>
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
+    ref.read(configMenuWantedProvider.notifier).state = false;
   }
 
   @override
@@ -146,33 +142,9 @@ class _OuiSpyAppState extends ConsumerState<OuiSpyApp>
       themeMode: themeMode,
       routerConfig: router,
       debugShowCheckedModeBanner: false,
-      builder: (context, child) {
-        final mq = MediaQuery.of(context);
-        return MediaQuery(
-          data: mq.copyWith(textScaler: _AppTextScaler(mq.textScaler)),
-          child: _GlobalPcapBannerOverlay(child: child ?? const SizedBox.shrink()),
-        );
-      },
+      builder: (context, child) => _GlobalPcapBannerOverlay(child: child ?? const SizedBox.shrink()),
     );
   }
-}
-
-class _AppTextScaler extends TextScaler {
-  const _AppTextScaler(this.system);
-
-  final TextScaler system;
-
-  @override
-  double scale(double fontSize) => system.scale(fontSize * 1.2);
-
-  @override
-  double get textScaleFactor => system.scale(1.2);
-
-  @override
-  bool operator ==(Object other) => other is _AppTextScaler && other.system == system;
-
-  @override
-  int get hashCode => system.hashCode;
 }
 
 class _GlobalPcapBannerOverlay extends ConsumerWidget {
@@ -261,33 +233,66 @@ class AppShell extends ConsumerStatefulWidget {
 }
 
 class _AppShellState extends ConsumerState<AppShell> {
-  static const _routes = ['/home', '/detections', '/devices', '/wardrive', '/config'];
+  static const _routes = ['/home', '/detections', '/wardrive', '/config'];
+  static const _configIndex = 3;
+
+  bool get _sectionSheetOpen {
+    final nav = _shellNavigatorKey.currentState;
+    if (nav == null) return false;
+    var open = false;
+    nav.popUntil((r) {
+      if (r.settings.name == kConfigSectionSheetRoute) open = true;
+      return true;
+    });
+    return open;
+  }
+
   void _onNavTap(int i) {
-    if (_routes[i] != GoRouterState.of(context).uri.path) context.go(_routes[i]);
+    final alreadyHere = _routes[i] == GoRouterState.of(context).uri.path;
+    if (i == _configIndex && alreadyHere) {
+      ref.read(configMenuWantedProvider.notifier).state = !_sectionSheetOpen;
+    }
+    if (!alreadyHere) {
+      context.go(_routes[i]);
+    }
   }
 
   @override
   Widget build(BuildContext context) {
     final location = GoRouterState.of(context).uri.path;
     final index = _routes.indexOf(location);
-    final t = AppTheme.of(context);
     return Scaffold(
       body: widget.child,
-      bottomNavigationBar: CupertinoTabBar(
+      bottomNavigationBar: Container(
+        decoration: BoxDecoration(
+          border: Border(top: BorderSide(color: AppTheme.of(context).border, width: 0.5)),
+        ),
+        child: BottomNavigationBar(
         currentIndex: index < 0 ? 0 : index,
         onTap: _onNavTap,
-        backgroundColor: t.surface.withValues(alpha: 0.94),
-        activeColor: AppTheme.accent,
-        inactiveColor: t.textDim,
-        border: Border(top: BorderSide(color: t.border, width: 0.5)),
         items: const [
-          BottomNavigationBarItem(icon: Icon(CupertinoIcons.house_fill), label: 'Home'),
-          BottomNavigationBarItem(icon: Icon(CupertinoIcons.dot_radiowaves_left_right), label: 'Live'),
-          BottomNavigationBarItem(icon: Icon(CupertinoIcons.device_phone_portrait), label: 'Devices'),
-          BottomNavigationBarItem(icon: Icon(CupertinoIcons.map_fill), label: 'Wardrive'),
-          BottomNavigationBarItem(icon: Icon(CupertinoIcons.gear_alt_fill), label: 'Settings'),
+          BottomNavigationBarItem(
+            icon: Icon(Icons.home_outlined),
+            activeIcon: Icon(Icons.home),
+            label: 'Home',
+          ),
+          BottomNavigationBarItem(
+            icon: Icon(Icons.list_alt_outlined),
+            activeIcon: Icon(Icons.list_alt),
+            label: 'Detections',
+          ),
+          BottomNavigationBarItem(
+            icon: Icon(Icons.map_outlined),
+            activeIcon: Icon(Icons.map),
+            label: 'Map',
+          ),
+          BottomNavigationBarItem(
+            icon: Icon(Icons.settings_outlined),
+            activeIcon: Icon(Icons.settings),
+            label: 'Settings',
+          ),
         ],
-      ),
+      )),
     );
   }
 }

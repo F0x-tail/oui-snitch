@@ -1,10 +1,8 @@
 import 'dart:async';
 import 'dart:io';
 
-import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 import 'package:oui_spy/core/app_state.dart';
 import 'package:oui_spy/core/db/app_database.dart' show databaseProvider;
@@ -21,33 +19,19 @@ import 'package:oui_spy/features/feed/feed_stats_header.dart';
 import 'package:oui_spy/features/feed/filter_bar.dart';
 import 'package:oui_spy/theme/app_theme.dart';
 import 'package:oui_spy/widgets/command_bar.dart';
-import 'package:oui_spy/widgets/ios.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:share_plus/share_plus.dart';
 
+
 enum FeedMetric {
-  time('Time'),
-  rssi('Signal'),
-  count('Times seen'),
-  name('Name'),
-  channel('Channel');
+  time('TIME'),
+  rssi('RSSI'),
+  count('COUNT'),
+  name('NAME'),
+  channel('CH');
 
   const FeedMetric(this.label);
   final String label;
-}
-
-class LiveHistorySwitch extends StatelessWidget {
-  const LiveHistorySwitch({super.key, required this.live, required this.onChanged});
-
-  final bool live;
-  final ValueChanged<bool> onChanged;
-
-  @override
-  Widget build(BuildContext context) => IosSegments<bool>(
-        value: live,
-        segments: const {true: 'Live', false: 'History'},
-        onChanged: onChanged,
-      );
 }
 
 class FeedScreen extends ConsumerStatefulWidget {
@@ -66,7 +50,8 @@ class _FeedScreenState extends ConsumerState<FeedScreen> {
   String? _selectedNode;
   bool _showStats = true;
   FeedMetric _sortMetric = FeedMetric.time;
-  bool _sortAscending = false;
+  bool _sortAscending = false; // false = descending (newest/strongest/most first)
+  bool _searchOpen = false;
   final _searchCtrl = TextEditingController();
   Timer? _searchDebounce;
   List<Detection> _dbHits = const [];
@@ -110,44 +95,89 @@ class _FeedScreenState extends ConsumerState<FeedScreen> {
     }
   }
 
+  /// Live feed rows plus stored-history hits the 500-row buffer no longer holds.
+  List<Detection> _withDbHits(List<Detection> live) =>
+      _mergeHistory(live, _dbHits);
+
   List<Detection> _mergeHistory(List<Detection> live, List<Detection> history) {
     if (history.isEmpty) return live;
-    final seen = <String>{for (final d in live) '${d.macAddress}|${d.engine.name}'};
-    final extra = history.where((d) => seen.add('${d.macAddress}|${d.engine.name}')).toList();
+    final seen = <String>{
+      for (final d in live) '${d.macAddress}|${d.engine.name}',
+    };
+    final extra = history
+        .where((d) => seen.add('${d.macAddress}|${d.engine.name}'))
+        .toList();
     if (extra.isEmpty) return live;
     return [...live, ...extra];
   }
 
-  bool get _allEnginesActive => _activeFilters.length == Engine.values.length && _activeRadio == null;
+  bool get _allEnginesActive =>
+      _activeFilters.length == Engine.values.length && _activeRadio == null;
 
-  int get _activeFilterCount => (_allEnginesActive ? 0 : 1) + (_selectedNode != null ? 1 : 0);
+  int get _activeFilterCount {
+    var n = 0;
+    if (!_allEnginesActive) n++;
+    if (_selectedNode != null) n++;
+    return n;
+  }
 
   String _engineFilterLabel() {
     for (final p in FilterPreset.values) {
       if (p == FilterPreset.all) continue;
       if (p.matches(_activeFilters, _activeRadio)) return p.label;
     }
-    if (_activeFilters.isEmpty) return 'No engines';
-    return '${_activeFilters.length} engines';
+    if (_activeFilters.isEmpty) return 'NO ENGINES';
+    return '${_activeFilters.length} ENGINES';
   }
 
-  void _resetFilters() => setState(() {
+  String _nodeLabel(String Function(String) labelForNode) {
+    if (_selectedNode == null) return 'ALL';
+    if (_selectedNode!.isEmpty) return 'LOCAL';
+    return labelForNode(_selectedNode!);
+  }
+
+  void _toggleSearch() {
+    _searchDebounce?.cancel();
+    setState(() {
+      _searchOpen = !_searchOpen;
+      if (!_searchOpen) {
+        _searchCtrl.clear();
+        _searchQuery = '';
+        _dbHits = const [];
+        _dbSearching = false;
+      }
+    });
+  }
+
+  void _resetEngineFilters() => setState(() {
         _activeFilters = Engine.values.toSet();
         _activeRadio = null;
-        _selectedNode = null;
       });
 
-  List<Detection> _mergeFlockFromWardrive(List<Detection> feed, WardriveController wd) {
-    if (!wd.isActive || !wd.includesFlock) return feed;
+  List<Detection> _mergeFlockFromWardrive(
+    List<Detection> feedDetections,
+    WardriveController wd,
+  ) {
+    if (!wd.isActive || !wd.includesFlock) return feedDetections;
+
     final flockDets = wd.flockDetections;
-    if (flockDets.isEmpty) return feed;
-    final have = <String>{
-      for (final d in feed)
-        if (d.engine == Engine.flockBle || d.engine == Engine.flockWifi) d.macAddress,
-    };
-    final missing = flockDets.where((d) => !have.contains(d.macAddress)).toList();
-    if (missing.isEmpty) return feed;
-    return [...missing, ...feed];
+    if (flockDets.isEmpty) return feedDetections;
+
+    final feedFlockMacs = <String>{};
+    for (final d in feedDetections) {
+      if (d.engine == Engine.flockBle || d.engine == Engine.flockWifi) {
+        feedFlockMacs.add(d.macAddress);
+      }
+    }
+
+    final missing = flockDets
+        .where((d) => !feedFlockMacs.contains(d.macAddress))
+        .toList();
+    if (missing.isEmpty) return feedDetections;
+
+    final merged = List<Detection>.from(feedDetections);
+    merged.insertAll(0, missing);
+    return merged;
   }
 
   bool _radioMatches(Detection d) {
@@ -156,7 +186,6 @@ class _FeedScreenState extends ConsumerState<FeedScreen> {
   }
 
   List<Detection> _filter(List<Detection> detections) {
-    final q = _searchQuery.trim().toLowerCase();
     return detections.where((d) {
       if (!_activeFilters.contains(d.engine)) return false;
       if (!_radioMatches(d)) return false;
@@ -164,18 +193,22 @@ class _FeedScreenState extends ConsumerState<FeedScreen> {
         if (_selectedNode == '' && d.sourceNodeId.isNotEmpty) return false;
         if (_selectedNode!.isNotEmpty && d.sourceNodeId != _selectedNode) return false;
       }
-      if (q.isEmpty) return true;
-      return d.macAddress.toLowerCase().contains(q) ||
-          d.deviceName.toLowerCase().contains(q) ||
-          d.ssid.toLowerCase().contains(q) ||
-          d.method.toLowerCase().contains(q) ||
-          d.sourceNodeId.toLowerCase().contains(q);
+      if (_searchQuery.trim().isNotEmpty) {
+        final q = _searchQuery.trim().toLowerCase();
+        return d.macAddress.toLowerCase().contains(q) ||
+            d.deviceName.toLowerCase().contains(q) ||
+            d.ssid.toLowerCase().contains(q) ||
+            d.method.toLowerCase().contains(q) ||
+            d.sourceNodeId.toLowerCase().contains(q);
+      }
+      return true;
     }).toList();
   }
 
   List<Detection> _sorted(List<Detection> detections) {
     final sorted = List<Detection>.from(detections);
-    int dir(int v) => _sortAscending ? v : -v;
+    final asc = _sortAscending;
+    int dir(int v) => asc ? v : -v;
     switch (_sortMetric) {
       case FeedMetric.time:
         sorted.sort((a, b) => dir(a.appTimestamp.compareTo(b.appTimestamp)));
@@ -191,204 +224,284 @@ class _FeedScreenState extends ConsumerState<FeedScreen> {
     return sorted;
   }
 
-  String get _sortDirection => switch ((_sortMetric, _sortAscending)) {
-        (FeedMetric.time, true) => 'oldest first',
-        (FeedMetric.time, false) => 'newest first',
-        (FeedMetric.rssi, true) => 'weakest first',
-        (FeedMetric.rssi, false) => 'strongest first',
-        (FeedMetric.count, true) => 'fewest first',
-        (FeedMetric.count, false) => 'most first',
-        (FeedMetric.name, true) => 'A to Z',
-        (FeedMetric.name, false) => 'Z to A',
-        (FeedMetric.channel, true) => 'lowest first',
-        (FeedMetric.channel, false) => 'highest first',
-      };
-
   @override
   Widget build(BuildContext context) {
+    final t = AppTheme.of(context);
     final state = ref.watch(appStateProvider);
     final wd = ref.watch(wardriveProvider);
     final merged = _mergeFlockFromWardrive(state.recentDetections, wd);
-    final hasQuery = _searchQuery.trim().isNotEmpty;
-    final scope = hasQuery ? _mergeHistory(merged, _dbHits) : merged;
-    final filtered = _sorted(_filter(scope));
+    final searchScope =
+        _searchQuery.trim().isEmpty ? merged : _withDbHits(merged);
+    final filtered = _sorted(_filter(searchScope));
     final sourceNodes = state.isManagerConnected ? state.meshSourceNodes : const <String>{};
 
     final droneGroups = groupDronesByUavId(filtered);
-    final droneIds = droneGroups.map((g) => g.uavId).toSet();
-    final rows = filtered.where((d) {
+    final droneUavIds = droneGroups.map((g) => g.uavId).toSet();
+    final nonDroneRows = filtered.where((d) {
       if (d.engine != Engine.skySpy) return true;
       final id = d.odid?.uavId ?? '';
-      return id.isEmpty || !droneIds.contains(id);
+      return id.isEmpty || !droneUavIds.contains(id);
     }).toList();
-    final items = <Object>[...rows, ...droneGroups];
-    final index = Map<Detection, int>.identity();
-    for (var i = 0; i < rows.length; i++) {
-      index[rows[i]] = i;
+
+    final feedItems = <Object>[...nonDroneRows, ...droneGroups];
+    final rowIndex = Map<Detection, int>.identity();
+    for (int i = 0; i < nonDroneRows.length; i++) {
+      rowIndex[nonDroneRows[i]] = i;
     }
-    items.sort((a, b) {
-      if (a is Detection && b is Detection) return index[a]!.compareTo(index[b]!);
-      DateTime ts(Object o) => o is Detection ? o.appTimestamp : (o as DroneGroup).representative.appTimestamp;
-      return _sortAscending ? ts(a).compareTo(ts(b)) : ts(b).compareTo(ts(a));
+    feedItems.sort((a, b) {
+      DateTime ts(Object o) => o is Detection
+          ? o.appTimestamp
+          : (o as DroneGroup).representative.appTimestamp;
+      final byTime = _sortAscending
+          ? ts(a).compareTo(ts(b))
+          : ts(b).compareTo(ts(a));
+      if (a is Detection && b is Detection) {
+        return rowIndex[a]!.compareTo(rowIndex[b]!);
+      }
+      return byTime;
     });
 
-    final filterSummary = [
-      if (!_allEnginesActive) _engineFilterLabel(),
-      if (_selectedNode != null) _selectedNode!.isEmpty ? 'This node' : state.labelForNode(_selectedNode!),
-    ].join(' · ');
+    final hasQuery = _searchQuery.trim().isNotEmpty;
 
-    return IosPage(
-      title: 'Live',
-      actions: [
-        IosNavButton(
-          icon: _activeFilterCount > 0 ? CupertinoIcons.line_horizontal_3_decrease_circle_fill : CupertinoIcons.line_horizontal_3_decrease_circle,
-          tooltip: 'Filter',
-          onPressed: () => _openFilterSheet(sourceNodes, state.labelForNode),
-        ),
-        IosNavButton(icon: CupertinoIcons.ellipsis_circle, tooltip: 'More', onPressed: () => _openMore(state)),
-      ],
-      slivers: [
-        SliverToBoxAdapter(
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(16, 4, 16, 8),
-            child: Column(children: [
-              LiveHistorySwitch(live: true, onChanged: (live) => live ? null : widget.onShowHistory?.call()),
-              const SizedBox(height: 10),
-              IosSearch(controller: _searchCtrl, placeholder: 'MAC, name, SSID, method, node', onChanged: _onSearchChanged),
-            ]),
-          ),
-        ),
-        if (filterSummary.isNotEmpty || hasQuery)
-          SliverToBoxAdapter(
-            child: IosSection(children: [
-              IosRow(
-                leading: const Icon(CupertinoIcons.line_horizontal_3_decrease, color: AppTheme.accent),
-                title: '${filtered.length} of ${scope.length} shown',
-                subtitle: Text([
-                  if (filterSummary.isNotEmpty) filterSummary,
-                  if (hasQuery) _dbSearching ? 'Searching saved history…' : 'Includes saved history',
-                ].join(' · ')),
-                trailing: CupertinoButton(
-                  padding: EdgeInsets.zero,
-                  onPressed: () {
-                    _resetFilters();
-                    _searchCtrl.clear();
-                    _onSearchChanged('');
-                  },
-                  child: const Text('Clear'),
+    return Column(
+          children: [
+            CommandHeader(
+              title: 'FEED',
+              count: _activeFilterCount > 0 || hasQuery
+                  ? '${filtered.length}/${searchScope.length}'
+                  : '${state.totalDetections}',
+              chips: _filterChips(t, state.labelForNode),
+              indicators: [
+                if (state.isManagerConnected && sourceNodes.isNotEmpty)
+                  Icon(Icons.hub, size: barIconSize(context) * 0.8, color: AppTheme.warning),
+              ],
+              actions: [
+                CommandBarAction(
+                  icon: Icons.filter_alt,
+                  label: 'Filter',
+                  active: _activeFilterCount > 0,
+                  onTap: () => _openFilterSheet(sourceNodes, state.labelForNode),
                 ),
-              ),
-            ]),
-          ),
-        if (_showStats && filtered.length >= 2) SliverToBoxAdapter(child: FeedStatsHeader(detections: filtered)),
-        if (items.isEmpty)
-          SliverToBoxAdapter(
-            child: state.isConnected
-                ? IosEmpty(
-                    icon: CupertinoIcons.dot_radiowaves_left_right,
-                    title: scope.isEmpty ? 'No detections yet' : 'No matches',
-                    message: scope.isEmpty
-                        ? 'Turn on an engine on Home. Detections from the node appear here as they arrive.'
-                        : 'Nothing matches the current search or filter.',
-                    action: scope.isEmpty
-                        ? CupertinoButton(onPressed: () => context.go('/home'), child: const Text('Go to engines'))
-                        : CupertinoButton(
-                            onPressed: () {
-                              _resetFilters();
-                              _searchCtrl.clear();
-                              _onSearchChanged('');
-                            },
-                            child: const Text('Clear search and filters'),
-                          ),
-                  )
-                : IosEmpty(
-                    icon: CupertinoIcons.bluetooth,
-                    title: 'Not connected',
-                    message: 'Connect to an OUI-SPY node to see live detections.',
-                    action: CupertinoButton.filled(onPressed: () => context.push('/onboarding'), child: const Text('Connect')),
+                CommandBarAction(
+                  icon: _sortAscending ? Icons.arrow_upward : Icons.arrow_downward,
+                  label: 'Sort: ${_sortMetric.label}',
+                  onTap: _openSortSheet,
+                ),
+                if (widget.onShowHistory != null)
+                  CommandBarAction(
+                    icon: Icons.history,
+                    label: 'History',
+                    onTap: widget.onShowHistory,
                   ),
-          )
-        else
-          IosSliverSection(
-            header: '${items.length} ${_sortMetric.label.toLowerCase()} · $_sortDirection',
-            itemCount: items.length,
-            itemBuilder: (context, i) {
-              final item = items[i];
-              return item is DroneGroup ? DroneDetectionRow(group: item) : DetectionRow(detection: item as Detection);
-            },
-          ),
-      ],
+                CommandBarAction(
+                  icon: Icons.more_vert,
+                  label: 'More',
+                  onTap: () => _openActionSheet(state),
+                ),
+              ],
+            ),
+            if (_searchOpen)
+              CommandSearchField(
+                controller: _searchCtrl,
+                hintText: 'MAC, name, SSID, method, node…',
+                onChanged: _onSearchChanged,
+                onClose: _toggleSearch,
+              ),
+            const Divider(height: 1),
+            if (_showStats && filtered.length >= 2)
+              FeedStatsHeader(detections: filtered),
+            Expanded(
+              child: feedItems.isEmpty
+                  ? Center(child: Text(
+                      state.isConnected ? 'NO DETECTIONS' : 'NOT CONNECTED',
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(letterSpacing: 2),
+                    ))
+                  : ListView.builder(
+                      itemCount: feedItems.length,
+                      itemBuilder: (context, index) {
+                        final item = feedItems[index];
+                        if (item is DroneGroup) {
+                          return DroneDetectionRow(group: item);
+                        }
+                        return DetectionRow(detection: item as Detection);
+                      },
+                    ),
+            ),
+          ],
     );
   }
 
-  Future<void> _openFilterSheet(Set<String> sourceNodes, String Function(String) labelForNode) {
+  List<Widget> _filterChips(ResolvedTheme t, String Function(String) labelForNode) {
+    return <Widget>[
+      if (!_allEnginesActive)
+        CommandActiveChip(
+          label: _engineFilterLabel(),
+          color: AppTheme.accent,
+          onClear: _resetEngineFilters,
+        ),
+      if (_selectedNode != null)
+        CommandActiveChip(
+          label: _nodeLabel(labelForNode),
+          color: AppTheme.warning,
+          onClear: () => setState(() => _selectedNode = null),
+        ),
+      if (_searchQuery.trim().isNotEmpty)
+        CommandActiveChip(
+          label: '"${_searchQuery.trim()}"',
+          color: AppTheme.accent,
+          onClear: _toggleSearch,
+        ),
+      if (_searchQuery.trim().isNotEmpty)
+        Text(
+          _dbSearching ? 'HISTORY…' : 'ALL HISTORY',
+          style: barLabelStyle(context, _dbSearching ? t.textDim : AppTheme.accent, bold: false),
+        ),
+    ];
+  }
+
+  Future<void> _openFilterSheet(
+    Set<String> sourceNodes,
+    String Function(String) labelForNode,
+  ) {
     return showCommandSheet<void>(
       context: context,
       builder: (ctx) => StatefulBuilder(
         builder: (ctx, setSheet) {
           void apply(VoidCallback fn) {
-            setState(fn);
+            fn();
             setSheet(() {});
           }
 
+          final t = AppTheme.of(ctx);
+          final gap = barGap(ctx);
           return CommandSheet(
-            title: 'Filter',
+            title: 'FILTER',
             trailing: _activeFilterCount == 0
                 ? null
-                : CupertinoButton(padding: const EdgeInsets.symmetric(horizontal: 8), onPressed: () => apply(_resetFilters), child: const Text('Reset')),
+                : TextButton(
+                    onPressed: () => apply(() {
+                      _resetEngineFilters();
+                      setState(() => _selectedNode = null);
+                    }),
+                    child: Text('RESET',
+                        style: barLabelStyle(ctx, AppTheme.accent)),
+                  ),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
                 CommandSheetGroup(
-                  label: 'Show',
-                  child: CommandOptionList(children: [
-                    for (final p in FilterPreset.values)
-                      CommandOption(
-                        label: p.label,
-                        selected: p.matches(_activeFilters, _activeRadio),
-                        color: switch (p) {
-                          FilterPreset.all => kPillAll,
-                          FilterPreset.ble => kPillBle,
-                          FilterPreset.wifi => kPillWifi,
-                          FilterPreset.flock => AppTheme.flockWifi,
-                          FilterPreset.drones => AppTheme.skySpy,
-                          FilterPreset.alerts => AppTheme.error,
-                        },
-                        onTap: () => apply(() {
-                          _activeFilters = p.resolve();
-                          _activeRadio = p.radio;
-                        }),
-                      ),
-                  ]),
+                  label: 'PRESET',
+                  child: Wrap(
+                    spacing: gap,
+                    runSpacing: gap,
+                    children: [
+                      for (final preset in FilterPreset.values)
+                        CommandChip(
+                          label: preset.label,
+                          selected:
+                              preset.matches(_activeFilters, _activeRadio),
+                          color: switch (preset) {
+                            FilterPreset.all => kPillAll,
+                            FilterPreset.ble => kPillBle,
+                            FilterPreset.wifi => kPillWifi,
+                            FilterPreset.flock => AppTheme.flockWifi,
+                            FilterPreset.drones => AppTheme.skySpy,
+                            FilterPreset.alerts => AppTheme.error,
+                          },
+                          onTap: () => apply(() => setState(() {
+                                _activeFilters = preset.resolve();
+                                _activeRadio = preset.radio;
+                              })),
+                        ),
+                    ],
+                  ),
                 ),
                 if (sourceNodes.isNotEmpty)
                   CommandSheetGroup(
-                    label: 'Heard by',
-                    child: CommandOptionList(children: [
-                      for (final (i, (id, label)) in <(String?, String)>[
-                        (null, 'All nodes'),
-                        ('', 'This node'),
-                        ...sourceNodes.map((n) => (n, labelForNode(n))),
-                      ].indexed)
-                        CommandOption(label: label, selected: _selectedNode == id, color: pillColor(i), onTap: () => apply(() => _selectedNode = id)),
-                    ]),
+                    label: 'SOURCE',
+                    child: Wrap(
+                      spacing: gap,
+                      runSpacing: gap,
+                      children: [
+                        for (final (i, (id, label)) in <(String?, String)>[
+                          (null, 'ALL'),
+                          ('', 'LOCAL'),
+                          ...sourceNodes.map((n) => (n, labelForNode(n))),
+                        ].indexed)
+                          CommandChip(
+                            label: label,
+                            selected: _selectedNode == id,
+                            color: pillColor(i),
+                            onTap: () => apply(
+                                () => setState(() => _selectedNode = id)),
+                          ),
+                      ],
+                    ),
                   ),
                 CommandSheetGroup(
-                  label: 'Engines',
-                  child: CommandOptionList(children: [
-                    for (final e in Engine.values)
-                      CommandOption(
-                        label: e.label,
-                        selected: _activeFilters.contains(e),
-                        color: e.color,
-                        onTap: () => apply(() {
-                          final next = Set<Engine>.from(_activeFilters);
-                          next.contains(e) ? next.remove(e) : next.add(e);
-                          _activeFilters = next;
-                          _activeRadio = null;
-                        }),
+                  label: 'ENGINES',
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      Row(
+                        children: [
+                          TextButton(
+                            onPressed: () => apply(() => setState(() {
+                                  _activeFilters = Engine.values.toSet();
+                                  _activeRadio = null;
+                                })),
+                            child: Text('ALL',
+                                style: barLabelStyle(ctx, AppTheme.accent)),
+                          ),
+                          TextButton(
+                            onPressed: () => apply(() => setState(() {
+                                  _activeFilters = <Engine>{};
+                                  _activeRadio = null;
+                                })),
+                            child: Text('NONE',
+                                style: barLabelStyle(ctx, t.textDim)),
+                          ),
+                        ],
                       ),
-                  ]),
+                      for (final engine in Engine.values)
+                        CheckboxListTile(
+                          contentPadding: EdgeInsets.zero,
+                          controlAffinity: ListTileControlAffinity.leading,
+                          activeColor: engine.color,
+                          value: _activeFilters.contains(engine),
+                          onChanged: (v) => apply(() => setState(() {
+                                final next = Set<Engine>.from(_activeFilters);
+                                if (v ?? false) {
+                                  next.add(engine);
+                                } else {
+                                  next.remove(engine);
+                                }
+                                _activeFilters = next;
+                                _activeRadio = null;
+                              })),
+                          title: Row(
+                            children: [
+                              Icon(engine.icon,
+                                  size: barIconSize(ctx), color: engine.color),
+                              SizedBox(width: gap),
+                              Flexible(
+                                child: Text(
+                                  engine.label.toUpperCase(),
+                                  style: barLabelStyle(ctx, t.textPrimary)
+                                      .copyWith(letterSpacing: 1),
+                                ),
+                              ),
+                            ],
+                          ),
+                          subtitle: Text(
+                            engine.description,
+                            style: (Theme.of(ctx).textTheme.bodySmall ??
+                                    const TextStyle())
+                                .copyWith(color: t.textDim),
+                          ),
+                        ),
+                    ],
+                  ),
                 ),
               ],
             ),
@@ -398,66 +511,104 @@ class _FeedScreenState extends ConsumerState<FeedScreen> {
     );
   }
 
-  Future<void> _openMore(AppState state) {
-    return showCupertinoModalPopup<void>(
+  Future<void> _openSortSheet() => showSortSheet<FeedMetric>(
+        context: context,
+        options: FeedMetric.values,
+        label: (m) => m.label,
+        current: () => _sortMetric,
+        ascending: () => _sortAscending,
+        hint: () => _sortDirectionHint,
+        onPick: (m) => setState(() {
+          if (_sortMetric == m) {
+            _sortAscending = !_sortAscending;
+          } else {
+            _sortMetric = m;
+            _sortAscending = false;
+          }
+        }),
+        onToggleDirection: () => setState(() => _sortAscending = !_sortAscending),
+      );
+
+  String get _sortDirectionHint => switch ((_sortMetric, _sortAscending)) {
+        (FeedMetric.time, true) => 'Oldest first',
+        (FeedMetric.time, false) => 'Newest first',
+        (FeedMetric.rssi, true) => 'Weakest signal first',
+        (FeedMetric.rssi, false) => 'Strongest signal first',
+        (FeedMetric.count, true) => 'Fewest hits first',
+        (FeedMetric.count, false) => 'Most hits first',
+        (FeedMetric.name, true) => 'A → Z',
+        (FeedMetric.name, false) => 'Z → A',
+        (FeedMetric.channel, true) => 'Lowest channel first',
+        (FeedMetric.channel, false) => 'Highest channel first',
+      };
+
+  Future<void> _openActionSheet(AppState state) {
+    return showCommandSheet<void>(
       context: context,
-      builder: (ctx) => CupertinoActionSheet(
-        title: Text('Sorted by ${_sortMetric.label.toLowerCase()}, $_sortDirection'),
-        actions: [
-          for (final m in FeedMetric.values)
-            CupertinoActionSheetAction(
-              isDefaultAction: m == _sortMetric,
-              onPressed: () {
+      builder: (ctx) => CommandSheet(
+        title: 'ACTIONS',
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            CommandSheetTile(
+              icon: _showStats ? Icons.analytics : Icons.analytics_outlined,
+              label: _showStats ? 'HIDE STATS' : 'SHOW STATS',
+              subtitle: 'Summary header above the feed',
+              color: _showStats ? AppTheme.accent : null,
+              onTap: () {
                 Navigator.pop(ctx);
-                setState(() {
-                  if (_sortMetric == m) {
-                    _sortAscending = !_sortAscending;
-                  } else {
-                    _sortMetric = m;
-                    _sortAscending = false;
-                  }
-                });
+                setState(() => _showStats = !_showStats);
               },
-              child: Text(m == _sortMetric ? 'Reverse ${m.label.toLowerCase()} order' : 'Sort by ${m.label.toLowerCase()}'),
             ),
-          CupertinoActionSheetAction(
-            onPressed: () {
-              Navigator.pop(ctx);
-              setState(() => _showStats = !_showStats);
-            },
-            child: Text(_showStats ? 'Hide summary' : 'Show summary'),
-          ),
-          CupertinoActionSheetAction(
-            onPressed: () {
-              Navigator.pop(ctx);
-              _exportCsv(context);
-            },
-            child: const Text('Export CSV'),
-          ),
-          if (state.recentDetections.isNotEmpty)
-            CupertinoActionSheetAction(
-              isDestructiveAction: true,
-              onPressed: () {
+            CommandSheetTile(
+              icon: _searchOpen ? Icons.search_off : Icons.search,
+              label: _searchOpen ? 'CLOSE SEARCH' : 'SEARCH',
+              subtitle: 'MAC, name, method, node',
+              onTap: () {
                 Navigator.pop(ctx);
-                _clearAll(context);
+                _toggleSearch();
               },
-              child: Text('Clear feed (${state.recentDetections.length})'),
             ),
-        ],
-        cancelButton: CupertinoActionSheetAction(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
+            const Divider(height: 1),
+            CommandSheetTile(
+              icon: Icons.ios_share,
+              label: 'EXPORT CSV',
+              subtitle: 'Full stored history, current filters',
+              onTap: () {
+                Navigator.pop(ctx);
+                _exportCsv(context);
+              },
+            ),
+            CommandSheetTile(
+              icon: Icons.delete_sweep,
+              label: 'CLEAR FEED',
+              subtitle: '${state.recentDetections.length} detections held',
+              color: AppTheme.error,
+              onTap: state.recentDetections.isEmpty
+                  ? null
+                  : () {
+                      Navigator.pop(ctx);
+                      _clearAll(context);
+                    },
+            ),
+          ],
+        ),
       ),
     );
   }
 
   Future<void> _clearAll(BuildContext context) async {
-    final ok = await showCupertinoDialog<bool>(
+    final ok = await showDialog<bool>(
       context: context,
-      builder: (ctx) => CupertinoAlertDialog(
-        title: const Text('Clear the feed?'),
-        content: const Text('Removes every detection from the live feed and resets the counts. Saved history is kept.'),
+      builder: (ctx) => AlertDialog(
+        title: const Text('Clear feed?'),
+        content: const Text('Clears all detections from the feed and resets counts.'),
         actions: [
-          CupertinoDialogAction(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
-          CupertinoDialogAction(isDestructiveAction: true, onPressed: () => Navigator.pop(ctx, true), child: const Text('Clear')),
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('CANCEL')),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('CLEAR', style: TextStyle(color: AppTheme.error)),
+          ),
         ],
       ),
     );
@@ -467,22 +618,33 @@ class _FeedScreenState extends ConsumerState<FeedScreen> {
   Future<void> _exportCsv(BuildContext context) async {
     final messenger = ScaffoldMessenger.of(context);
     final box = context.findRenderObject() as RenderBox?;
-    final origin = box != null ? box.localToGlobal(Offset.zero) & box.size : const Rect.fromLTWH(0, 0, 100, 100);
+    final origin = box != null
+        ? box.localToGlobal(Offset.zero) & box.size
+        : const Rect.fromLTWH(0, 0, 100, 100);
     try {
       final rows = await ref.read(databaseProvider).getAllDetectionMaps();
       final history = rows.map(detectionFromDbRow).toList();
-      final live = _mergeFlockFromWardrive(ref.read(appStateProvider).recentDetections, ref.read(wardriveProvider));
+      final live = _mergeFlockFromWardrive(
+        ref.read(appStateProvider).recentDetections,
+        ref.read(wardriveProvider),
+      );
       final detections = _sorted(_filter(_mergeHistory(live, history)));
       if (detections.isEmpty) {
-        messenger.showSnackBar(const SnackBar(content: Text('Nothing to export')));
+        messenger.showSnackBar(
+            const SnackBar(content: Text('Nothing to export')));
         return;
       }
       final csv = DetectionsCsv.generate(detections);
       final dir = await getTemporaryDirectory();
       final ts = DateFormat('yyyyMMdd_HHmmss').format(DateTime.now());
-      final file = File('${dir.path}/oui_spy_feed_$ts.csv');
+      final filename = 'oui_spy_feed_$ts.csv';
+      final file = File('${dir.path}/$filename');
       await file.writeAsString(csv);
-      await Share.shareXFiles([XFile(file.path)], subject: 'OUI-SPY Feed Export (${detections.length} detections)', sharePositionOrigin: origin);
+      await Share.shareXFiles(
+        [XFile(file.path)],
+        subject: 'OUI-SPY Feed Export (${detections.length} detections)',
+        sharePositionOrigin: origin,
+      );
     } catch (e) {
       messenger.showSnackBar(SnackBar(content: Text('Export failed: $e')));
     }

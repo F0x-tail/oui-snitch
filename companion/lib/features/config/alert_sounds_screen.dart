@@ -1,51 +1,12 @@
-import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:oui_spy/core/ble/ble_manager.dart';
 import 'package:oui_spy/core/melody_state.dart';
+import 'package:oui_spy/features/config/widgets/config_widgets.dart';
 import 'package:oui_spy/theme/app_theme.dart';
-import 'package:oui_spy/widgets/ios.dart';
 
 void _preview(WidgetRef ref, List<MelodyNote> notes) {
   ref.read(bleManagerProvider).writeMelodyOps([MelodyState.previewOp(notes)]);
-}
-
-Widget _playButton(VoidCallback? onPressed) => CupertinoButton(
-      padding: const EdgeInsets.symmetric(horizontal: 8),
-      minimumSize: const Size(44, 44),
-      onPressed: onPressed,
-      child: const Icon(CupertinoIcons.play_circle, size: 26, semanticLabel: 'Play on board'),
-    );
-
-Widget _page(BuildContext context, {required String title, String? back, Widget? trailing, required List<Widget> children}) {
-  final t = AppTheme.of(context);
-  return CupertinoPageScaffold(
-    backgroundColor: t.background,
-    navigationBar: CupertinoNavigationBar(
-      backgroundColor: t.background.withValues(alpha: 0.92),
-      middle: Text(title, style: TextStyle(color: t.textPrimary)),
-      previousPageTitle: back,
-      trailing: trailing,
-    ),
-    child: Material(
-      color: t.background,
-      child: SafeArea(child: ListView(padding: const EdgeInsets.only(top: 8, bottom: 24), children: children)),
-    ),
-  );
-}
-
-Future<T?> _pick<T>(BuildContext context, String title, List<(T, String)> options, T current) {
-  return showCupertinoModalPopup<T>(
-    context: context,
-    builder: (ctx) => CupertinoActionSheet(
-      title: Text(title),
-      actions: [
-        for (final (v, label) in options)
-          CupertinoActionSheetAction(isDefaultAction: v == current, onPressed: () => Navigator.pop(ctx, v), child: Text(label)),
-      ],
-      cancelButton: CupertinoActionSheetAction(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
-    ),
-  );
 }
 
 class AlertSoundsScreen extends ConsumerWidget {
@@ -56,57 +17,87 @@ class AlertSoundsScreen extends ConsumerWidget {
     final t = AppTheme.of(context);
     final mel = ref.watch(melodyProvider);
     final supported = ref.read(bleManagerProvider).hasMelodySupport;
-    String nameOf(String? id) => id == null ? 'Default' : id == melodySilent ? 'Silent' : (mel.byId(id)?.name ?? 'Default');
-    return _page(
-      context,
-      title: 'Alert sounds',
-      back: 'Hardware',
-      children: [
-        if (!supported)
-          const IosSection(children: [
-            IosRow(
-              leading: IosIcon(CupertinoIcons.exclamationmark_triangle_fill, AppTheme.warning),
-              title: 'Firmware has no melody support',
-              subtitle: Text('Update the node to use these sounds.'),
+    return Scaffold(
+      backgroundColor: t.background,
+      appBar: AppBar(title: const Text('Alert sounds')),
+      body: ListView(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+        children: [
+          if (!supported)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 8),
+              child: Text(
+                'Connected firmware has no melody support. Update the board to apply these.',
+                style: TextStyle(color: AppTheme.warning, fontSize: 12),
+              ),
             ),
-          ]),
-        IosSection(
-          header: 'Sound for each alert',
-          children: [
-            for (final slot in kAlertSlots)
-              Builder(builder: (context) {
-                final current = mel.assignmentFor(slot);
-                final melody = current == null ? null : mel.byId(current);
-                return IosRow(
-                  title: slot.label,
-                  detail: Text(nameOf(current), style: TextStyle(color: t.textSecondary, fontSize: 17)),
-                  trailing: _playButton(melody == null ? null : () => _preview(ref, melody.notes)),
-                  onTap: () async {
-                    final v = await _pick<String?>(context, slot.label, [
-                      (null, 'Default'),
-                      (melodySilent, 'Silent'),
-                      for (final m in mel.melodies) (m.id, m.name),
-                    ], current);
-                    if (v != current) mel.assign(slot, v);
-                  },
-                );
-              }),
-          ],
-        ),
-        IosSection(
-          header: 'Melodies',
-          footer: 'Swipe a melody you made to delete it.',
-          children: [
-            for (final m in mel.melodies) _MelodyRow(melody: m),
-            IosRow(
-              leading: const IosIcon(CupertinoIcons.add, AppTheme.accent),
-              title: 'Compose melody',
-              chevron: true,
-              onTap: () => Navigator.of(context).push(CupertinoPageRoute(builder: (_) => const MelodyComposerScreen())),
-            ),
-          ],
-        ),
-      ],
+          const ConfigSectionHeader(label: 'ASSIGNMENTS'),
+          for (final slot in kAlertSlots) _SlotRow(slot: slot, mel: mel),
+          const SizedBox(height: 16),
+          const ConfigSectionHeader(label: 'MELODIES'),
+          for (final m in mel.melodies) _MelodyRow(melody: m),
+          ConfigActionRow(
+            icon: Icons.add,
+            label: 'Compose melody',
+            onTap: () => Navigator.of(context).push(MaterialPageRoute(
+              builder: (_) => const MelodyComposerScreen(),
+            )),
+          ),
+          const SizedBox(height: 24),
+        ],
+      ),
+    );
+  }
+}
+
+class _SlotRow extends ConsumerWidget {
+  const _SlotRow({required this.slot, required this.mel});
+
+  final AlertSlot slot;
+  final MelodyState mel;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final t = AppTheme.of(context);
+    final current = mel.assignmentFor(slot);
+    final valid = current == null || current == melodySilent || mel.byId(current) != null;
+    return Container(
+      margin: const EdgeInsets.only(bottom: 4),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 2),
+      decoration: BoxDecoration(
+        color: t.surface,
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: t.border, width: 0.5),
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            child: Text(slot.label,
+                style: TextStyle(color: t.textPrimary, fontSize: 13, fontWeight: FontWeight.w600)),
+          ),
+          DropdownButton<String?>(
+            value: valid ? current : null,
+            underline: const SizedBox.shrink(),
+            dropdownColor: t.surface,
+            style: TextStyle(color: t.textSecondary, fontSize: 12),
+            items: [
+              const DropdownMenuItem<String?>(value: null, child: Text('Default')),
+              const DropdownMenuItem<String?>(value: melodySilent, child: Text('Silent')),
+              for (final m in mel.melodies)
+                DropdownMenuItem<String?>(value: m.id, child: Text(m.name)),
+            ],
+            onChanged: (v) => mel.assign(slot, v),
+          ),
+          IconButton(
+            icon: const Icon(Icons.play_arrow, size: 18),
+            color: AppTheme.accent,
+            tooltip: 'Play on board',
+            onPressed: current == null || current == melodySilent || mel.byId(current) == null
+                ? null
+                : () => _preview(ref, mel.byId(current)!.notes),
+          ),
+        ],
+      ),
     );
   }
 }
@@ -118,26 +109,52 @@ class _MelodyRow extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final row = IosRow(
-      title: melody.name,
-      subtitle: Text(melody.notes.map((n) => n.label).join(' '), maxLines: 1, overflow: TextOverflow.ellipsis),
-      trailing: _playButton(() => _preview(ref, melody.notes)),
-      onTap: melody.builtIn
-          ? null
-          : () => Navigator.of(context).push(CupertinoPageRoute(builder: (_) => MelodyComposerScreen(initial: melody))),
-    );
-    if (melody.builtIn) return row;
-    return Dismissible(
-      key: ValueKey(melody.id),
-      direction: DismissDirection.endToStart,
-      background: Container(
-        color: AppTheme.error,
-        alignment: Alignment.centerRight,
-        padding: const EdgeInsets.only(right: 20),
-        child: const Text('Delete', style: TextStyle(color: Colors.white, fontSize: 17, fontWeight: FontWeight.w600)),
+    final t = AppTheme.of(context);
+    return Container(
+      margin: const EdgeInsets.only(bottom: 4),
+      padding: const EdgeInsets.only(left: 12),
+      decoration: BoxDecoration(
+        color: t.surface,
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: t.border, width: 0.5),
       ),
-      onDismissed: (_) => ref.read(melodyProvider).deleteMelody(melody.id),
-      child: row,
+      child: Row(
+        children: [
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(melody.name,
+                    style: TextStyle(color: t.textPrimary, fontSize: 13, fontWeight: FontWeight.w600)),
+                Text(melody.notes.map((n) => n.label).join(' '),
+                    style: TextStyle(color: t.textDim, fontSize: 10, fontFamily: 'monospace')),
+              ],
+            ),
+          ),
+          IconButton(
+            icon: const Icon(Icons.play_arrow, size: 18),
+            color: AppTheme.accent,
+            tooltip: 'Play on board',
+            onPressed: () => _preview(ref, melody.notes),
+          ),
+          if (!melody.builtIn) ...[
+            IconButton(
+              icon: const Icon(Icons.edit, size: 18),
+              color: t.textSecondary,
+              tooltip: 'Edit',
+              onPressed: () => Navigator.of(context).push(MaterialPageRoute(
+                builder: (_) => MelodyComposerScreen(initial: melody),
+              )),
+            ),
+            IconButton(
+              icon: const Icon(Icons.delete_outline, size: 18),
+              color: AppTheme.error,
+              tooltip: 'Delete',
+              onPressed: () => ref.read(melodyProvider).deleteMelody(melody.id),
+            ),
+          ],
+        ],
+      ),
     );
   }
 }
@@ -186,87 +203,98 @@ class _MelodyComposerScreenState extends ConsumerState<MelodyComposerScreen> {
     if (mounted) Navigator.of(context).pop();
   }
 
-  Widget _value(String text, VoidCallback onTap) => CupertinoButton(
-        padding: const EdgeInsets.symmetric(horizontal: 6),
-        minimumSize: const Size(44, 44),
-        onPressed: onTap,
-        child: Text(text, style: const TextStyle(color: AppTheme.accent, fontSize: 16)),
-      );
-
   @override
   Widget build(BuildContext context) {
     final t = AppTheme.of(context);
-    final dim = TextStyle(color: t.textDim, fontSize: 15);
-    return _page(
-      context,
-      title: widget.initial == null ? 'New melody' : 'Edit melody',
-      back: 'Sounds',
-      trailing: CupertinoButton(
-        padding: EdgeInsets.zero,
-        onPressed: _notes.isEmpty ? null : _save,
-        child: const Text('Save', style: TextStyle(fontWeight: FontWeight.w600)),
-      ),
-      children: [
-        IosSection(header: 'Name', children: [
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16),
-            child: CupertinoTextField(
-              controller: _name,
-              decoration: null,
-              padding: const EdgeInsets.symmetric(vertical: 14),
-              style: TextStyle(color: t.textPrimary, fontSize: 17),
-            ),
+    final style = TextStyle(color: t.textSecondary, fontSize: 12);
+    return Scaffold(
+      backgroundColor: t.background,
+      appBar: AppBar(
+        title: const Text('Compose'),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.play_arrow),
+            tooltip: 'Play on board',
+            onPressed: _notes.isEmpty ? null : () => _preview(ref, _notes),
           ),
-        ]),
-        IosSection(
-          header: 'Notes ${_notes.length} of $melodyMaxNotes',
-          footer: 'Tap a value to change it. Pitch 0 is a rest.',
-          children: [
-            for (var i = 0; i < _notes.length; i++)
-              Padding(
-                padding: const EdgeInsets.only(left: 16),
-                child: Row(
-                  children: [
-                    SizedBox(width: 24, child: Text('${i + 1}', style: dim)),
-                    _value(_notes[i].label, () async {
-                      final v = await _pick<int>(context, 'Pitch', [for (final p in _pitches) (p, MelodyNote(p, 0, 0).label)], _notes[i].midi);
-                      if (v != null) _set(i, midi: v);
-                    }),
-                    Text('on', style: dim),
-                    _value('${_snap(_notes[i].onMs)} ms', () async {
-                      final v = await _pick<int>(context, 'Note length', [for (final d in _durations) (d, '$d ms')], _snap(_notes[i].onMs));
-                      if (v != null) _set(i, on: v);
-                    }),
-                    Text('gap', style: dim),
-                    _value('${_snap(_notes[i].gapMs)} ms', () async {
-                      final v = await _pick<int>(context, 'Gap after', [for (final d in _durations) (d, '$d ms')], _snap(_notes[i].gapMs));
-                      if (v != null) _set(i, gap: v);
-                    }),
-                    const Spacer(),
-                    CupertinoButton(
-                      padding: const EdgeInsets.symmetric(horizontal: 10),
-                      minimumSize: const Size(44, 44),
-                      onPressed: () => setState(() => _notes.removeAt(i)),
-                      child: const Icon(CupertinoIcons.minus_circle_fill, color: AppTheme.error, semanticLabel: 'Remove note'),
-                    ),
-                  ],
-                ),
+          IconButton(
+            icon: const Icon(Icons.check),
+            tooltip: 'Save',
+            onPressed: _notes.isEmpty ? null : _save,
+          ),
+        ],
+      ),
+      body: ListView(
+        padding: const EdgeInsets.all(16),
+        children: [
+          TextField(
+            controller: _name,
+            style: TextStyle(color: t.textPrimary),
+            decoration: const InputDecoration(labelText: 'Name'),
+          ),
+          const SizedBox(height: 16),
+          ConfigSectionHeader(label: 'NOTES ${_notes.length}/$melodyMaxNotes'),
+          for (var i = 0; i < _notes.length; i++)
+            Container(
+              margin: const EdgeInsets.only(bottom: 4),
+              padding: const EdgeInsets.only(left: 12),
+              decoration: BoxDecoration(
+                color: t.surface,
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(color: t.border, width: 0.5),
               ),
-            if (_notes.length < melodyMaxNotes)
-              IosRow(
-                leading: const IosIcon(CupertinoIcons.add, AppTheme.accent),
-                title: 'Add note',
-                onTap: () => setState(() => _notes.add(_notes.isEmpty ? const MelodyNote(72, 100, 50) : _notes.last)),
+              child: Row(
+                children: [
+                  SizedBox(width: 20, child: Text('${i + 1}', style: style)),
+                  DropdownButton<int>(
+                    value: _notes[i].midi,
+                    underline: const SizedBox.shrink(),
+                    dropdownColor: t.surface,
+                    style: style,
+                    items: [
+                      for (final p in _pitches)
+                        DropdownMenuItem(value: p, child: Text(MelodyNote(p, 0, 0).label)),
+                    ],
+                    onChanged: (v) => _set(i, midi: v),
+                  ),
+                  const SizedBox(width: 8),
+                  Text('on', style: style),
+                  DropdownButton<int>(
+                    value: _snap(_notes[i].onMs),
+                    underline: const SizedBox.shrink(),
+                    dropdownColor: t.surface,
+                    style: style,
+                    items: [for (final d in _durations) DropdownMenuItem(value: d, child: Text('${d}ms'))],
+                    onChanged: (v) => _set(i, on: v),
+                  ),
+                  const SizedBox(width: 8),
+                  Text('gap', style: style),
+                  DropdownButton<int>(
+                    value: _snap(_notes[i].gapMs),
+                    underline: const SizedBox.shrink(),
+                    dropdownColor: t.surface,
+                    style: style,
+                    items: [for (final d in _durations) DropdownMenuItem(value: d, child: Text('${d}ms'))],
+                    onChanged: (v) => _set(i, gap: v),
+                  ),
+                  const Spacer(),
+                  IconButton(
+                    icon: const Icon(Icons.remove_circle_outline, size: 18),
+                    color: AppTheme.error,
+                    onPressed: () => setState(() => _notes.removeAt(i)),
+                  ),
+                ],
               ),
-            IosRow(
-              leading: const IosIcon(CupertinoIcons.play_fill, AppTheme.success),
-              title: 'Play on board',
-              disabled: _notes.isEmpty,
-              onTap: _notes.isEmpty ? null : () => _preview(ref, _notes),
             ),
-          ],
-        ),
-      ],
+          if (_notes.length < melodyMaxNotes)
+            ConfigActionRow(
+              icon: Icons.add,
+              label: 'Add note',
+              onTap: () => setState(() => _notes.add(
+                  _notes.isEmpty ? const MelodyNote(72, 100, 50) : _notes.last)),
+            ),
+        ],
+      ),
     );
   }
 }

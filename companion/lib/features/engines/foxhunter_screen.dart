@@ -1,13 +1,10 @@
 import 'dart:math' as math;
 
-import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:go_router/go_router.dart';
 import 'package:oui_spy/core/app_state.dart';
 import 'package:oui_spy/core/models/engine.dart';
 import 'package:oui_spy/theme/app_theme.dart';
-import 'package:oui_spy/widgets/ios.dart';
 
 class FoxhunterScreen extends ConsumerStatefulWidget {
   const FoxhunterScreen({super.key});
@@ -71,92 +68,141 @@ class _FoxhunterScreenState extends ConsumerState<FoxhunterScreen> {
     }
     _lastSyncedTarget = target;
 
-    final canStart = !(state.isManagerConnected && state.foxhunterTargetNodeId == null);
-    final status = !isActive ? 'Off' : (channel > 0 ? 'Channel $channel' : 'Scanning');
-
     return Scaffold(
       backgroundColor: t.background,
-      body: IosPage(
-        title: 'Foxhunt',
-        leading: CupertinoNavigationBarBackButton(color: AppTheme.accent, onPressed: () => context.canPop() ? context.pop() : context.go('/home')),
-        slivers: [
-          SliverToBoxAdapter(
-            child: IosSection(
-              header: 'Target',
-              footer: target == null ? 'Enter the full address of the device to track.' : 'Tracking ${target.toUpperCase()}. $status.',
-              children: [
-                if (state.isManagerConnected)
-                  _NodeTargetPicker(
-                    selected: state.foxhunterTargetNodeId,
-                    enabled: !isActive,
-                    onChanged: (v) => ref.read(appStateProvider).setFoxhunterTargetNode(v),
-                  ),
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 16),
-                  child: CupertinoTextField(
-                    controller: _macController,
-                    placeholder: 'AA:BB:CC:DD:EE:FF',
-                    autocorrect: false,
-                    enableSuggestions: false,
-                    textCapitalization: TextCapitalization.characters,
-                    decoration: null,
-                    padding: const EdgeInsets.symmetric(vertical: 14),
-                    style: TextStyle(color: t.textPrimary, fontFamily: 'monospace', fontSize: 17),
-                    placeholderStyle: TextStyle(color: t.textDim, fontFamily: 'monospace', fontSize: 17),
-                  ),
-                ),
-                if (target != null)
-                  IosRow(
-                    leading: const IosIcon(CupertinoIcons.stop_fill, AppTheme.error),
-                    title: 'Stop hunt',
-                    onTap: _clearTarget,
-                  )
-                else
-                  IosRow(
-                    leading: const IosIcon(CupertinoIcons.scope, AppTheme.foxhunter),
-                    title: 'Start hunt',
-                    subtitle: canStart ? null : const Text('Pick a node to hunt from first'),
-                    disabled: !canStart,
-                    onTap: canStart ? _setTarget : null,
-                  ),
-              ],
+      appBar: AppBar(
+        title: const Text('FOXHUNTER'),
+        actions: [
+          Container(
+            margin: const EdgeInsets.only(right: 8),
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+            decoration: BoxDecoration(
+              color: (isActive ? AppTheme.foxhunter : t.textDim).withValues(alpha: 0.15),
+              borderRadius: BorderRadius.circular(4),
+              border: Border.all(
+                color: (isActive ? AppTheme.foxhunter : t.textDim).withValues(alpha: 0.3),
+              ),
+            ),
+            child: Text(
+              isActive
+                  ? (channel > 0 ? 'CH $channel' : 'SCANNING')
+                  : 'OFF',
+              style: TextStyle(
+                color: isActive ? AppTheme.foxhunter : t.textDim,
+                fontSize: 10, fontWeight: FontWeight.w700, letterSpacing: 1,
+              ),
             ),
           ),
-          SliverToBoxAdapter(
-            child: IosSection(
-              header: 'Signal',
+          if (target != null)
+            IconButton(
+              icon: const Icon(Icons.clear, color: AppTheme.error),
+              onPressed: _clearTarget,
+              tooltip: 'Clear target',
+            ),
+        ],
+      ),
+      body: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          children: [
+            if (state.isManagerConnected) ...[
+              _NodeTargetPicker(
+                selected: state.foxhunterTargetNodeId,
+                enabled: !isActive,
+                onChanged: (v) =>
+                    ref.read(appStateProvider).setFoxhunterTargetNode(v),
+              ),
+              const SizedBox(height: 12),
+            ],
+            Row(
               children: [
-                Padding(
-                  padding: const EdgeInsets.symmetric(vertical: 24),
+                Expanded(
+                  child: TextField(
+                    controller: _macController,
+                    style: TextStyle(color: t.textPrimary, fontFamily: 'monospace', fontSize: 14),
+                    decoration: const InputDecoration(
+                      hintText: 'AA:BB:CC:DD:EE:FF',
+                      labelText: 'Target MAC',
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                ElevatedButton(
+                  onPressed: target != null
+                      ? _clearTarget
+                      : ((state.isManagerConnected &&
+                              state.foxhunterTargetNodeId == null)
+                          ? null
+                          : _setTarget),
+                  style: target != null
+                      ? ElevatedButton.styleFrom(
+                          backgroundColor: AppTheme.error)
+                      : null,
+                  child: Text(target != null ? 'STOP' : 'HUNT'),
+                ),
+              ],
+            ),
+            if (target != null) ...[
+              const SizedBox(height: 8),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Container(
+                    width: 6, height: 6,
+                    decoration: BoxDecoration(
+                      color: isActive ? AppTheme.foxhunter : t.textDim,
+                      shape: BoxShape.circle,
+                    ),
+                  ),
+                  const SizedBox(width: 6),
+                  Text(
+                    'Tracking: ${target.toUpperCase()}',
+                    style: TextStyle(
+                      color: isActive ? AppTheme.foxhunter : t.textDim,
+                      fontSize: 11, fontFamily: 'monospace',
+                    ),
+                  ),
+                  if (channel > 0) ...[
+                    const SizedBox(width: 8),
+                    Text('ch$channel',
+                      style: TextStyle(
+                        color: AppTheme.foxhunter.withValues(alpha: 0.6),
+                        fontSize: 10, fontFamily: 'monospace',
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+            ],
+            const Spacer(),
+            SizedBox(
+              width: 200, height: 200,
+              child: CustomPaint(
+                painter: _RssiGaugePainter(rssi: rssi, normalized: normalized, color: color),
+                child: Center(
                   child: Column(
+                    mainAxisSize: MainAxisSize.min,
                     children: [
-                      SizedBox(
-                        width: 200, height: 200,
-                        child: CustomPaint(
-                          painter: _RssiGaugePainter(rssi: rssi, normalized: normalized, color: color, track: t.border),
-                          child: Center(
-                            child: Column(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                Text('$rssi', style: TextStyle(color: color, fontSize: 48, fontWeight: FontWeight.w300)),
-                                Text(targetLost ? 'Lost' : 'dBm', style: TextStyle(color: t.textSecondary, fontSize: 15)),
-                              ],
-                            ),
-                          ),
-                        ),
-                      ),
-                      const SizedBox(height: 16),
-                      Text(
-                        targetLost ? 'Target lost, still scanning' : (isActive ? 'Beeps every $intervalMs ms' : 'Start a hunt to see signal strength'),
-                        style: TextStyle(color: targetLost ? AppTheme.error : t.textSecondary, fontSize: 15),
-                      ),
+                      Text('$rssi', style: TextStyle(
+                        color: color, fontSize: 48, fontWeight: FontWeight.w300, fontFamily: 'monospace',
+                      )),
+                      Text(targetLost ? 'LOST' : 'dBm', style: TextStyle(
+                        color: color.withValues(alpha: 0.6), fontSize: 14,
+                      )),
                     ],
                   ),
                 ),
-              ],
+              ),
             ),
-          ),
-        ],
+            const SizedBox(height: 24),
+            Text(targetLost ? 'TARGET LOST — scanning...' : 'Beep interval: ${intervalMs}ms',
+                style: TextStyle(
+                  color: targetLost ? AppTheme.error.withValues(alpha: 0.7) : t.textDim,
+                  fontSize: 11, fontFamily: 'monospace',
+                )),
+            const Spacer(),
+          ],
+        ),
       ),
     );
   }
@@ -177,50 +223,60 @@ class _NodeTargetPicker extends ConsumerWidget {
     final appState = ref.watch(appStateProvider);
     final t = AppTheme.of(context);
     final nodes = appState.liveKnownNodes.toList()..sort();
-    String name(String id) {
-      final label = appState.labelForNode(id);
-      return label == id ? id : '$label ($id)';
-    }
     if (nodes.isEmpty) {
-      return IosRow(
-        leading: IosIcon(CupertinoIcons.device_laptop, t.textDim),
-        title: 'Hunt from',
-        detail: Text('No nodes seen yet', style: TextStyle(color: t.textDim, fontSize: 17)),
+      return Container(
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: t.surface,
+          border: Border.all(color: t.border),
+          borderRadius: BorderRadius.circular(10),
+        ),
+        child: Text('No mesh nodes seen yet.',
+            style: TextStyle(color: t.textDim, fontSize: 12)),
       );
     }
-    final current = nodes.contains(selected) ? selected : null;
-    return IosRow(
-      leading: const IosIcon(CupertinoIcons.device_laptop, AppTheme.accent),
-      title: 'Hunt from',
-      detail: Text(current == null ? 'Choose' : name(current), maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(color: t.textSecondary, fontSize: 17)),
-      chevron: enabled,
-      disabled: !enabled,
-      onTap: !enabled
-          ? null
-          : () async {
-              final v = await showCupertinoModalPopup<String>(
-                context: context,
-                builder: (ctx) => CupertinoActionSheet(
-                  title: const Text('Hunt from which node?'),
-                  actions: [
-                    for (final id in nodes)
-                      CupertinoActionSheetAction(isDefaultAction: id == current, onPressed: () => Navigator.pop(ctx, id), child: Text(name(id))),
-                  ],
-                  cancelButton: CupertinoActionSheetAction(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
-                ),
-              );
-              if (v != null) onChanged(v);
-            },
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+      decoration: BoxDecoration(
+        color: t.surface,
+        border: Border.all(color: t.border),
+        borderRadius: BorderRadius.circular(10),
+      ),
+      child: Row(
+        children: [
+          Icon(Icons.memory, color: t.textDim, size: 18),
+          const SizedBox(width: 8),
+          Text('HUNT FROM',
+              style: TextStyle(color: t.textDim, fontSize: 11, letterSpacing: 1.5)),
+          const SizedBox(width: 8),
+          Expanded(
+            child: DropdownButton<String>(
+              isExpanded: true,
+              value: nodes.contains(selected) ? selected : null,
+              hint: const Text('— Pick Node —'),
+              underline: const SizedBox.shrink(),
+              onChanged: enabled ? onChanged : null,
+              items: nodes.map((id) {
+                final label = appState.labelForNode(id);
+                return DropdownMenuItem(
+                  value: id,
+                  child: Text(label == id ? id : '$label ($id)',
+                      overflow: TextOverflow.ellipsis, maxLines: 1),
+                );
+              }).toList(),
+            ),
+          ),
+        ],
+      ),
     );
   }
 }
 
 class _RssiGaugePainter extends CustomPainter {
-  _RssiGaugePainter({required this.rssi, required this.normalized, required this.color, required this.track});
+  _RssiGaugePainter({required this.rssi, required this.normalized, required this.color});
   final int rssi;
   final double normalized;
   final Color color;
-  final Color track;
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -228,7 +284,7 @@ class _RssiGaugePainter extends CustomPainter {
     final radius = size.width / 2 - 8;
 
     final bgPaint = Paint()
-      ..color = track
+      ..color = AppTheme.border
       ..style = PaintingStyle.stroke
       ..strokeWidth = 6
       ..strokeCap = StrokeCap.round;
@@ -248,5 +304,5 @@ class _RssiGaugePainter extends CustomPainter {
 
   @override
   bool shouldRepaint(covariant _RssiGaugePainter old) =>
-      old.rssi != rssi || old.normalized != normalized || old.color != color || old.track != track;
+      old.rssi != rssi || old.normalized != normalized;
 }

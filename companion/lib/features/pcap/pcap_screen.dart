@@ -1,7 +1,6 @@
 import 'dart:async';
 import 'dart:io';
 
-import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -9,8 +8,6 @@ import 'package:oui_spy/core/ble/ble_manager.dart';
 import 'package:oui_spy/core/app_state.dart';
 import 'package:oui_spy/features/pcap/pcap_stats.dart';
 import 'package:oui_spy/theme/app_theme.dart';
-import 'package:oui_spy/widgets/ios.dart';
-import 'package:oui_spy/features/config/widgets/config_widgets.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:share_plus/share_plus.dart';
@@ -192,58 +189,6 @@ class _PcapScreenState extends ConsumerState<PcapScreen> {
     );
   }
 
-  void _pickChannel({required bool isStart}) async {
-    final current = isStart ? _chanStart : _chanEnd;
-    final min = isStart ? 1 : _chanStart;
-    final items = <int>[for (int i = min; i <= 14; i++) i];
-    final v = await showCupertinoModalPopup<int>(
-      context: context,
-      builder: (ctx) => CupertinoActionSheet(
-        title: Text(isStart ? 'Start channel' : 'End channel'),
-        actions: [
-          for (final ch in items)
-            CupertinoActionSheetAction(
-              isDefaultAction: ch == current,
-              onPressed: () => Navigator.pop(ctx, ch),
-              child: Text('Channel $ch'),
-            ),
-        ],
-        cancelButton: CupertinoActionSheetAction(
-          onPressed: () => Navigator.pop(ctx),
-          child: const Text('Cancel'),
-        ),
-      ),
-    );
-    if (v == null) return;
-    setState(() {
-      if (isStart) {
-        _chanStart = v;
-        if (v > _chanEnd) _chanEnd = v;
-      } else {
-        _chanEnd = v;
-      }
-    });
-    _savePrefs();
-  }
-
-  void _pick5gMode() async {
-    final v = await showCupertinoModalPopup<int>(
-      context: context,
-      builder: (ctx) => CupertinoActionSheet(
-        title: const Text('5 GHz mode'),
-        actions: [
-          CupertinoActionSheetAction(isDefaultAction: _mode5g == 0, onPressed: () => Navigator.pop(ctx, 0), child: const Text('Off')),
-          CupertinoActionSheetAction(isDefaultAction: _mode5g == 1, onPressed: () => Navigator.pop(ctx, 1), child: const Text('Regular (non-DFS)')),
-          CupertinoActionSheetAction(isDefaultAction: _mode5g == 2, onPressed: () => Navigator.pop(ctx, 2), child: const Text('+ DFS')),
-        ],
-        cancelButton: CupertinoActionSheetAction(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
-      ),
-    );
-    if (v == null) return;
-    setState(() => _mode5g = v);
-    _savePrefs();
-  }
-
   @override
   Widget build(BuildContext context) {
     final t = AppTheme.of(context);
@@ -251,6 +196,7 @@ class _PcapScreenState extends ConsumerState<PcapScreen> {
 
     return Scaffold(
       backgroundColor: t.background,
+      appBar: AppBar(title: const Text('PCAP CAPTURE')),
       body: StreamBuilder<PcapStats>(
         stream: ble.pcapStats,
         initialData: ble.latestPcapStats,
@@ -285,258 +231,177 @@ class _PcapScreenState extends ConsumerState<PcapScreen> {
               ?? (s.autoDurationSec > 0 ? s.autoDurationSec : _autoDurationSec);
           final autoCooldown = _autoCooldownOverride ?? s.autoCooldownSec;
 
-          final uptimeS = s.uptimeMs ~/ 1000;
-          Color stateColor;
-          switch (s.state) {
-            case 1: stateColor = AppTheme.success;
-            case 2: stateColor = AppTheme.warning;
-            case 3: stateColor = AppTheme.error;
-            case 4: stateColor = AppTheme.warning;
-            default: stateColor = t.textDim;
-          }
-
-          return IosPage(
-            title: 'Packet capture',
-            leading: CupertinoNavigationBarBackButton(
-              color: AppTheme.accent,
-              onPressed: () => context.canPop() ? context.pop() : context.go('/home'),
-            ),
-            actions: [
-              IosNavButton(
-                icon: CupertinoIcons.collections,
-                tooltip: 'Capture library',
-                onPressed: () => context.push('/pcap/library'),
-              ),
-            ],
-            slivers: [
-              SliverToBoxAdapter(
-                child: IosSection(
-                  header: 'Status',
-                  children: [
-                    IosRow(
-                      leading: _StatDot(color: stateColor),
-                      title: s.stateLabel,
-                      detail: Text(s.modeLabel, style: TextStyle(color: t.textDim, fontSize: 15)),
-                    ),
-                    IosRow(
-                      title: 'Uptime',
-                      detail: Text('${uptimeS}s', style: TextStyle(color: t.textSecondary, fontSize: 15, fontFamily: 'monospace')),
-                    ),
-                    IosRow(
-                      title: 'Sent',
-                      detail: Text(_humanBytes(s.bytesWritten), style: TextStyle(color: t.textSecondary, fontSize: 15, fontFamily: 'monospace')),
-                    ),
-                    IosRow(
-                      title: 'Received',
-                      detail: Text(_humanBytes(_bytesWritten), style: TextStyle(color: t.textSecondary, fontSize: 15, fontFamily: 'monospace')),
-                    ),
-                    if (s.modeEnum == PcapMode.wifi)
-                      IosRow(
-                        title: 'Channel',
-                        detail: Text('${s.currentChannel}', style: TextStyle(color: t.textSecondary, fontSize: 15, fontFamily: 'monospace')),
-                      ),
-                    IosRow(
-                      title: 'Dropped',
-                      detail: Text('${s.droppedFrames}', style: TextStyle(color: s.droppedFrames > 0 ? AppTheme.error : t.textSecondary, fontSize: 15, fontFamily: 'monospace')),
-                    ),
-                    if (s.isAutoTriggered)
-                      IosRow(
-                        leading: const IosIcon(Icons.bolt, AppTheme.warning),
-                        title: 'Auto-triggered',
-                        subtitle: Text('${s.autoTriggerEngineName} ${s.autoTriggerMacStr}${s.autoRemainingMs > 0 ? ' · ${(s.autoRemainingMs / 1000).ceil()}s' : ''}'),
-                      ),
-                  ],
+          return SingleChildScrollView(
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                _StateCard(stats: s, t: t, localBytes: _bytesWritten),
+                const SizedBox(height: 16),
+                _AutoPcapCard(
+                  enabled: autoEnabled,
+                  durationSec: autoDuration,
+                  cooldownSec: autoCooldown,
+                  cooldownRemainingMs: s.autoCooldownRemainingMs,
+                  onToggle: (v) async {
+                    setState(() => _autoPcapOverride = v);
+                    try {
+                      await ble.setAutoPcap(v);
+                    } on Exception catch (e) {
+                      if (context.mounted) {
+                        setState(() => _autoPcapOverride = null);
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(content: Text('Auto-PCAP set failed: $e')),
+                        );
+                      }
+                    }
+                  },
+                  onDuration: (v) async {
+                    setState(() {
+                      _autoDurationOverride = v;
+                      _autoDurationSec = v;
+                    });
+                    try {
+                      await ble.setAutoPcapDuration(v);
+                    } on Exception catch (e) {
+                      if (context.mounted) {
+                        setState(() => _autoDurationOverride = null);
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(content: Text('Duration set failed: $e')),
+                        );
+                      }
+                    }
+                  },
+                  onCooldown: (v) async {
+                    setState(() {
+                      _autoCooldownOverride = v;
+                    });
+                    try {
+                      await ble.setAutoPcapCooldown(v);
+                    } on Exception catch (e) {
+                      if (context.mounted) {
+                        setState(() => _autoCooldownOverride = null);
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(content: Text('Cooldown set failed: $e')),
+                        );
+                      }
+                    }
+                  },
                 ),
-              ),
-              SliverToBoxAdapter(
-                child: IosSection(
-                  header: 'Auto-PCAP',
-                  footer: autoEnabled
-                      ? 'Any detection starts a capture automatically.'
-                      : 'Off. Detections are not auto-captured.',
-                  children: [
-                    ConfigToggleRow(
-                      icon: Icons.bolt,
-                      label: 'Auto-PCAP on detect',
-                      color: AppTheme.accent,
-                      value: autoEnabled,
-                      onChanged: (v) async {
-                        setState(() => _autoPcapOverride = v);
-                        try {
-                          await ble.setAutoPcap(v);
-                        } on Exception catch (e) {
-                          if (context.mounted) {
-                            setState(() => _autoPcapOverride = null);
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              SnackBar(content: Text('Auto-PCAP set failed: $e')),
-                            );
-                          }
-                        }
-                      },
-                    ),
-                    if (autoEnabled) ...[
-                      ConfigSliderRow(
-                        icon: Icons.timer,
-                        label: 'Window',
-                        valueLabel: '${autoDuration}s',
-                        min: 3, max: 120, divisions: 39,
-                        value: autoDuration.toDouble().clamp(3, 120),
-                        onChanged: (v) async {
-                          final val = v.round();
-                          setState(() {
-                            _autoDurationOverride = val;
-                            _autoDurationSec = val;
-                          });
-                          try {
-                            await ble.setAutoPcapDuration(val);
-                          } on Exception catch (e) {
-                            if (context.mounted) {
-                              setState(() => _autoDurationOverride = null);
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                SnackBar(content: Text('Duration set failed: $e')),
-                              );
-                            }
-                          }
-                        },
-                      ),
-                      ConfigSliderRow(
-                        icon: Icons.hourglass_bottom,
-                        label: 'Cooldown',
-                        valueLabel: autoCooldown == 0 ? 'Off' : '${autoCooldown}s',
-                        min: 0, max: 600, divisions: 60,
-                        value: autoCooldown.toDouble().clamp(0, 600),
-                        onChanged: (v) async {
-                          final val = v.round();
-                          setState(() => _autoCooldownOverride = val);
-                          try {
-                            await ble.setAutoPcapCooldown(val);
-                          } on Exception catch (e) {
-                            if (context.mounted) {
-                              setState(() => _autoCooldownOverride = null);
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                SnackBar(content: Text('Cooldown set failed: $e')),
-                              );
-                            }
-                          }
-                        },
-                      ),
-                      if (s.autoCooldownRemainingMs > 0)
-                        IosRow(
-                          leading: const IosIcon(Icons.hourglass_bottom, AppTheme.warning),
-                          title: 'Cooldown active',
-                          detail: Text('${(s.autoCooldownRemainingMs / 1000).ceil()}s', style: TextStyle(color: AppTheme.warning, fontSize: 15, fontFamily: 'monospace')),
+                const SizedBox(height: 16),
+                _NodePicker(
+                  selected: _targetNode,
+                  enabled: !isCapturing,
+                  onChanged: (id) => setState(() => _targetNode = id),
+                ),
+                const SizedBox(height: 16),
+                _ModeSelector(
+                  mode: _mode,
+                  enabled: !isCapturing,
+                  onChanged: (m) {
+                    setState(() => _mode = m);
+                    _savePrefs();
+                  },
+                ),
+                if (_mode == PcapMode.wifi) ...[
+                  const SizedBox(height: 12),
+                  _WifiConfigCard(
+                    chanStart: _chanStart,
+                    chanEnd: _chanEnd,
+                    enabled: !isCapturing,
+                    onChanStart: (v) {
+                      setState(() {
+                        _chanStart = v;
+                        if (v > _chanEnd) _chanEnd = v;
+                      });
+                      _savePrefs();
+                    },
+                    onChanEnd: (v) {
+                      setState(() => _chanEnd = v);
+                      _savePrefs();
+                    },
+                  ),
+                  if (ref.read(bleManagerProvider).board.toLowerCase().contains('c5')) ...[
+                    const SizedBox(height: 12),
+                    Row(
+                      children: [
+                        Text('5 GHz', style: Theme.of(context).textTheme.bodyMedium),
+                        const SizedBox(width: 12),
+                        DropdownButton<int>(
+                          value: _mode5g,
+                          onChanged: isCapturing
+                              ? null
+                              : (v) {
+                                  if (v == null) return;
+                                  setState(() => _mode5g = v);
+                                  _savePrefs();
+                                },
+                          items: const [
+                            DropdownMenuItem(value: 0, child: Text('Off')),
+                            DropdownMenuItem(value: 1, child: Text('Regular (non-DFS)')),
+                            DropdownMenuItem(value: 2, child: Text('+ DFS')),
+                          ],
                         ),
-                    ],
-                  ],
-                ),
-              ),
-              SliverToBoxAdapter(child: _NodePicker(
-                selected: _targetNode,
-                enabled: !isCapturing,
-                onChanged: (id) => setState(() => _targetNode = id),
-              )),
-              SliverToBoxAdapter(
-                child: IosSection(
-                  header: 'Mode',
-                  children: [
-                    Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                      child: IosSegments<PcapMode>(
-                        value: _mode,
-                        segments: const {PcapMode.wifi: 'Wi-Fi 802.11', PcapMode.ble: 'BLE LL PHDR'},
-                        onChanged: isCapturing ? (_) {} : (m) {
-                          setState(() => _mode = m);
-                          _savePrefs();
-                        },
-                      ),
+                      ],
                     ),
                   ],
-                ),
-              ),
-              if (_mode == PcapMode.wifi) ...[
-                SliverToBoxAdapter(
-                  child: IosSection(
-                    header: 'Channels',
-                    children: [
-                      IosRow(
-                        title: 'Start',
-                        detail: Text('$_chanStart', style: TextStyle(color: t.textSecondary, fontSize: 17)),
-                        chevron: !isCapturing,
-                        disabled: isCapturing,
-                        onTap: isCapturing ? null : () => _pickChannel(isStart: true),
-                      ),
-                      IosRow(
-                        title: 'End',
-                        detail: Text('$_chanEnd', style: TextStyle(color: t.textSecondary, fontSize: 17)),
-                        chevron: !isCapturing,
-                        disabled: isCapturing,
-                        onTap: isCapturing ? null : () => _pickChannel(isStart: false),
-                      ),
-                      if (ref.read(bleManagerProvider).board.toLowerCase().contains('c5'))
-                        IosRow(
-                          title: '5 GHz',
-                          detail: Text(
-                            switch (_mode5g) { 0 => 'Off', 1 => 'Regular', 2 => '+ DFS', _ => '?' },
-                            style: TextStyle(color: t.textSecondary, fontSize: 17),
-                          ),
-                          chevron: !isCapturing,
-                          disabled: isCapturing,
-                          onTap: isCapturing ? null : _pick5gMode,
-                        ),
-                    ],
+                ],
+                const SizedBox(height: 16),
+                if (activeMode == PcapMode.wifi)
+                  _WifiStatsGrid(stats: gridStats, t: t)
+                else
+                  _BleStatsGrid(stats: gridStats, t: t),
+                const SizedBox(height: 16),
+                OutlinedButton.icon(
+                  onPressed: _toggling ? null : (isActive ? _stop : _start),
+                  icon: _toggling
+                      ? const SizedBox(width: 16, height: 16,
+                          child: CircularProgressIndicator(strokeWidth: 2))
+                      : Icon(isActive ? Icons.stop : Icons.fiber_manual_record),
+                  label: Text(_toggling
+                      ? (isActive ? 'WRITING FILE…' : 'STARTING…')
+                      : (isActive ? 'STOP' : 'START')),
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: isActive ? AppTheme.error : AppTheme.success,
+                    side: BorderSide(color: isActive ? AppTheme.error : AppTheme.success),
+                    padding: const EdgeInsets.symmetric(vertical: 14),
                   ),
                 ),
-              ],
-              SliverToBoxAdapter(
-                child: activeMode == PcapMode.wifi
-                    ? _WifiStatsSection(stats: gridStats)
-                    : _BleStatsSection(stats: gridStats),
-              ),
-              SliverToBoxAdapter(
-                child: IosSection(
-                  children: [
-                    IosRow(
-                      leading: IosIcon(
-                        isActive ? CupertinoIcons.stop_fill : CupertinoIcons.circle_fill,
-                        isActive ? AppTheme.error : AppTheme.success,
-                      ),
-                      title: _toggling
-                          ? (isActive ? 'Writing file' : 'Starting')
-                          : (isActive ? 'Stop' : 'Start'),
-                      disabled: _toggling,
-                      onTap: _toggling ? null : (isActive ? _stop : _start),
+                if (isActive) ...[
+                  const SizedBox(height: 8),
+                  OutlinedButton.icon(
+                    onPressed: _toggling
+                        ? null
+                        : (isPaused
+                            ? () => ref.read(bleManagerProvider).resumePcap()
+                            : () => ref.read(bleManagerProvider).pausePcap()),
+                    icon: Icon(isPaused ? Icons.play_arrow : Icons.pause),
+                    label: Text(isPaused ? 'RESUME' : 'PAUSE'),
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: AppTheme.warning,
+                      side: const BorderSide(color: AppTheme.warning),
+                      padding: const EdgeInsets.symmetric(vertical: 14),
                     ),
-                    if (isActive)
-                      IosRow(
-                        leading: IosIcon(
-                          isPaused ? CupertinoIcons.play_fill : CupertinoIcons.pause_fill,
-                          AppTheme.warning,
-                        ),
-                        title: isPaused ? 'Resume' : 'Pause',
-                        disabled: _toggling,
-                        onTap: _toggling
-                            ? null
-                            : (isPaused
-                                ? () => ref.read(bleManagerProvider).resumePcap()
-                                : () => ref.read(bleManagerProvider).pausePcap()),
-                      ),
-                    if (hasFile)
-                      IosRow(
-                        leading: const IosIcon(CupertinoIcons.share, AppTheme.accent),
-                        title: 'Share last capture',
-                        onTap: () => _shareFile(_lastSaved!),
-                      ),
-                  ],
+                  ),
+                ],
+                const SizedBox(height: 8),
+                ElevatedButton.icon(
+                  onPressed: hasFile ? () => _shareFile(_lastSaved!) : null,
+                  icon: const Icon(Icons.ios_share),
+                  label: const Text('SHARE LAST PCAP'),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AppTheme.accent,
+                    foregroundColor: Colors.black,
+                    padding: const EdgeInsets.symmetric(vertical: 14),
+                  ),
                 ),
-              ),
-              SliverToBoxAdapter(
-                child: _SavedPcapsSection(
+                const SizedBox(height: 16),
+                _SavedPcapsSection(
                   loader: _listSavedPcaps,
                   refreshTick: _lastSaved?.path.hashCode ?? 0,
                 ),
-              ),
-              const SliverToBoxAdapter(child: SizedBox(height: 40)),
-            ],
+              ],
+            ),
           );
         },
       ),
@@ -544,177 +409,335 @@ class _PcapScreenState extends ConsumerState<PcapScreen> {
   }
 }
 
-class _StatDot extends StatelessWidget {
-  const _StatDot({required this.color});
-  final Color color;
+class _StateCard extends StatelessWidget {
+  const _StateCard({required this.stats, required this.t, required this.localBytes});
+  final PcapStats stats;
+  final ResolvedTheme t;
+  final int localBytes;
 
   @override
   Widget build(BuildContext context) {
-    return SizedBox(
-      width: 30, height: 30,
-      child: Center(
-        child: Container(
-          width: 10, height: 10,
-          decoration: BoxDecoration(color: color, shape: BoxShape.circle),
+    Color stateColor;
+    switch (stats.state) {
+      case 1: stateColor = AppTheme.success;
+      case 2: stateColor = AppTheme.warning;
+      case 3: stateColor = AppTheme.error;
+      case 4: stateColor = AppTheme.warning;
+      default: stateColor = t.textDim;
+    }
+    final uptimeS = stats.uptimeMs ~/ 1000;
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: t.surface,
+        border: Border.all(color: t.border),
+        borderRadius: BorderRadius.circular(10),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                width: 8, height: 8,
+                decoration: BoxDecoration(color: stateColor, shape: BoxShape.circle),
+              ),
+              const SizedBox(width: 8),
+              Text(stats.stateLabel,
+                  style: TextStyle(color: stateColor, fontFamily: 'monospace',
+                      fontWeight: FontWeight.bold, letterSpacing: 2)),
+              const SizedBox(width: 12),
+              Text(stats.modeLabel,
+                  style: TextStyle(color: t.textDim, fontFamily: 'monospace',
+                      fontSize: 11, letterSpacing: 2)),
+              const Spacer(),
+              if (stats.modeEnum == PcapMode.wifi)
+                Text('CH ${stats.currentChannel}',
+                    style: TextStyle(color: t.textDim, fontFamily: 'monospace')),
+            ],
+          ),
+          const SizedBox(height: 6),
+          Text(
+            'uptime ${uptimeS}s  •  Sent ${_humanBytes(stats.bytesWritten)}  •  Received ${_humanBytes(localBytes)}  •  dropped ${stats.droppedFrames}',
+            style: TextStyle(color: t.textDim, fontSize: 12, fontFamily: 'monospace'),
+          ),
+          if (stats.isAutoTriggered) ...[
+            const SizedBox(height: 6),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+              decoration: BoxDecoration(
+                color: AppTheme.warning.withValues(alpha: 0.10),
+                border: Border.all(color: AppTheme.warning.withValues(alpha: 0.35)),
+                borderRadius: BorderRadius.circular(4),
+              ),
+              child: Row(
+                children: [
+                  const Icon(Icons.bolt, size: 13, color: AppTheme.warning),
+                  const SizedBox(width: 4),
+                  Text(
+                    'AUTO',
+                    style: const TextStyle(
+                      color: AppTheme.warning, fontSize: 10,
+                      fontFamily: 'monospace', fontWeight: FontWeight.w700,
+                      letterSpacing: 1,
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Text(
+                    stats.autoTriggerEngineName.toUpperCase(),
+                    style: TextStyle(
+                      color: t.textPrimary, fontSize: 11,
+                      fontFamily: 'monospace', fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Flexible(
+                    child: Text(
+                      stats.autoTriggerMacStr,
+                      style: TextStyle(
+                        color: AppTheme.accent, fontSize: 11,
+                        fontFamily: 'monospace',
+                      ),
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                  if (stats.autoRemainingMs > 0) ...[
+                    const SizedBox(width: 8),
+                    Text(
+                      '${(stats.autoRemainingMs / 1000).ceil()}s',
+                      style: TextStyle(
+                        color: t.textDim, fontSize: 11,
+                        fontFamily: 'monospace',
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+class _ModeSelector extends StatelessWidget {
+  const _ModeSelector({required this.mode, required this.enabled, required this.onChanged});
+  final PcapMode mode;
+  final bool enabled;
+  final ValueChanged<PcapMode> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    final t = AppTheme.of(context);
+    return Container(
+      padding: const EdgeInsets.all(4),
+      decoration: BoxDecoration(
+        color: t.surface,
+        border: Border.all(color: t.border),
+        borderRadius: BorderRadius.circular(10),
+      ),
+      child: Row(
+        children: [
+          Expanded(child: _modeBtn(context, PcapMode.wifi, 'WIFI 802.11')),
+          Expanded(child: _modeBtn(context, PcapMode.ble, 'BLE LL PHDR')),
+        ],
+      ),
+    );
+  }
+
+  Widget _modeBtn(BuildContext context, PcapMode m, String label) {
+    final t = AppTheme.of(context);
+    final selected = mode == m;
+    return GestureDetector(
+      onTap: enabled ? () => onChanged(m) : null,
+      child: Container(
+        padding: const EdgeInsets.symmetric(vertical: 10),
+        decoration: BoxDecoration(
+          color: selected ? AppTheme.accent.withValues(alpha: 0.18) : Colors.transparent,
+          borderRadius: BorderRadius.circular(6),
+        ),
+        alignment: Alignment.center,
+        child: Text(label,
+            style: TextStyle(
+              color: selected ? AppTheme.accent : (enabled ? t.textPrimary : t.textDim),
+              fontFamily: 'monospace',
+              letterSpacing: 2,
+              fontWeight: selected ? FontWeight.bold : FontWeight.normal,
+              fontSize: 12,
+            )),
+      ),
+    );
+  }
+}
+
+class _WifiConfigCard extends StatelessWidget {
+  const _WifiConfigCard({
+    required this.chanStart, required this.chanEnd, required this.enabled,
+    required this.onChanStart, required this.onChanEnd,
+  });
+  final int chanStart;
+  final int chanEnd;
+  final bool enabled;
+  final ValueChanged<int> onChanStart;
+  final ValueChanged<int> onChanEnd;
+
+  @override
+  Widget build(BuildContext context) {
+    final t = AppTheme.of(context);
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: t.surface,
+        border: Border.all(color: t.border),
+        borderRadius: BorderRadius.circular(10),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text('CHANNELS',
+              style: TextStyle(color: t.textDim, letterSpacing: 2, fontSize: 11)),
+          const SizedBox(height: 4),
+          Row(
+            children: [
+              Expanded(child: _ChanDropdown(label: 'START', value: chanStart, enabled: enabled, onChanged: onChanStart)),
+              const SizedBox(width: 8),
+              Expanded(child: _ChanDropdown(label: 'END', value: chanEnd, enabled: enabled, min: chanStart, onChanged: onChanEnd)),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _ChanDropdown extends StatelessWidget {
+  const _ChanDropdown({
+    required this.label, required this.value, required this.enabled,
+    required this.onChanged, this.min = 1,
+  });
+  final String label;
+  final int value;
+  final bool enabled;
+  final int min;
+  final ValueChanged<int> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    final t = AppTheme.of(context);
+    final items = <int>[for (int i = min; i <= 14; i++) i];
+    return InputDecorator(
+      decoration: InputDecoration(
+        labelText: label,
+        labelStyle: TextStyle(color: t.textDim, fontSize: 11, letterSpacing: 2),
+        border: const OutlineInputBorder(),
+        contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+      ),
+      child: DropdownButtonHideUnderline(
+        child: DropdownButton<int>(
+          value: items.contains(value) ? value : items.first,
+          isDense: true,
+          onChanged: enabled ? (v) { if (v != null) onChanged(v); } : null,
+          items: [for (final i in items) DropdownMenuItem(value: i, child: Text('$i'))],
         ),
       ),
     );
   }
 }
 
-class _WifiStatsSection extends StatelessWidget {
-  const _WifiStatsSection({required this.stats});
+class _WifiStatsGrid extends StatelessWidget {
+  const _WifiStatsGrid({required this.stats, required this.t});
   final PcapStats stats;
+  final ResolvedTheme t;
 
   @override
   Widget build(BuildContext context) {
-    return IosSection(
-      header: 'Frame counts',
-      children: [
-        _statRow('Beacons', stats.beaconCount, AppTheme.accent),
-        _statRow('Probe requests', stats.probeReqCount, AppTheme.warning),
-        _statRow('Probe responses', stats.probeRespCount, AppTheme.warning),
-        _statRow('Deauth', stats.deauthCount, AppTheme.error),
-        _statRow('Disassociation', stats.disassocCount, AppTheme.error),
-        _statRow('Data', stats.dataCount, AppTheme.success),
-        _statRow('Control', stats.ctrlCount, null),
-        _statRow('Management other', stats.mgmtOtherCount, null),
-      ],
-    );
+    final rows = <(_StatTile, _StatTile)>[
+      (_StatTile(label: 'BEACONS', value: stats.beaconCount, color: AppTheme.accent),
+       _StatTile(label: 'PROBES (REQ)', value: stats.probeReqCount, color: AppTheme.warning)),
+      (_StatTile(label: 'PROBES (RESP)', value: stats.probeRespCount, color: AppTheme.warning),
+       _StatTile(label: 'DEAUTH', value: stats.deauthCount, color: AppTheme.error)),
+      (_StatTile(label: 'DISASSOC', value: stats.disassocCount, color: AppTheme.error),
+       _StatTile(label: 'DATA', value: stats.dataCount, color: AppTheme.success)),
+      (_StatTile(label: 'CTRL', value: stats.ctrlCount, color: t.textDim),
+       _StatTile(label: 'MGMT OTHER', value: stats.mgmtOtherCount, color: t.textDim)),
+      (_StatTile(label: 'DROPPED', value: stats.droppedFrames, color: AppTheme.error),
+       _StatTile(label: 'TX BYTES', value: stats.bytesWritten, color: t.textSecondary)),
+    ];
+    return _gridBox(context, rows);
   }
 }
 
-class _BleStatsSection extends StatelessWidget {
-  const _BleStatsSection({required this.stats});
+class _BleStatsGrid extends StatelessWidget {
+  const _BleStatsGrid({required this.stats, required this.t});
   final PcapStats stats;
+  final ResolvedTheme t;
 
   @override
   Widget build(BuildContext context) {
-    return IosSection(
-      header: 'Frame counts',
-      children: [
-        _statRow('Advertisements', stats.bleAdvCount, AppTheme.accent),
-        _statRow('Scan responses', stats.bleScanCount, AppTheme.warning),
-      ],
-    );
+    final rows = <(_StatTile, _StatTile)>[
+      (_StatTile(label: 'ADVS', value: stats.bleAdvCount, color: AppTheme.accent),
+       _StatTile(label: 'SCAN RSP', value: stats.bleScanCount, color: AppTheme.warning)),
+      (_StatTile(label: 'DROPPED', value: stats.droppedFrames, color: AppTheme.error),
+       _StatTile(label: 'TX BYTES', value: stats.bytesWritten, color: t.textSecondary)),
+    ];
+    return _gridBox(context, rows);
   }
 }
 
-Widget _statRow(String label, int value, Color? color) {
-  return Builder(builder: (context) {
+Widget _gridBox(BuildContext context, List<(_StatTile, _StatTile)> rows) {
+  final t = AppTheme.of(context);
+  return Container(
+    padding: const EdgeInsets.all(8),
+    decoration: BoxDecoration(
+      color: t.surface,
+      border: Border.all(color: t.border),
+      borderRadius: BorderRadius.circular(10),
+    ),
+    child: Column(
+      children: [
+        for (final row in rows)
+          Row(children: [Expanded(child: row.$1), Expanded(child: row.$2)]),
+      ],
+    ),
+  );
+}
+
+class _StatTile extends StatelessWidget {
+  const _StatTile({required this.label, required this.value, required this.color});
+  final String label;
+  final int value;
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) {
     final t = AppTheme.of(context);
-    return IosRow(
-      title: label,
-      detail: Text(
-        _fmt(value),
-        style: TextStyle(color: color ?? t.textDim, fontSize: 17, fontFamily: 'monospace', fontWeight: FontWeight.w600),
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 8),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(label, style: TextStyle(color: t.textDim, fontSize: 10, letterSpacing: 2)),
+          const SizedBox(height: 2),
+          Text(_fmt(value),
+              style: TextStyle(color: color, fontFamily: 'monospace',
+                  fontSize: 18, fontWeight: FontWeight.bold)),
+        ],
       ),
     );
-  });
-}
+  }
 
-String _fmt(int v) {
-  if (v < 1000) return v.toString();
-  if (v < 1000000) return '${(v / 1000).toStringAsFixed(1)}k';
-  return '${(v / 1000000).toStringAsFixed(2)}M';
+  static String _fmt(int v) {
+    if (v < 1000) return v.toString();
+    if (v < 1000000) return '${(v / 1000).toStringAsFixed(1)}k';
+    return '${(v / 1000000).toStringAsFixed(2)}M';
+  }
 }
 
 String _humanBytes(int n) {
   if (n < 1024) return '${n}B';
   if (n < 1024 * 1024) return '${(n / 1024).toStringAsFixed(1)}KB';
   return '${(n / 1024 / 1024).toStringAsFixed(2)}MB';
-}
-
-class _NodePicker extends ConsumerWidget {
-  const _NodePicker({
-    required this.selected,
-    required this.enabled,
-    required this.onChanged,
-  });
-  final String? selected;
-  final bool enabled;
-  final ValueChanged<String?> onChanged;
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final appState = ref.watch(appStateProvider);
-    final t = AppTheme.of(context);
-    final mgr = appState.isManagerConnected;
-
-    if (!mgr) {
-      return IosSection(
-        header: 'Capture node',
-        children: [
-          IosRow(
-            leading: IosIcon(Icons.memory, t.textDim),
-            title: 'Local capture',
-            subtitle: const Text('Captures on this device'),
-          ),
-        ],
-      );
-    }
-
-    final nodes = appState.liveKnownNodes
-        .where((id) => id != appState.nodeId)
-        .toList();
-    String name(String id) {
-      final label = appState.labelForNode(id);
-      return label == id ? id : '$label ($id)';
-    }
-    if (nodes.isEmpty) {
-      return IosSection(
-        header: 'Capture node',
-        children: [
-          IosRow(
-            leading: IosIcon(CupertinoIcons.device_laptop, t.textDim),
-            title: 'Capture from',
-            detail: Text('No nodes seen yet', style: TextStyle(color: t.textDim, fontSize: 17)),
-          ),
-        ],
-      );
-    }
-    final current = nodes.contains(selected) ? selected : null;
-    return IosSection(
-      header: 'Capture node',
-      children: [
-        IosRow(
-          leading: const IosIcon(CupertinoIcons.device_laptop, AppTheme.accent),
-          title: 'Capture from',
-          detail: Text(
-            current == null ? 'Choose' : name(current),
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: TextStyle(color: t.textSecondary, fontSize: 17),
-          ),
-          chevron: enabled,
-          disabled: !enabled,
-          onTap: !enabled
-              ? null
-              : () async {
-                  final v = await showCupertinoModalPopup<String>(
-                    context: context,
-                    builder: (ctx) => CupertinoActionSheet(
-                      title: const Text('Capture from which node?'),
-                      actions: [
-                        for (final id in nodes)
-                          CupertinoActionSheetAction(
-                            isDefaultAction: id == current,
-                            onPressed: () => Navigator.pop(ctx, id),
-                            child: Text(name(id)),
-                          ),
-                      ],
-                      cancelButton: CupertinoActionSheetAction(
-                        onPressed: () => Navigator.pop(ctx),
-                        child: const Text('Cancel'),
-                      ),
-                    ),
-                  );
-                  if (v != null) onChanged(v);
-                },
-        ),
-      ],
-    );
-  }
 }
 
 class _SavedPcapsSection extends StatefulWidget {
@@ -749,14 +772,18 @@ class _SavedPcapsSectionState extends State<_SavedPcapsSection> {
     final files = await widget.loader();
     if (files.isEmpty) return;
     if (!mounted) return;
-    final ok = await showCupertinoDialog<bool>(
+    final ok = await showDialog<bool>(
       context: context,
-      builder: (ctx) => CupertinoAlertDialog(
+      builder: (ctx) => AlertDialog(
         title: const Text('Delete all captures?'),
         content: Text('${files.length} pcap file(s) will be deleted.'),
         actions: [
-          CupertinoDialogAction(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
-          CupertinoDialogAction(isDestructiveAction: true, onPressed: () => Navigator.pop(ctx, true), child: const Text('Delete all')),
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('CANCEL')),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            style: TextButton.styleFrom(foregroundColor: AppTheme.error),
+            child: const Text('DELETE ALL'),
+          ),
         ],
       ),
     );
@@ -780,14 +807,18 @@ class _SavedPcapsSectionState extends State<_SavedPcapsSection> {
   }
 
   Future<void> _deleteFile(File f) async {
-    final ok = await showCupertinoDialog<bool>(
+    final ok = await showDialog<bool>(
       context: context,
-      builder: (ctx) => CupertinoAlertDialog(
+      builder: (ctx) => AlertDialog(
         title: const Text('Delete capture?'),
         content: Text(f.uri.pathSegments.last),
         actions: [
-          CupertinoDialogAction(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
-          CupertinoDialogAction(isDestructiveAction: true, onPressed: () => Navigator.pop(ctx, true), child: const Text('Delete')),
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('CANCEL')),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            style: TextButton.styleFrom(foregroundColor: AppTheme.error),
+            child: const Text('DELETE'),
+          ),
         ],
       ),
     );
@@ -798,40 +829,74 @@ class _SavedPcapsSectionState extends State<_SavedPcapsSection> {
 
   @override
   Widget build(BuildContext context) {
-    return FutureBuilder<List<File>>(
-      future: _future,
-      builder: (context, snap) {
-        if (!snap.hasData) return const SizedBox.shrink();
-        final files = snap.data!;
-        if (files.isEmpty) {
-          return IosSection(
-            header: 'Saved captures',
-            children: [
-              IosRow(
-                leading: const IosIcon(CupertinoIcons.tray, AppTheme.accent),
-                title: 'No captures yet',
-              ),
-            ],
-          );
-        }
-        return IosSection(
-          header: 'Saved captures',
-          footer: '${files.length} file${files.length == 1 ? '' : 's'}',
+    final t = AppTheme.of(context);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
           children: [
-            for (final f in files)
-              _PcapRow(
-                file: f,
-                onShare: () => _shareFile(f),
-                onDelete: () => _deleteFile(f),
-              ),
-            IosRow(
-              leading: const IosIcon(CupertinoIcons.trash, AppTheme.error),
-              title: 'Delete all captures',
-              onTap: _clearAll,
+            Text('SAVED CAPTURES',
+                style: TextStyle(color: t.textDim, fontSize: 11, letterSpacing: 2)),
+            const Spacer(),
+            IconButton(
+              icon: const Icon(Icons.open_in_full, size: 18),
+              color: t.textDim,
+              tooltip: 'Open capture library',
+              onPressed: () => context.push('/pcap/library'),
+            ),
+            IconButton(
+              icon: const Icon(Icons.refresh, size: 18),
+              color: t.textDim,
+              onPressed: _reload,
+            ),
+            IconButton(
+              icon: const Icon(Icons.delete_sweep, size: 18),
+              color: AppTheme.error,
+              tooltip: 'Clear all',
+              onPressed: _clearAll,
             ),
           ],
-        );
-      },
+        ),
+        FutureBuilder<List<File>>(
+          future: _future,
+          builder: (context, snap) {
+            if (!snap.hasData) {
+              return Padding(
+                padding: const EdgeInsets.all(8),
+                child: Text('Loading…', style: TextStyle(color: t.textDim)),
+              );
+            }
+            final files = snap.data!;
+            if (files.isEmpty) {
+              return Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: t.surface,
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(color: t.border),
+                ),
+                child: Text('No captures yet.', style: TextStyle(color: t.textDim)),
+              );
+            }
+            return Container(
+              decoration: BoxDecoration(
+                color: t.surface,
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(color: t.border),
+              ),
+              child: Column(
+                children: [
+                  for (final f in files) _PcapRow(
+                    file: f,
+                    onShare: () => _shareFile(f),
+                    onDelete: () => _deleteFile(f),
+                  ),
+                ],
+              ),
+            );
+          },
+        ),
+      ],
     );
   }
 }
@@ -847,21 +912,261 @@ class _PcapRow extends StatelessWidget {
     final t = AppTheme.of(context);
     final name = file.uri.pathSegments.last;
     final isBle = name.contains('_ble_');
-    return IosRow(
-      leading: IosIcon(
-        isBle ? Icons.bluetooth : Icons.wifi,
-        isBle ? AppTheme.flockBle : AppTheme.accent,
-      ),
-      title: name,
-      subtitle: FutureBuilder<int>(
-        future: file.length(),
-        builder: (ctx, snap) => Text(_humanBytes(snap.data ?? 0)),
-      ),
-      trailing: Row(
-        mainAxisSize: MainAxisSize.min,
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      child: Row(
         children: [
-          CupertinoButton(padding: EdgeInsets.zero, minimumSize: const Size.square(32), onPressed: onShare, child: Icon(CupertinoIcons.share, size: 20, color: t.textPrimary)),
-          CupertinoButton(padding: EdgeInsets.zero, minimumSize: const Size.square(32), onPressed: onDelete, child: const Icon(CupertinoIcons.delete, size: 20, color: AppTheme.error)),
+          Icon(isBle ? Icons.bluetooth : Icons.wifi,
+              color: isBle ? AppTheme.flockBle : AppTheme.accent, size: 16),
+          const SizedBox(width: 10),
+          Expanded(
+            child: FutureBuilder<int>(
+              future: file.length(),
+              builder: (ctx, snap) {
+                final sz = snap.data ?? 0;
+                return Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(name,
+                        style: TextStyle(color: t.textPrimary, fontSize: 12, fontFamily: 'monospace')),
+                    Text(_humanBytes(sz),
+                        style: TextStyle(color: t.textDim, fontSize: 10)),
+                  ],
+                );
+              },
+            ),
+          ),
+          IconButton(
+            icon: const Icon(Icons.ios_share, size: 18),
+            color: AppTheme.accent,
+            onPressed: onShare,
+          ),
+          IconButton(
+            icon: const Icon(Icons.delete_outline, size: 18),
+            color: AppTheme.error,
+            onPressed: onDelete,
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _AutoPcapCard extends StatelessWidget {
+  const _AutoPcapCard({
+    required this.enabled,
+    required this.durationSec,
+    required this.cooldownSec,
+    required this.cooldownRemainingMs,
+    required this.onToggle,
+    required this.onDuration,
+    required this.onCooldown,
+  });
+  final bool enabled;
+  final int durationSec;
+  final int cooldownSec;
+  final int cooldownRemainingMs;
+  final ValueChanged<bool> onToggle;
+  final ValueChanged<int> onDuration;
+  final ValueChanged<int> onCooldown;
+
+  @override
+  Widget build(BuildContext context) {
+    final t = AppTheme.of(context);
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: t.surface,
+        border: Border.all(color: t.border),
+        borderRadius: BorderRadius.circular(10),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(Icons.flash_on,
+                  color: enabled ? AppTheme.accent : t.textDim, size: 18),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('Auto-PCAP on detect',
+                        style: TextStyle(color: t.textPrimary, fontSize: 13, fontWeight: FontWeight.w600)),
+                    Text(
+                      enabled
+                          ? 'Any detection (OUI/Flock) starts a capture'
+                          : 'Off — detections are not auto-captured',
+                      style: TextStyle(color: t.textSecondary, fontSize: 11),
+                    ),
+                  ],
+                ),
+              ),
+              Switch(value: enabled, onChanged: onToggle, activeThumbColor: AppTheme.accent),
+            ],
+          ),
+          if (enabled) ...[
+            const SizedBox(height: 8),
+            Row(
+              children: [
+                Text('Window', style: TextStyle(color: t.textDim, fontSize: 11, letterSpacing: 2)),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Slider(
+                    value: durationSec.toDouble().clamp(3, 120),
+                    min: 3, max: 120, divisions: 39,
+                    label: '${durationSec}s',
+                    activeColor: AppTheme.accent,
+                    onChanged: (v) => onDuration(v.round()),
+                  ),
+                ),
+                SizedBox(
+                  width: 44,
+                  child: Text('${durationSec}s',
+                      textAlign: TextAlign.right,
+                      style: TextStyle(color: t.textPrimary, fontFamily: 'monospace')),
+                ),
+              ],
+            ),
+            Row(
+              children: [
+                Text('Cooldown', style: TextStyle(color: t.textDim, fontSize: 11, letterSpacing: 2)),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Slider(
+                    value: cooldownSec.toDouble().clamp(0, 600),
+                    min: 0, max: 600, divisions: 60,
+                    label: cooldownSec == 0 ? 'off' : '${cooldownSec}s',
+                    activeColor: AppTheme.warning,
+                    onChanged: (v) => onCooldown(v.round()),
+                  ),
+                ),
+                SizedBox(
+                  width: 56,
+                  child: Text(
+                    cooldownSec == 0 ? 'off' : '${cooldownSec}s',
+                    textAlign: TextAlign.right,
+                    style: TextStyle(color: t.textPrimary, fontFamily: 'monospace'),
+                  ),
+                ),
+              ],
+            ),
+            if (cooldownRemainingMs > 0)
+              Padding(
+                padding: const EdgeInsets.only(top: 2),
+                child: Row(
+                  children: [
+                    const Icon(Icons.hourglass_bottom, size: 12, color: AppTheme.warning),
+                    const SizedBox(width: 4),
+                    Text(
+                      'cooldown active — ${(cooldownRemainingMs / 1000).ceil()}s remaining',
+                      style: const TextStyle(
+                        color: AppTheme.warning, fontSize: 10,
+                        fontFamily: 'monospace',
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+class _NodePicker extends ConsumerWidget {
+  const _NodePicker({
+    required this.selected,
+    required this.enabled,
+    required this.onChanged,
+  });
+  final String? selected;
+  final bool enabled;
+  final ValueChanged<String?> onChanged;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final appState = ref.watch(appStateProvider);
+    final t = AppTheme.of(context);
+    final mgr = appState.isManagerConnected;
+
+    final box = BoxDecoration(
+      color: t.surface,
+      border: Border.all(color: t.border),
+      borderRadius: BorderRadius.circular(10),
+    );
+
+    if (!mgr) {
+      return Container(
+        padding: const EdgeInsets.all(12),
+        decoration: box,
+        child: Row(
+          children: [
+            Icon(Icons.memory, color: t.textDim, size: 18),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text('LOCAL CAPTURE',
+                      style: TextStyle(
+                        color: t.textPrimary, fontSize: 12,
+                        letterSpacing: 1.5, fontWeight: FontWeight.w700,
+                      )),
+                  const SizedBox(height: 2),
+                  Text('Captures on this device.',
+                      style: TextStyle(color: t.textSecondary, fontSize: 11)),
+                ],
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    final nodes = appState.liveKnownNodes
+        .where((id) => id != appState.nodeId)
+        .toList();
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: box,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(Icons.lan, color: AppTheme.accent, size: 18),
+              const SizedBox(width: 10),
+              Text('PCAP NODE',
+                  style: TextStyle(
+                    color: AppTheme.accent, fontSize: 12,
+                    letterSpacing: 1.5, fontWeight: FontWeight.w700,
+                  )),
+            ],
+          ),
+          const SizedBox(height: 8),
+          if (nodes.isEmpty)
+            Text('No live nodes yet — wait for nodes to report in.',
+                style: TextStyle(color: t.textSecondary, fontSize: 11))
+          else
+            DropdownButton<String>(
+              value: nodes.contains(selected) ? selected : null,
+              hint: Text('Select a node',
+                  style: TextStyle(color: t.textDim, fontSize: 13)),
+              isExpanded: true,
+              dropdownColor: t.surface,
+              underline: const SizedBox.shrink(),
+              items: nodes
+                  .map((id) => DropdownMenuItem(
+                        value: id,
+                        child: Text('${appState.labelForNode(id)}  ·  $id',
+                            style: TextStyle(color: t.textPrimary)),
+                      ))
+                  .toList(),
+              onChanged: enabled ? onChanged : null,
+            ),
         ],
       ),
     );

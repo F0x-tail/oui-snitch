@@ -3,26 +3,26 @@ import 'dart:convert';
 import 'observation.dart';
 
 enum SignatureClass {
-  finder('Trackers'),
+  finder('Finder tags'),
   beacon('Beacons'),
   signage('Signage'),
   wearable('Wearables'),
   surveillance('Surveillance'),
   drone('Drones'),
-  hacking('Hacking tools'),
+  hacking('Pentest'),
   bodyworn('Wearables'),
-  lawEnforcement('Public safety & fleet'),
-  vehicle('Vehicles'),
-  glasses('Smart glasses'),
+  lawEnforcement('Public safety'),
+  vehicle('Vehicle'),
+  glasses('Glasses'),
   audio('Audio'),
   camera('Cameras'),
   thermostat('Thermostats'),
   lock('Access control'),
   health('Health'),
-  home('Home & office'),
-  isp('Routers & network'),
-  mesh('Mesh radios'),
-  phone('Phones & computers'),
+  home('Home IoT'),
+  isp('ISP / routers'),
+  mesh('Mesh'),
+  phone('Phones / PCs'),
   other('Other');
 
   final String label;

@@ -22,7 +22,7 @@ class _IdleControls extends StatelessWidget {
           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
           decoration: BoxDecoration(
             color: th.background.withValues(alpha: 0.92),
-            borderRadius: BorderRadius.circular(8),
+            borderRadius: BorderRadius.circular(10),
             border: Border.all(color: th.border, width: 0.5),
           ),
           child: Row(
@@ -435,7 +435,7 @@ class _MapStyleButton extends StatelessWidget {
       offset: const Offset(0, 40),
       color: t.surface,
       shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(8),
+        borderRadius: BorderRadius.circular(10),
         side: BorderSide(color: t.border),
       ),
       itemBuilder: (_) => [
@@ -638,7 +638,7 @@ class _DetectionList extends StatelessWidget {
       constraints: const BoxConstraints(maxHeight: 100),
       decoration: BoxDecoration(
         color: t.background.withValues(alpha: 0.92),
-        borderRadius: BorderRadius.circular(8),
+        borderRadius: BorderRadius.circular(10),
         border: Border.all(color: t.border),
       ),
       child: ListView(

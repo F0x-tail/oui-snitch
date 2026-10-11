@@ -1,319 +1,819 @@
 import 'dart:async';
 
-import 'package:flutter/cupertino.dart';
+import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:oui_spy/core/app_state.dart';
 import 'package:oui_spy/core/ble/ble_manager.dart';
-import 'package:oui_spy/core/gps/gps_provider.dart';
-import 'package:oui_spy/core/gps/gps_types.dart';
 import 'package:oui_spy/core/models/engine.dart';
+import 'package:oui_spy/core/wardrive_state.dart';
 import 'package:oui_spy/core/wigle/wigle_api.dart';
 import 'package:oui_spy/core/wigle/wigle_provider.dart';
 import 'package:oui_spy/core/wdgwars/wdgwars_provider.dart';
 import 'package:oui_spy/features/config/config_menu_state.dart';
 import 'package:oui_spy/features/detections/detections_screen.dart';
-import 'package:oui_spy/features/devices/devices_screen.dart' show rssiColor;
 import 'package:oui_spy/features/home/engine_card.dart';
 import 'package:oui_spy/features/wardrive/session_launch.dart';
+import 'package:oui_spy/features/home/status_bar.dart';
 import 'package:oui_spy/theme/app_theme.dart';
-import 'package:oui_spy/widgets/ios.dart';
-
-const _engineGroups = <(String, List<Engine>)>[
-  ('Flock Safety', [Engine.flockBle, Engine.flockWifi]),
-  ('Tracking', [Engine.detector, Engine.foxhunter]),
-  ('Specialty', [Engine.skySpy, Engine.uniPwn, Engine.pcap]),
-];
 
 class HomeScreen extends ConsumerWidget {
   const HomeScreen({super.key});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final t = AppTheme.of(context);
     final state = ref.watch(appStateProvider);
-    final ble = ref.read(bleManagerProvider);
-    return IosPage(
-      title: 'OUI-SPY',
-      actions: [
-        if (state.isConnected)
-          IosNavButton(
-            icon: CupertinoIcons.arrow_2_squarepath,
-            tooltip: 'Switch node',
-            onPressed: () async {
-              await ble.disconnect();
-              if (context.mounted) context.push('/onboarding');
-            },
-          ),
-      ],
-      slivers: [
-        SliverToBoxAdapter(child: _SpoolImportBanner(stream: ble.awayImport)),
-        SliverToBoxAdapter(child: _StatusSection(state: state)),
-        if (state.isConnected) const SliverToBoxAdapter(child: _SessionSection()),
-        for (final (name, engines) in _engineGroups)
-          SliverToBoxAdapter(
-            child: IosSection(
-              header: name,
-              footer: state.isConnected ? null : (name == _engineGroups.last.$1 ? 'Connect a node to turn engines on.' : null),
-              children: [
-                for (final e in engines)
-                  state.isConnected
-                      ? EngineRow(engine: e)
-                      : IosRow(
-                          leading: IosIcon(e.icon, e.color.withValues(alpha: 0.55)),
-                          title: e.label,
-                          subtitle: Text(e.description),
-                          disabled: true,
-                        ),
-              ],
+
+    return Scaffold(
+      backgroundColor: t.background,
+      body: SafeArea(
+        child: Column(
+          children: [
+            const StatusBar(),
+            Expanded(
+              child: state.isConnected
+                  ? _ConnectedView(state: state)
+                  : _DisconnectedView(state: state),
             ),
-          ),
-        if (state.isConnected && state.recentDetections.isNotEmpty) SliverToBoxAdapter(child: _RecentSection(state: state)),
-        const SliverToBoxAdapter(child: _AccountsSection()),
-      ],
+          ],
+        ),
+      ),
     );
   }
 }
 
-class _StatusSection extends ConsumerStatefulWidget {
-  const _StatusSection({required this.state});
+class _DisconnectedView extends ConsumerWidget {
+  const _DisconnectedView({required this.state});
   final AppState state;
 
   @override
-  ConsumerState<_StatusSection> createState() => _StatusSectionState();
+  Widget build(BuildContext context, WidgetRef ref) {
+    final t = AppTheme.of(context);
+    final isConnecting =
+        state.connectionState == NodeConnectionState.connecting ||
+            state.connectionState == NodeConnectionState.negotiating ||
+            state.connectionState == NodeConnectionState.syncing;
+    final isReconnecting =
+        state.connectionState == NodeConnectionState.reconnecting;
+
+    final screenWidth = MediaQuery.of(context).size.width;
+    final horizontalPad = (screenWidth * 0.08).clamp(24.0, 64.0);
+
+    return SingleChildScrollView(
+      padding: EdgeInsets.symmetric(horizontal: horizontalPad, vertical: 32),
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 420),
+        child: Column(
+          children: [
+            const SizedBox(height: 40),
+            _PulsingRadar(active: isConnecting || isReconnecting),
+            const SizedBox(height: 28),
+            Text(
+              'OUI-SPY',
+              style: TextStyle(
+                color: t.textPrimary,
+                fontSize: 28,
+                fontWeight: FontWeight.w200,
+                letterSpacing: 8,
+              ),
+            ),
+            const SizedBox(height: 6),
+            Text(
+              isConnecting
+                  ? 'Establishing BLE link...'
+                  : isReconnecting
+                      ? 'Searching for your OUI-SPY…'
+                      : 'Multi-engine RF intelligence',
+              style: TextStyle(
+                color: t.textDim,
+                fontSize: 12,
+                letterSpacing: 1,
+              ),
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 40),
+            if (isConnecting) ...[
+              const _ConnectingIndicator(),
+              const SizedBox(height: 20),
+              SizedBox(
+                width: double.infinity,
+                height: 44,
+                child: OutlinedButton.icon(
+                  onPressed: () =>
+                      ref.read(bleManagerProvider).disconnect(),
+                  icon: const Icon(Icons.close, size: 14),
+                  label: const Text(
+                    'CANCEL',
+                    style: TextStyle(letterSpacing: 2, fontSize: 12),
+                  ),
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: AppTheme.error,
+                    side: BorderSide(
+                      color: AppTheme.error.withValues(alpha: 0.4),
+                    ),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                  ),
+                ),
+              ),
+            ] else if (!isReconnecting)
+              SizedBox(
+                width: double.infinity,
+                height: 48,
+                child: OutlinedButton.icon(
+                  onPressed: () => context.push('/onboarding'),
+                  icon: const Icon(Icons.bluetooth, size: 16),
+                  label: const Text(
+                    'CONNECT',
+                    style: TextStyle(letterSpacing: 2, fontSize: 13),
+                  ),
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: AppTheme.accent,
+                    side: const BorderSide(color: AppTheme.accent),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                  ),
+                ),
+              ),
+            if (isReconnecting) ...[
+              const SizedBox(height: 20),
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 10,
+                ),
+                decoration: BoxDecoration(
+                  color: AppTheme.accent.withValues(alpha: 0.08),
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(
+                    color: AppTheme.accent.withValues(alpha: 0.25),
+                  ),
+                ),
+                child: const Row(
+                  children: [
+                    SizedBox(
+                      width: 14,
+                      height: 14,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        color: AppTheme.accent,
+                      ),
+                    ),
+                    SizedBox(width: 8),
+                    Text(
+                      'RECONNECTING…',
+                      style: TextStyle(
+                        color: AppTheme.accent,
+                        fontSize: 10,
+                        fontWeight: FontWeight.w600,
+                        letterSpacing: 1,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 12),
+              SizedBox(
+                width: double.infinity,
+                height: 44,
+                child: OutlinedButton.icon(
+                  onPressed: () =>
+                      ref.read(bleManagerProvider).disconnect(),
+                  icon: const Icon(Icons.close, size: 14),
+                  label: const Text(
+                    'STOP RECONNECT',
+                    style: TextStyle(letterSpacing: 2, fontSize: 12),
+                  ),
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: AppTheme.error,
+                    side: BorderSide(
+                      color: AppTheme.error.withValues(alpha: 0.4),
+                    ),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                  ),
+                ),
+              ),
+            ],
+            const SizedBox(height: 48),
+            ...Engine.values.map(
+              (e) => Padding(
+                padding: const EdgeInsets.only(bottom: 12),
+                child: _EnginePreviewRow(engine: e),
+              ),
+            ),
+            const SizedBox(height: 8),
+            const _WardriveAccountsStrip(),
+          ],
+        ),
+      ),
+    );
+  }
 }
 
-class _StatusSectionState extends ConsumerState<_StatusSection> {
-  GpsPosition? _pos;
-  HwGpsState _hw = const HwGpsState(active: false, satellites: 0, source: GpsSource.phone, inUse: false);
-  StreamSubscription<GpsPosition>? _posSub;
-  StreamSubscription<HwGpsState>? _hwSub;
-  Timer? _tick;
+class _PulsingRadar extends StatefulWidget {
+  const _PulsingRadar({required this.active});
+  final bool active;
+
+  @override
+  State<_PulsingRadar> createState() => _PulsingRadarState();
+}
+
+class _PulsingRadarState extends State<_PulsingRadar>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _controller;
 
   @override
   void initState() {
     super.initState();
-    final gps = ref.read(gpsProvider);
-    _pos = gps.lastPosition;
-    _hw = gps.hwGps;
-    _posSub = gps.positionStream.listen((p) {
-      if (mounted) setState(() => _pos = p);
-    });
-    _hwSub = gps.hwGpsStream.listen((h) {
-      if (mounted) setState(() => _hw = h);
-    });
-    _tick = Timer.periodic(const Duration(seconds: 1), (_) {
-      if (mounted) setState(() {});
-    });
+    _controller = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 2500),
+    )..repeat();
   }
 
   @override
   void dispose() {
-    _posSub?.cancel();
-    _hwSub?.cancel();
-    _tick?.cancel();
+    _controller.dispose();
     super.dispose();
   }
 
-  String _uptime(Duration d) {
-    final h = d.inHours;
-    final m = d.inMinutes.remainder(60);
-    if (h > 0) return '${h}h ${m}m';
-    return '${m}m ${d.inSeconds.remainder(60)}s';
-  }
-
-  (String, Color) get _gps {
-    if (_hw.inUse) return ('Node GPS · ${_hw.satellites} satellites', AppTheme.gpsGood);
-    final p = _pos;
-    if (p == null) return (_hw.fallback ? 'Phone GPS · waiting for a fix' : 'No location fix', AppTheme.gpsNone);
-    final color = switch (p.quality) {
-      GpsQuality.good => AppTheme.gpsGood,
-      GpsQuality.fair => AppTheme.gpsFair,
-      GpsQuality.poor => AppTheme.gpsPoor,
-      GpsQuality.none => AppTheme.gpsNone,
-    };
-    return ('Phone GPS · ±${p.accuracy.toStringAsFixed(0)} m', color);
-  }
-
   @override
   Widget build(BuildContext context) {
-    final s = widget.state;
     final t = AppTheme.of(context);
-    final ble = ref.read(bleManagerProvider);
-    final connecting = s.connectionState == NodeConnectionState.connecting ||
-        s.connectionState == NodeConnectionState.negotiating ||
-        s.connectionState == NodeConnectionState.syncing;
-    final reconnecting = s.connectionState == NodeConnectionState.reconnecting;
-    final (connColor, connText) = s.isConnected
-        ? (AppTheme.success, s.sessionStartTime != null ? 'Connected · up ${_uptime(s.sessionUptime)}' : 'Connected')
-        : connecting
-            ? (AppTheme.warning, 'Connecting…')
-            : reconnecting
-                ? (AppTheme.error, 'Connection lost · searching for the node')
-                : (t.textDim, 'Not connected');
-    final (gpsText, gpsColor) = _gps;
-    final active = Engine.values.where(s.isEngineActive).length;
-    final selfId = AppState.canonicalNodeId(s.nodeId);
-    final meshNodes = s.liveKnownNodes.where((id) => id != selfId && !s.isManagerNode(id)).length;
-
-    return IosSection(children: [
-      IosRow(
-        leading: IosIcon(CupertinoIcons.bluetooth, connColor),
-        title: s.isConnected && s.nodeId.isNotEmpty ? s.nodeId : 'OUI-SPY node',
-        subtitle: Text(connText),
-        trailing: s.isConnected
-            ? null
-            : connecting || reconnecting
-                ? Row(mainAxisSize: MainAxisSize.min, children: [
-                    const CupertinoActivityIndicator(),
-                    CupertinoButton(
-                      padding: const EdgeInsets.only(left: 12),
-                      onPressed: () => ble.disconnect(),
-                      child: Text(reconnecting ? 'Stop' : 'Cancel', style: const TextStyle(color: AppTheme.error)),
+    return SizedBox(
+      width: 80,
+      height: 80,
+      child: AnimatedBuilder(
+        animation: _controller,
+        builder: (context, child) {
+          final pulse = widget.active ? _controller.value : 0.0;
+          return Stack(
+            alignment: Alignment.center,
+            children: [
+              Container(
+                width: 80,
+                height: 80,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  border: Border.all(
+                    color: AppTheme.accent.withValues(
+                      alpha: widget.active ? 0.06 + pulse * 0.12 : 0.06,
                     ),
-                  ])
-                : CupertinoButton.filled(
-                    padding: const EdgeInsets.symmetric(horizontal: 16),
-                    minimumSize: const Size(44, 36),
-                    onPressed: () => context.push('/onboarding'),
-                    child: const Text('Connect'),
+                    width: 0.5,
                   ),
-      ),
-      IosRow(
-        leading: IosIcon(CupertinoIcons.location_fill, gpsColor),
-        title: 'Location',
-        subtitle: Text(gpsText),
-      ),
-      if (s.isConnected)
-        IosRow(
-          leading: const IosIcon(CupertinoIcons.waveform_path_ecg, AppTheme.accent),
-          title: '${s.totalDetections} unique detections',
-          subtitle: Text('$active of ${Engine.values.length} engines on${s.totalRate > 0 ? ' · ${s.totalRate} per minute' : ''}'),
-          chevron: true,
-          onTap: () {
-            ref.read(detectionsViewProvider.notifier).state = DetectionsView.live;
-            context.go('/detections');
-          },
-        ),
-      if (s.isConnected && s.isManagerConnected)
-        IosRow(
-          leading: IosIcon(CupertinoIcons.circle_grid_hex_fill, s.meshEnabled ? (meshNodes > 0 ? AppTheme.success : AppTheme.warning) : t.textDim),
-          title: 'Mesh',
-          subtitle: Text(s.meshEnabled ? '$meshNodes node${meshNodes == 1 ? '' : 's'} linked' : 'Off'),
-          chevron: true,
-          onTap: () {
-            ref.read(configSectionRequestProvider.notifier).state = 'NODE';
-            context.go('/config');
-          },
-        ),
-    ]);
-  }
-}
-
-class _SessionSection extends StatelessWidget {
-  const _SessionSection();
-
-  @override
-  Widget build(BuildContext context) {
-    final t = AppTheme.of(context);
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 6, 16, 10),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Padding(
-            padding: const EdgeInsets.only(left: 16, bottom: 6),
-            child: Text('WARDRIVE SESSION', style: TextStyle(color: t.textDim, fontSize: 13, fontWeight: FontWeight.w500)),
-          ),
-          const SessionBar(),
-        ],
+                ),
+              ),
+              Container(
+                width: 52,
+                height: 52,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  border: Border.all(
+                    color: AppTheme.accent.withValues(
+                      alpha: widget.active ? 0.1 + pulse * 0.15 : 0.08,
+                    ),
+                    width: 0.5,
+                  ),
+                ),
+              ),
+              Container(
+                width: 32,
+                height: 32,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: AppTheme.accent.withValues(
+                    alpha: widget.active ? 0.06 + pulse * 0.06 : 0.04,
+                  ),
+                ),
+                child: Icon(
+                  Icons.radar,
+                  size: 18,
+                  color: widget.active ? AppTheme.accent : t.textDim,
+                ),
+              ),
+            ],
+          );
+        },
       ),
     );
   }
 }
 
-class _RecentSection extends ConsumerWidget {
-  const _RecentSection({required this.state});
-  final AppState state;
+class _ConnectingIndicator extends StatelessWidget {
+  const _ConnectingIndicator();
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final t = AppTheme.of(context);
-    return IosSection(
-      header: 'Recent',
+  Widget build(BuildContext context) {
+    return Column(
       children: [
-        for (final d in state.recentDetections.take(5))
-          IosRow(
-            leading: Icon(d.engine.icon, color: d.engine.color, size: 22),
-            title: d.deviceName.isNotEmpty ? d.deviceName : (d.ssid.isNotEmpty ? d.ssid : d.engine.label),
-            subtitle: Text('${d.macAddress.toUpperCase()} · ${d.engine.label}', maxLines: 1, overflow: TextOverflow.ellipsis),
-            detail: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              crossAxisAlignment: CrossAxisAlignment.end,
-              children: [
-                Text('${d.rssi} dBm', style: TextStyle(color: rssiColor(d.rssi), fontSize: 15, fontWeight: FontWeight.w600)),
-                Text(agoLabel(d.appTimestamp), style: TextStyle(color: t.textDim, fontSize: 13)),
-              ],
-            ),
-            chevron: true,
-            onTap: () {
-              ref.read(detectionsViewProvider.notifier).state = DetectionsView.live;
-              context.go('/detections');
-            },
+        SizedBox(
+          width: 24,
+          height: 24,
+          child: CircularProgressIndicator(
+            color: AppTheme.accent.withValues(alpha: 0.6),
+            strokeWidth: 1.5,
           ),
+        ),
+        const SizedBox(height: 10),
+        Text(
+          'LINKING',
+          style: TextStyle(
+            color: AppTheme.accent.withValues(alpha: 0.5),
+            fontSize: 10,
+            fontWeight: FontWeight.w600,
+            letterSpacing: 3,
+          ),
+        ),
       ],
     );
   }
 }
 
-class _AccountsSection extends ConsumerWidget {
-  const _AccountsSection();
+class _EnginePreviewRow extends StatelessWidget {
+  const _EnginePreviewRow({required this.engine});
+  final Engine engine;
 
-  static String _fmt(int n) {
-    if (n >= 1000000) return '${(n / 1000000).toStringAsFixed(1)}M';
-    if (n >= 1000) return '${(n / 1000).toStringAsFixed(1)}K';
-    return '$n';
+  @override
+  Widget build(BuildContext context) {
+    final t = AppTheme.of(context);
+    return Row(
+      children: [
+        Container(
+          width: 28,
+          height: 28,
+          decoration: BoxDecoration(
+            color: engine.color.withValues(alpha: 0.08),
+            borderRadius: BorderRadius.circular(7),
+          ),
+          child: Icon(engine.icon, size: 14, color: engine.color),
+        ),
+        const SizedBox(width: 12),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                engine.label,
+                style: TextStyle(
+                  color: engine.color.withValues(alpha: 0.8),
+                  fontSize: 11,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+              Text(
+                engine.description,
+                style: TextStyle(
+                  color: t.textDim,
+                  fontSize: 9,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
   }
+}
+
+class _ConnectedView extends ConsumerWidget {
+  const _ConnectedView({required this.state});
+  final AppState state;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final wigle = ref.watch(wigleProvider);
-    final wdg = ref.watch(wdgwarsProvider);
-    if (!wigle.isLoggedIn && !wdg.isLoggedIn) return const SizedBox.shrink();
-    void open() {
-      ref.read(configSectionRequestProvider.notifier).state = 'DATA';
-      context.go('/config');
-    }
+    final wd = ref.watch(wardriveProvider);
+    
+    final pad = 12.0;
 
-    final ws = wigle.stats;
-    final ds = wdg.stats;
-    return IosSection(header: 'Wardrive accounts', children: [
-      if (wigle.isLoggedIn)
-        IosRow(
-          leading: const IosIcon(CupertinoIcons.globe, AppTheme.wigle),
-          title: 'WiGLE',
-          subtitle: Text(wigle.rateLimited
-              ? WigleApi.rateLimitMessage
-              : ws == null
-                  ? 'Loading…'
-                  : 'Rank #${ws.rank} · ${_fmt(ws.discoveredWiFi)} Wi-Fi · ${_fmt(ws.discoveredBt)} Bluetooth'),
-          chevron: true,
-          onTap: open,
+    final ble = ref.read(bleManagerProvider);
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        _SpoolImportBanner(stream: ble.awayImport, pad: pad),
+        Expanded(
+          child: SingleChildScrollView(
+            padding: EdgeInsets.all(pad),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+          _SummaryStrip(state: state),
+          SizedBox(height: pad),
+
+          _SectionLabel(label: 'SESSION', color: Engine.wardrive.color),
+          const SizedBox(height: 6),
+          const SessionBar(),
+
+          SizedBox(height: pad),
+
+          _SectionLabel(label: 'SAFETY', color: AppTheme.flockBle),
+          const SizedBox(height: 6),
+          SizedBox(
+            height: _mediumCardHeight(context),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Expanded(
+                  child: _sizedCard(Engine.flockWifi, CardSize.medium, state, wd),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: _sizedCard(Engine.flockBle, CardSize.medium, state, wd),
+                ),
+              ],
+            ),
+          ),
+
+          SizedBox(height: pad),
+
+          _SectionLabel(label: 'TRACKING', color: AppTheme.detector),
+          const SizedBox(height: 6),
+          SizedBox(
+            height: _mediumCardHeight(context),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Expanded(
+                  child: _sizedCard(Engine.detector, CardSize.medium, state, wd),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: _sizedCard(Engine.skySpy, CardSize.medium, state, wd),
+                ),
+              ],
+            ),
+          ),
+
+          SizedBox(height: pad),
+
+          _SectionLabel(label: 'SPECIALTY', color: AppTheme.foxhunter),
+          const SizedBox(height: 6),
+          _sizedCard(Engine.foxhunter, CardSize.compact, state, wd),
+          const SizedBox(height: 6),
+          _sizedCard(Engine.uniPwn, CardSize.compact, state, wd),
+          const SizedBox(height: 6),
+          _sizedCard(Engine.pcap, CardSize.compact, state, wd),
+
+          SizedBox(height: pad),
+
+          if (state.recentDetections.isNotEmpty)
+            _RecentActivity(state: state),
+
+          const _WardriveAccountsStrip(),
+              ],
+            ),
+          ),
         ),
-      if (wdg.isLoggedIn)
-        IosRow(
-          leading: const IosIcon(CupertinoIcons.game_controller_solid, AppTheme.wdgwars),
-          title: 'WDGWars',
-          subtitle: Text(ds == null ? 'Loading…' : '${_fmt(ds.total)} devices${ds.gang.isNotEmpty ? ' · ${ds.gang}' : ''}'),
-          chevron: true,
-          onTap: open,
+      ],
+    );
+  }
+
+  /// Determine if engine appears active — accounts for wardrive flock mode.
+  double _mediumCardHeight(BuildContext context) {
+    final w = MediaQuery.of(context).size.width;
+    if (w < 380) return 170;
+    if (w < 420) return 180;
+    return 190;
+  }
+
+  bool _isEngineOn(Engine engine, AppState state, WardriveController wd) {
+    if (wd.isActive && (engine == Engine.wardrive || wd.ownsEngine(engine))) return true;
+    return state.isEngineActive(engine);
+  }
+
+  Widget _sizedCard(Engine e, CardSize size, AppState state, WardriveController wd) {
+    return EngineCard(
+      engine: e,
+      detectionCount: state.countForEngine(e),
+      isActive: _isEngineOn(e, state, wd),
+      engineState: state.getEngineState(e),
+      lastDetection: state.lastDetectionTime[e],
+      rate: state.detectionRate(e),
+      size: size,
+      nodeCount: 0,
+    );
+  }
+}
+
+class _SectionLabel extends StatelessWidget {
+  const _SectionLabel({required this.label, required this.color});
+  final String label;
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) {
+    final t = AppTheme.of(context);
+    return Row(
+      children: [
+        Container(
+          width: 3,
+          height: 12,
+          decoration: BoxDecoration(
+            color: color.withValues(alpha: 0.6),
+            borderRadius: BorderRadius.circular(2),
+          ),
         ),
-    ]);
+        const SizedBox(width: 6),
+        Text(
+          label,
+          style: TextStyle(
+            color: t.textSecondary,
+            fontSize: 10,
+            fontWeight: FontWeight.w700,
+            letterSpacing: 2,
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _SummaryStrip extends ConsumerWidget {
+  const _SummaryStrip({required this.state});
+  final AppState state;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final t = AppTheme.of(context);
+    
+    final activeCount =
+        Engine.values.where((e) => state.isEngineActive(e)).length;
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
+      decoration: BoxDecoration(
+        color: t.surface,
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: t.border, width: 0.5),
+      ),
+      child: Row(
+        children: [
+          Expanded(child: _StatItem(
+            value: '${state.totalDetections}',
+            label: 'UNIQUE',
+            color: AppTheme.accent,
+          )),
+          _divider(t),
+          Expanded(child: _StatItem(
+            value: '$activeCount/${Engine.values.length}',
+            label: 'ENGINES',
+            color: activeCount > 0 ? AppTheme.success : t.textDim,
+          )),
+          _divider(t),
+          Expanded(child: _StatItem(
+            value: '${state.totalRate}',
+            label: '/MIN',
+            color: state.totalRate > 0 ? AppTheme.warning : t.textDim,
+          )),
+          if (state.isManagerConnected) ...[
+            _divider(t),
+            Expanded(child: Builder(builder: (_) {
+              final selfId = AppState.canonicalNodeId(state.nodeId);
+              final nodeCount = state.liveKnownNodes
+                  .where((id) => id != selfId && !state.isManagerNode(id))
+                  .length;
+              return InkWell(
+                onTap: () {
+                  ref.read(configSectionRequestProvider.notifier).state = 'NODE';
+                  context.go('/config');
+                },
+                borderRadius: BorderRadius.circular(6),
+                child: Padding(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+                  child: _StatItem(
+                    icon: Icons.hub,
+                    value: state.meshEnabled ? '$nodeCount' : 'OFF',
+                    label: 'NODES',
+                    color: state.meshEnabled
+                        ? (nodeCount > 0
+                            ? AppTheme.success
+                            : AppTheme.warning)
+                        : t.textDim,
+                  ),
+                ),
+              );
+            })),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _divider(ResolvedTheme t) {
+    return Container(
+      width: 0.5,
+      height: 28,
+      margin: const EdgeInsets.symmetric(horizontal: 14),
+      color: t.border,
+    );
+  }
+}
+
+class _StatItem extends StatelessWidget {
+  const _StatItem({
+    required this.value,
+    required this.label,
+    required this.color,
+    this.icon,
+  });
+  final String value;
+  final String label;
+  final Color color;
+  final IconData? icon;
+
+  @override
+  Widget build(BuildContext context) {
+    final t = AppTheme.of(context);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Row(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.center,
+          children: [
+            if (icon != null) ...[
+              Icon(icon, size: 18, color: color),
+              const SizedBox(width: 4),
+            ],
+            Text(
+              value,
+              style: TextStyle(
+                color: color,
+                fontSize: 22,
+                fontWeight: FontWeight.w500,
+                fontFamily: 'monospace',
+                height: 1,
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 3),
+        Text(
+          label,
+          style: TextStyle(
+            color: t.textSecondary,
+            fontSize: 10,
+            fontWeight: FontWeight.w600,
+            letterSpacing: 1.5,
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _RecentActivity extends StatelessWidget {
+  const _RecentActivity({required this.state});
+  final AppState state;
+
+  @override
+  Widget build(BuildContext context) {
+    final t = AppTheme.of(context);
+    final recent = state.recentDetections.take(5).toList();
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 4),
+          child: Row(
+            children: [
+              Container(
+                width: 4,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: AppTheme.success.withValues(alpha: 0.6),
+                  shape: BoxShape.circle,
+                ),
+              ),
+              const SizedBox(width: 6),
+              Text(
+                'RECENT',
+                style: TextStyle(
+                  color: t.textSecondary,
+                  fontSize: 10,
+                  fontWeight: FontWeight.w700,
+                  letterSpacing: 2,
+                ),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 6),
+        Container(
+          decoration: BoxDecoration(
+            color: t.surface,
+            borderRadius: BorderRadius.circular(10),
+            border: Border.all(color: t.border, width: 0.5),
+          ),
+          child: Column(
+            children: recent.asMap().entries.map((entry) {
+              final det = entry.value;
+              final isLast = entry.key == recent.length - 1;
+              final engineColor = det.engine.color;
+              final age = DateTime.now().difference(det.appTimestamp);
+              final ageStr = age.inSeconds < 60
+                  ? '${age.inSeconds}s'
+                  : '${age.inMinutes}m';
+
+              return Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 14,
+                  vertical: 10,
+                ),
+                decoration: BoxDecoration(
+                  border: isLast
+                      ? null
+                      : Border(
+                          bottom: BorderSide(
+                            color: t.border,
+                            width: 0.5,
+                          ),
+                        ),
+                ),
+                child: Row(
+                  children: [
+                    Container(
+                      width: 6,
+                      height: 6,
+                      decoration: BoxDecoration(
+                        color: engineColor,
+                        shape: BoxShape.circle,
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    Text(
+                      det.macAddress.toUpperCase(),
+                      style: TextStyle(
+                        color: t.textPrimary,
+                        fontSize: 12,
+                        fontFamily: 'monospace',
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Text(
+                        det.deviceName.isNotEmpty
+                            ? det.deviceName
+                            : det.ssid.isNotEmpty
+                                ? det.ssid
+                                : '<hidden>',
+                        style: TextStyle(
+                          color: t.textSecondary,
+                          fontSize: 12,
+                        ),
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                    Text(
+                      '${det.rssi}',
+                      style: TextStyle(
+                        color: _rssiColor(det.rssi),
+                        fontSize: 12,
+                        fontFamily: 'monospace',
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    Text(
+                      ageStr,
+                      style: TextStyle(
+                        color: t.textSecondary,
+                        fontSize: 11,
+                        fontFamily: 'monospace',
+                      ),
+                    ),
+                  ],
+                ),
+              );
+            }).toList(),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Color _rssiColor(int rssi) {
+    if (rssi > -50) return AppTheme.success;
+    if (rssi > -70) return AppTheme.warning;
+    return AppTheme.textDim;
   }
 }
 
 class _SpoolImportBanner extends StatefulWidget {
-  const _SpoolImportBanner({required this.stream});
+  const _SpoolImportBanner({required this.stream, required this.pad});
   final Stream<SpoolImportProgress> stream;
+  final double pad;
 
   @override
   State<_SpoolImportBanner> createState() => _SpoolImportBannerState();
@@ -331,6 +831,7 @@ class _SpoolImportBannerState extends State<_SpoolImportBanner> {
   }
 
   void _onEvent(SpoolImportProgress p) {
+    // Only the settled result is shown — no progress churn.
     if (!p.done && !p.aborted) return;
     if (p.done && !p.aborted && p.seen == 0) return;
     _hold?.cancel();
@@ -338,6 +839,11 @@ class _SpoolImportBannerState extends State<_SpoolImportBanner> {
       if (mounted) setState(() => _p = null);
     });
     setState(() => _p = p);
+  }
+
+  void _dismiss() {
+    _hold?.cancel();
+    setState(() => _p = null);
   }
 
   @override
@@ -351,32 +857,43 @@ class _SpoolImportBannerState extends State<_SpoolImportBanner> {
   Widget build(BuildContext context) {
     final p = _p;
     if (p == null) return const SizedBox.shrink();
-    final breakdown = _spoolBreakdown(p.byEngine);
-    return IosSection(children: [
-      IosRow(
-        leading: IosIcon(p.aborted ? CupertinoIcons.exclamationmark_circle_fill : CupertinoIcons.checkmark_circle_fill,
-            p.aborted ? AppTheme.error : AppTheme.accent),
-        title: p.aborted ? 'Import interrupted' : 'Imported ${p.seen} detections from while you were away',
-        subtitle: Text(p.aborted
-            ? 'It will retry on the next connection.'
-            : [if (breakdown.isNotEmpty) breakdown, if (p.dropped > 0) 'buffer was full, oldest ${p.dropped} dropped'].join(' · ')),
-        chevron: !p.aborted,
+    final String message;
+    final Color color;
+    final IconData icon;
+    if (p.aborted) {
+      message = 'Import interrupted — will retry on reconnect';
+      color = AppTheme.error;
+      icon = Icons.sync_problem;
+    } else {
+      final suffix = p.dropped > 0
+          ? ' (buffer was full, oldest ${p.dropped} dropped)'
+          : '';
+      final breakdown = _spoolBreakdown(p.byEngine);
+      message = 'Imported ${p.seen} detection(s) while away'
+          '${breakdown.isNotEmpty ? ' — $breakdown' : ''}$suffix';
+      color = AppTheme.accent;
+      icon = Icons.check_circle_outline;
+    }
+    return Padding(
+      padding: EdgeInsets.fromLTRB(widget.pad, widget.pad, widget.pad, 0),
+      child: GestureDetector(
         onTap: () {
-          ProviderScope.containerOf(context, listen: false).read(detectionsViewProvider.notifier).state = DetectionsView.live;
+          ProviderScope.containerOf(context, listen: false).read(detectionsViewProvider.notifier).state =
+              DetectionsView.live;
           context.go('/detections');
-          _hold?.cancel();
-          setState(() => _p = null);
+          _dismiss();
         },
+        child: _SpoolBanner(color: color, icon: icon, message: message),
       ),
-    ]);
+    );
   }
 }
 
 String _spoolBreakdown(Map<String, int> byEngine) {
   if (byEngine.isEmpty) return '';
   const label = {
-    'flockBle': 'Flock',
-    'flockWifi': 'Flock',
+    'flockBle': 'flock',
+    'flockWifi': 'flock',
     'skySpy': 'drone',
     'detector': 'detector',
     'wardrive': 'wardrive',
@@ -387,6 +904,206 @@ String _spoolBreakdown(Map<String, int> byEngine) {
     final name = label[k] ?? k;
     tally[name] = (tally[name] ?? 0) + v;
   });
-  final parts = tally.entries.toList()..sort((a, b) => b.value.compareTo(a.value));
+  final parts = tally.entries.toList()
+    ..sort((a, b) => b.value.compareTo(a.value));
   return parts.map((e) => '${e.value} ${e.key}').join(' · ');
+}
+
+class _SpoolBanner extends StatelessWidget {
+  const _SpoolBanner({
+    required this.color,
+    required this.icon,
+    required this.message,
+  });
+  final Color color;
+  final IconData icon;
+  final String message;
+
+  @override
+  Widget build(BuildContext context) {
+    final t = AppTheme.of(context);
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.12),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: color.withValues(alpha: 0.4)),
+      ),
+      child: Row(
+        children: [
+          Icon(icon, size: 18, color: color),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              message,
+              style: TextStyle(
+                color: t.textPrimary,
+                fontSize: 13,
+                fontWeight: FontWeight.w600,
+                letterSpacing: 0.2,
+              ),
+            ),
+          ),
+          const SizedBox(width: 8),
+          Icon(Icons.close, size: 16, color: t.textDim),
+        ],
+      ),
+    );
+  }
+}
+
+class _WardriveAccountsStrip extends ConsumerWidget {
+  const _WardriveAccountsStrip();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final t = AppTheme.of(context);
+    final wigle = ref.watch(wigleProvider);
+    final wdg = ref.watch(wdgwarsProvider);
+    if (!wigle.isLoggedIn && !wdg.isLoggedIn) return const SizedBox.shrink();
+
+    final rows = <Widget>[];
+    if (wigle.isLoggedIn) {
+      final s = wigle.stats;
+      rows.add(_AccountMiniRow(
+        icon: Icons.language,
+        color: AppTheme.wigle,
+        name: 'WiGLE',
+        detail: wigle.rateLimited
+            ? WigleApi.rateLimitMessage
+            : s == null
+            ? 'Loading…'
+            : '#${s.rank} · ${_fmt(s.discoveredWiFi)} WiFi · ${_fmt(s.discoveredBt)} BT',
+      ));
+    }
+    if (wdg.isLoggedIn) {
+      final s = wdg.stats;
+      rows.add(_AccountMiniRow(
+        icon: Icons.sports_esports,
+        color: AppTheme.wdgwars,
+        name: 'WDGWars',
+        detail: s == null
+            ? 'Loading…'
+            : '${_fmt(s.total)} devices${s.gang.isNotEmpty ? ' · ${s.gang}' : ''}',
+      ));
+    }
+
+    return Padding(
+      padding: const EdgeInsets.only(top: 4),
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTap: () {
+          ProviderScope.containerOf(context, listen: false).read(configSectionRequestProvider.notifier).state = 'DATA';
+          context.go('/config');
+        },
+        child: Container(
+          width: double.infinity,
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+          decoration: BoxDecoration(
+            color: t.surface,
+            borderRadius: BorderRadius.circular(10),
+            border: Border.all(color: t.border, width: 0.5),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Container(
+                    width: 3,
+                    height: 12,
+                    decoration: BoxDecoration(
+                      color: AppTheme.wdgwars.withValues(alpha: 0.7),
+                      borderRadius: BorderRadius.circular(2),
+                    ),
+                  ),
+                  const SizedBox(width: 6),
+                  Text(
+                    'WARDRIVE ACCOUNTS',
+                    style: TextStyle(
+                      color: t.textSecondary,
+                      fontSize: 10,
+                      fontWeight: FontWeight.w700,
+                      letterSpacing: 2,
+                    ),
+                  ),
+                  const Spacer(),
+                  Text(
+                    'FULL STATS',
+                    style: TextStyle(
+                      color: AppTheme.wdgwars.withValues(alpha: 0.9),
+                      fontSize: 9,
+                      fontWeight: FontWeight.w700,
+                      letterSpacing: 1,
+                    ),
+                  ),
+                  Icon(Icons.chevron_right, size: 16,
+                      color: AppTheme.wdgwars.withValues(alpha: 0.9)),
+                ],
+              ),
+              const SizedBox(height: 8),
+              ...rows,
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  static String _fmt(int count) {
+    if (count >= 1000000) return '${(count / 1000000).toStringAsFixed(1)}M';
+    if (count >= 1000) return '${(count / 1000).toStringAsFixed(1)}K';
+    return '$count';
+  }
+}
+
+class _AccountMiniRow extends StatelessWidget {
+  const _AccountMiniRow({
+    required this.icon,
+    required this.color,
+    required this.name,
+    required this.detail,
+  });
+  final IconData icon;
+  final Color color;
+  final String name;
+  final String detail;
+
+  @override
+  Widget build(BuildContext context) {
+    final t = AppTheme.of(context);
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 3),
+      child: Row(
+        children: [
+          Icon(icon, size: 14, color: color),
+          const SizedBox(width: 8),
+          SizedBox(
+            width: 64,
+            child: Text(
+              name,
+              style: TextStyle(
+                color: t.textPrimary,
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
+          Expanded(
+            child: Text(
+              detail,
+              style: TextStyle(
+                color: t.textDim,
+                fontSize: 11,
+                fontFamily: 'monospace',
+              ),
+              overflow: TextOverflow.ellipsis,
+              textAlign: TextAlign.right,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
 }

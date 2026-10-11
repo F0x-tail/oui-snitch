@@ -24,7 +24,7 @@ void main() {
     await tester.pumpWidget(_host(CommandHeader(
       title: 'DEVICES',
       count: '12/340',
-      chips: [for (var i = 0; i < 8; i++) CommandActiveChip(label: 'FILTER $i', color: AppTheme.accent)],
+      chips: [for (var i = 0; i < 8; i++) CommandActiveChip(label: 'FILTER $i', color: AppTheme.accent, onClear: () {})],
     )));
     expect(tester.takeException(), isNull);
     final title = tester.getTopLeft(find.text('DEVICES')).dy;
@@ -37,19 +37,19 @@ void main() {
       child: Column(children: [WatchlistPanel(), SignaturesPanel()]),
     )));
     await tester.pumpAndSettle();
-    expect(find.text('No targets yet'), findsOneWidget);
-    expect(find.text('THREAT SIGNATURES'), findsOneWidget);
+    expect(find.text('No targets. Add one or import a list.'), findsOneWidget);
+    expect(find.text('SIGNATURES'), findsOneWidget);
 
     final container = ProviderScope.containerOf(tester.element(find.byType(WatchlistPanel)));
     await container.read(watchlistProvider).importText('40:48:6E,Nokia router\nAA:BB:CC:DD:EE:FF,My tag');
     await tester.pumpAndSettle();
+    expect(find.text('40:48:6E'), findsOneWidget);
     expect(find.text('Nokia router'), findsOneWidget);
-    expect(find.text('OUI prefix · 40:48:6E'), findsOneWidget);
     expect(tester.takeException(), isNull);
 
-    await tester.tap(find.text('Nokia router'));
+    await tester.tap(find.text('40:48:6E'));
     await tester.pumpAndSettle();
-    expect(find.text('Edit target'), findsOneWidget);
+    expect(find.text('Edit Target'), findsOneWidget);
     expect(find.text('Enabled'), findsOneWidget);
   });
 }

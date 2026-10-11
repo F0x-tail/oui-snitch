@@ -6,11 +6,7 @@ https://github.com/OffGridPete/Fieldwatch
 The files in lib/core/classify/ (signature engine, advertisement decoder,
 device explanation, pairing and Wi-Fi beacon flood detectors, co-travel) are
 Dart ports of Fieldwatch source. assets/fieldwatch-signatures-v2.json is the
-Fieldwatch stock signature catalog with these changes: fleet-hobby-ble (generic
-HM-10/JDY/ESP32 BLE serial modules) is classed OTHER instead of HACKING and named
-"Hobby BLE module"; plural device names made singular (Apple AirTag, Samsung
-SmartTag, Tile tracker, Flock Safety camera); "Remote ID" renamed "Drone Remote
-ID"; "Apple Device" and "Microsoft Device" lowercased.
+Fieldwatch stock signature catalog, copied unmodified.
 
 Fast Pair model names (FastPairModels.kt) and the packed IEEE / Bluetooth SIG
 tables (radiodb.bin) are excluded from the Fieldwatch MIT grant and are not

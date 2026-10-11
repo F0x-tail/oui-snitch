@@ -858,7 +858,7 @@
         },
         {
             "id": "fleet-airtag",
-            "name": "Apple AirTag",
+            "name": "Apple AirTags",
             "enabled": true,
             "matchAny": true,
             "colorIndex": 4,
@@ -956,7 +956,7 @@
         },
         {
             "id": "fleet-apple-device",
-            "name": "Apple device",
+            "name": "Apple Device",
             "enabled": true,
             "matchAny": true,
             "colorIndex": 4,
@@ -24432,7 +24432,7 @@
         },
         {
             "id": "fleet-flock-cameras",
-            "name": "Flock Safety camera",
+            "name": "Flock Safety Cameras",
             "enabled": true,
             "matchAny": true,
             "colorIndex": 1,
@@ -26930,7 +26930,7 @@
         },
         {
             "id": "fleet-hobby-ble",
-            "name": "Hobby BLE module",
+            "name": "Hobby BLE serial",
             "enabled": true,
             "matchAny": true,
             "colorIndex": 2,
@@ -27079,7 +27079,7 @@
             "notes": "Cheap hobby UART module advertised under a default name (HM-10, JDY, CC41, ESP32 BLE). Common on printers, cars, and DIY. Fieldwatch does not see Classic HC-05/HC-06.",
             "attentionNote": "These default BLE serial names are cheap hobby modules. Some pump/ATM overlays have used boards like this so someone nearby can pull data over Bluetooth. The same modules show up on printers, cars, and DIY. If this radio is loud next to a card reader, treat it with caution and look with your eyes. Not proof of a skimmer. A miss is not a clean bill (name changed, Classic HC-05/HC-06, or cellular). Fieldwatch does not connect and does not try default PINs. Fieldwatch does not see Classic HC-05/HC-06.",
             "builtIn": true,
-            "kind": "OTHER"
+            "kind": "HACKING"
         },
         {
             "id": "fleet-holystone",
@@ -46735,7 +46735,7 @@
         },
         {
             "id": "fleet-microsoft",
-            "name": "Microsoft device",
+            "name": "Microsoft Device",
             "enabled": true,
             "matchAny": true,
             "colorIndex": 6,
@@ -50719,7 +50719,7 @@
         },
         {
             "id": "fleet-remote-id",
-            "name": "Drone Remote ID",
+            "name": "Remote ID",
             "enabled": true,
             "matchAny": true,
             "colorIndex": 1,
@@ -56236,7 +56236,7 @@
         },
         {
             "id": "fleet-smarttag",
-            "name": "Samsung SmartTag",
+            "name": "Samsung SmartTags",
             "enabled": true,
             "matchAny": true,
             "colorIndex": 3,
@@ -58243,7 +58243,7 @@
         },
         {
             "id": "fleet-tile",
-            "name": "Tile tracker",
+            "name": "Tile Trackers",
             "enabled": true,
             "matchAny": true,
             "colorIndex": 3,

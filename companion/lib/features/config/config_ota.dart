@@ -38,24 +38,70 @@ class _OuiDatabaseSectionState extends ConsumerState<_OuiDatabaseSection> {
     final t = AppTheme.of(context);
     final oui = ref.read(ouiLookupProvider);
 
-    return IosSection(
-      header: 'Vendor lookup database',
-      footer: _status ?? 'Source: Ringmast4r/OUI-Master-Database.',
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        IosRow(
-          leading: IosIcon(Icons.storage, t.textDim),
-          title: 'Vendors loaded',
-          detail: Text(
-            oui.lastUpdated == null ? '${oui.entryCount}' : '${oui.entryCount}, ${_formatDate(oui.lastUpdated!)}',
-            style: TextStyle(color: t.textSecondary, fontSize: 17),
+        Text(
+          'MAC vendor lookup database (Ringmast4r/OUI-Master-Database)',
+          style: TextStyle(color: t.textDim, fontSize: 11),
+        ),
+        const SizedBox(height: 12),
+        Row(
+          children: [
+            Icon(Icons.storage, size: 14, color: t.textSecondary),
+            const SizedBox(width: 8),
+            Text(
+              '${oui.entryCount} vendors loaded',
+              style: TextStyle(color: t.textPrimary, fontSize: 12),
+            ),
+            if (oui.lastUpdated != null) ...[
+              const SizedBox(width: 8),
+              Text(
+                'updated ${_formatDate(oui.lastUpdated!)}',
+                style: TextStyle(color: t.textDim, fontSize: 10),
+              ),
+            ],
+          ],
+        ),
+        const SizedBox(height: 12),
+        GestureDetector(
+          onTap: _updating ? null : _checkUpdate,
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+            decoration: BoxDecoration(
+              color: AppTheme.accent.withValues(alpha: 0.1),
+              borderRadius: BorderRadius.circular(6),
+              border: Border.all(color: AppTheme.accent.withValues(alpha: 0.3)),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                if (_updating)
+                  const SizedBox(
+                    width: 12, height: 12,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 1.5, color: AppTheme.accent,
+                    ),
+                  )
+                else
+                  const Icon(Icons.refresh, size: 14, color: AppTheme.accent),
+                const SizedBox(width: 6),
+                Text(
+                  _updating ? 'Checking...' : 'Check for Update',
+                  style: const TextStyle(
+                    color: AppTheme.accent,
+                    fontSize: 11,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ],
+            ),
           ),
         ),
-        IosRow(
-          leading: const IosIcon(Icons.refresh, AppTheme.accent),
-          title: _updating ? 'Checking…' : 'Check for update',
-          trailing: _updating ? const CupertinoActivityIndicator() : null,
-          onTap: _updating ? null : _checkUpdate,
-        ),
+        if (_status != null) ...[
+          const SizedBox(height: 8),
+          Text(_status!, style: TextStyle(color: t.textSecondary, fontSize: 11)),
+        ],
       ],
     );
   }
@@ -249,72 +295,124 @@ class _OtaSectionState extends ConsumerState<_OtaSection> {
         cur != null &&
         OtaService.compareVersion(_nodeRelease!.version, cur) > 0;
 
-    final rel = _nodeRelease;
-    final footer = _nodeStatus ??
-        (nodes.isEmpty
-            ? 'No nodes online. Power them on, then check for updates.'
-            : rel == null
-                ? 'Check for updates to fetch the latest node firmware.'
-                : nodeNewer
-                    ? 'Latest node firmware: ${rel.tag}'
-                    : 'Nodes are on the latest version (${rel.tag}).');
-    final locked = busy || _fleetRunning;
     return [
-      IosSection(
-        header: 'Node updates',
-        footer: footer,
-        children: [
-          for (final id in nodes)
-            Builder(builder: (_) {
-              final v = appState.nodeFwVersion(id);
-              final outdated = v != null && rel != null && OtaService.compareVersion(rel.version, OtaService.parseVersion(v) ?? const [0]) > 0;
-              return IosRow(
-                leading: IosIcon(Icons.sensors, outdated ? AppTheme.warning : AppTheme.success),
-                title: appState.labelForNode(id),
-                subtitle: Text(boardDisplayName(appState.nodeBoard(id))),
-                detail: Text(v == null ? 'Unknown' : 'v$v', style: TextStyle(color: outdated ? AppTheme.warning : t.textSecondary, fontSize: 17)),
-              );
-            }),
-          if (nodes.any((id) => appState.nodeBoard(id) == null))
-            IosRow(
-              leading: IosIcon(Icons.developer_board, t.textDim),
-              title: 'Board for older nodes',
-              detail: Text(_nodeBoard, style: TextStyle(color: t.textSecondary, fontSize: 17)),
-              chevron: !locked,
-              onTap: locked ? null : () => _pickNodeBoard(),
-            ),
-          if (nodes.isNotEmpty && rel != null)
-            ConfigActionRow(
-              icon: Icons.wifi,
-              label: 'Update ${nodes.length} node${nodes.length == 1 ? '' : 's'}',
-              subtitle: 'Over Wi-Fi',
-              color: AppTheme.success,
-              onTap: locked ? null : _updateNodes,
-            ),
-        ],
+      const Divider(height: 24),
+      Padding(
+        padding: const EdgeInsets.fromLTRB(16, 4, 16, 4),
+        child: Row(
+          children: [
+            Icon(Icons.hub_outlined, size: 14, color: t.textSecondary),
+            const SizedBox(width: 6),
+            Text('REMOTE NODES',
+                style: TextStyle(
+                    color: t.textSecondary,
+                    fontSize: 11,
+                    letterSpacing: 2,
+                    fontWeight: FontWeight.w600)),
+            const Spacer(),
+            if (_nodeRelease != null)
+              Text(
+                  nodeNewer
+                      ? 'latest ${_nodeRelease!.tag}'
+                      : 'latest ${_nodeRelease!.tag} · On latest version',
+                  style: TextStyle(
+                      color: nodeNewer ? AppTheme.accent : t.textDim,
+                      fontSize: 10)),
+          ],
+        ),
       ),
+      if (nodes.any((id) => appState.nodeBoard(id) == null))
+      Padding(
+        padding: const EdgeInsets.fromLTRB(16, 0, 16, 6),
+        child: Row(
+          children: [
+            Text('Board for nodes on older firmware',
+                style: TextStyle(color: t.textSecondary, fontSize: 11)),
+            const SizedBox(width: 10),
+            DropdownButton<String>(
+              value: _nodeBoard,
+              isDense: true,
+              dropdownColor: t.surface,
+              style: TextStyle(color: t.textPrimary, fontSize: 12),
+              underline: const SizedBox.shrink(),
+              items: [
+                for (final b in _nodeBoards)
+                  DropdownMenuItem(value: b, child: Text(b)),
+              ],
+              onChanged: (busy || _fleetRunning)
+                  ? null
+                  : (v) {
+                      if (v == null || v == _nodeBoard) return;
+                      _setNodeBoard(v);
+                      _check();
+                    },
+            ),
+          ],
+        ),
+      ),
+      if (nodes.isEmpty)
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+          child: Text('No live nodes. Power them on and Check for Update.',
+              style: TextStyle(color: t.textDim, fontSize: 11)),
+        )
+      else if (_nodeRelease == null)
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+          child: Text('Tap Check for Update to fetch the latest node firmware.',
+              style: TextStyle(color: t.textDim, fontSize: 11)),
+        ),
+      for (final id in nodes)
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 2, 16, 2),
+          child: Row(
+            children: [
+              Icon(Icons.sensors, size: 14, color: t.textDim),
+              const SizedBox(width: 6),
+              Expanded(
+                child: Text(appState.labelForNode(id),
+                    style: TextStyle(color: t.textPrimary, fontSize: 12)),
+              ),
+              Text(boardDisplayName(appState.nodeBoard(id)),
+                  style: TextStyle(color: t.textDim, fontSize: 11)),
+              const SizedBox(width: 8),
+              Builder(builder: (_) {
+                final v = appState.nodeFwVersion(id);
+                final outdated = v != null &&
+                    _nodeRelease != null &&
+                    OtaService.compareVersion(_nodeRelease!.version,
+                            OtaService.parseVersion(v) ?? const [0]) >
+                        0;
+                return Text(
+                  v == null ? 'v?' : 'v$v',
+                  style: TextStyle(
+                    color: outdated ? AppTheme.accent : t.textSecondary,
+                    fontSize: 11,
+                    fontWeight: outdated ? FontWeight.w700 : FontWeight.w400,
+                  ),
+                );
+              }),
+            ],
+          ),
+        ),
+      if (nodes.isNotEmpty && _nodeRelease != null)
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 6, 16, 6),
+          child: ElevatedButton.icon(
+            onPressed: (busy || _fleetRunning) ? null : _updateNodes,
+            style: ElevatedButton.styleFrom(backgroundColor: AppTheme.accent),
+            icon: const Icon(Icons.wifi, size: 16),
+            label: Text(
+                'Update ${nodes.length} node${nodes.length == 1 ? '' : 's'} over WiFi'),
+          ),
+        ),
+      if (_nodeStatus != null)
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 4, 16, 8),
+          child: Text(_nodeStatus!,
+              style: TextStyle(color: t.textSecondary, fontSize: 11)),
+        ),
     ];
-  }
-
-  Future<void> _pickNodeBoard() async {
-    final v = await showCupertinoModalPopup<String>(
-      context: context,
-      builder: (ctx) => CupertinoActionSheet(
-        title: const Text('Board for nodes on older firmware'),
-        actions: [
-          for (final b in _nodeBoards)
-            CupertinoActionSheetAction(
-              isDefaultAction: b == _nodeBoard,
-              onPressed: () => Navigator.pop(ctx, b),
-              child: Text(boardDisplayName(b)),
-            ),
-        ],
-        cancelButton: CupertinoActionSheetAction(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
-      ),
-    );
-    if (v == null || v == _nodeBoard) return;
-    await _setNodeBoard(v);
-    _check();
   }
 
   Future<void> _installWifi() async {
@@ -522,14 +620,17 @@ class _OtaSectionState extends ConsumerState<_OtaSection> {
           : '$warn Also role "$role" missing.';
     }
     if (mismatch) {
-      final ok = await showCupertinoDialog<bool>(
+      final ok = await showDialog<bool>(
         context: context,
-        builder: (ctx) => CupertinoAlertDialog(
+        builder: (ctx) => AlertDialog(
           title: const Text('Board mismatch'),
           content: Text('$warn\n\nProceed anyway?'),
           actions: [
-            CupertinoDialogAction(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
-            CupertinoDialogAction(isDestructiveAction: true, onPressed: () => Navigator.pop(ctx, true), child: const Text('Flash anyway')),
+            TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('CANCEL')),
+            TextButton(
+              onPressed: () => Navigator.pop(ctx, true),
+              child: const Text('FLASH ANYWAY', style: TextStyle(color: AppTheme.error)),
+            ),
           ],
         ),
       );
@@ -563,70 +664,111 @@ class _OtaSectionState extends ConsumerState<_OtaSection> {
       stepper = OtaStepperModel.fromBleProgress(p);
     }
 
-    final ble = ref.read(bleManagerProvider);
-    final tag = [if (ble.role.isNotEmpty) ble.role, if (ble.board.isNotEmpty) ble.board].join('-');
-    final rel = _availableRelease;
-    final progress = <Widget>[
-      if (_fleet.isNotEmpty) ..._buildFleetProgress(t) else if (stepper != null) OtaProgressStepper(model: stepper),
-    ];
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        IosSection(
-          header: 'Firmware update',
-          footer: _checkStatus,
-          children: [
-            ConfigActionRow(
-              icon: Icons.system_update,
-              label: 'Check for update',
-              subtitle: 'Compares with the latest GitHub release',
-              onTap: busy ? null : _check,
-            ),
-            ConfigToggleRow(
-              icon: Icons.wifi_tethering,
-              label: 'Join Wi-Fi to download',
-              subtitle: _wifiConfigured ? 'Uses the saved network above' : 'Save a Wi-Fi network above first',
-              color: AppTheme.accent,
-              value: _autoWifiUpdate,
-              onChanged: _setAutoWifi,
-            ),
-            if (rel != null && !busy && _wifiConfigured) ...[
-              ConfigActionRow(
-                icon: Icons.wifi,
-                label: 'Install ${rel.tag}',
-                subtitle: 'Over Wi-Fi',
-                color: AppTheme.success,
-                onTap: _installWifi,
-              ),
-              if (ble.isManagerConnected)
-                ConfigActionRow(
-                  icon: Icons.system_update_alt,
-                  label: 'Update manager and nodes',
-                  subtitle: 'Over Wi-Fi',
-                  color: AppTheme.success,
-                  onTap: _fleetRunning ? null : _updateAll,
-                ),
-            ],
-            if (rel != null && !busy && !_wifiConfigured)
-              IosRow(
-                leading: const IosIcon(Icons.wifi_off, AppTheme.warning),
-                title: '${rel.tag} available',
-                subtitle: const Text('Save a Wi-Fi network above to install it'),
-              ),
-            ConfigActionRow(
-              icon: Icons.upload_file,
-              label: 'Flash a local file',
-              subtitle: tag.isEmpty ? 'Pick a .bin over Bluetooth' : 'Pick a .bin for $tag over Bluetooth',
-              color: AppTheme.warning,
-              onTap: busy ? null : _flashLocalBin,
-            ),
-          ],
+        ConfigActionRow(
+          icon: Icons.system_update,
+          label: 'Check for Update',
+          subtitle: 'Compare against latest GitHub release',
+          onTap: busy ? null : _check,
         ),
-        if (progress.isNotEmpty)
-          IosSection(header: 'Progress', children: [
-            Padding(padding: const EdgeInsets.symmetric(vertical: 8), child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: progress)),
-          ]),
+        if (_checkStatus != null)
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 4, 16, 4),
+            child: Text(_checkStatus!,
+                style: TextStyle(color: t.textSecondary, fontSize: 11)),
+          ),
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 4, 16, 4),
+          child: Row(
+            children: [
+              Icon(Icons.wifi_tethering,
+                  size: 18,
+                  color: _autoWifiUpdate ? AppTheme.accent : t.textDim),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('Auto-connect WiFi for firmware update',
+                        style: TextStyle(
+                            color: t.textPrimary,
+                            fontSize: 13,
+                            fontWeight: FontWeight.w600)),
+                    Text(
+                      _wifiConfigured
+                          ? 'Manager joins saved WiFi to download the update'
+                          : 'Save WiFi credentials in the WIFI NETWORK section above to use this',
+                      style: TextStyle(color: t.textSecondary, fontSize: 11),
+                    ),
+                  ],
+                ),
+              ),
+              Switch(
+                value: _autoWifiUpdate,
+                onChanged: _setAutoWifi,
+                activeThumbColor: AppTheme.accent,
+              ),
+            ],
+          ),
+        ),
+        if (_availableRelease != null && !busy) ...[
+          if (_wifiConfigured) ...[
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 4, 16, 4),
+              child: ElevatedButton.icon(
+                onPressed: _installWifi,
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: AppTheme.accent,
+                ),
+                icon: const Icon(Icons.wifi, size: 16),
+                label: Text('Install via WiFi — ${_availableRelease!.tag}'),
+              ),
+            ),
+            if (ref.read(bleManagerProvider).isManagerConnected)
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
+                child: ElevatedButton.icon(
+                  onPressed: _fleetRunning ? null : _updateAll,
+                  style: ElevatedButton.styleFrom(
+                      backgroundColor: AppTheme.accent),
+                  icon: const Icon(Icons.system_update_alt, size: 16),
+                  label: const Text('Update All — manager + nodes (WiFi)'),
+                ),
+              ),
+          ] else
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 4, 16, 8),
+              child: Text(
+                'Set WiFi credentials in the WIFI NETWORK section above to update '
+                'over WiFi.',
+                style: TextStyle(color: AppTheme.warning, fontSize: 12),
+              ),
+            ),
+        ],
         ..._buildNodeUpdateSection(t, busy),
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
+          child: OutlinedButton.icon(
+            onPressed: busy ? null : _flashLocalBin,
+            icon: const Icon(Icons.upload_file, size: 16),
+            label: Builder(builder: (ctx) {
+              final ble = ref.read(bleManagerProvider);
+              final tag = [
+                if (ble.role.isNotEmpty) ble.role,
+                if (ble.board.isNotEmpty) ble.board,
+              ].join('-');
+              return Text(tag.isEmpty
+                  ? 'Flash local .bin (DFU)'
+                  : 'Flash local .bin ($tag)');
+            }),
+          ),
+        ),
+        if (_fleet.isNotEmpty)
+          ..._buildFleetProgress(t)
+        else if (stepper != null)
+          OtaProgressStepper(model: stepper),
       ],
     );
   }
@@ -634,13 +776,25 @@ class _OtaSectionState extends ConsumerState<_OtaSection> {
   List<Widget> _buildFleetProgress(ResolvedTheme t) {
     final done = _fleet.where((f) => f.status == _FleetStatus.done).length;
     final out = <Widget>[
+      const Divider(height: 20),
       Padding(
         padding: const EdgeInsets.fromLTRB(16, 4, 16, 4),
         child: Row(
           children: [
-            Expanded(child: Text('Fleet update', style: TextStyle(color: t.textPrimary, fontSize: 17))),
-            Text('$done of ${_fleet.length} done',
-                style: TextStyle(color: _fleetRunning ? AppTheme.accent : AppTheme.success, fontSize: 15, fontWeight: FontWeight.w600)),
+            Icon(Icons.dns_outlined, size: 14, color: t.textSecondary),
+            const SizedBox(width: 6),
+            Text('FLEET UPDATE',
+                style: TextStyle(
+                    color: t.textSecondary,
+                    fontSize: 11,
+                    letterSpacing: 2,
+                    fontWeight: FontWeight.w600)),
+            const Spacer(),
+            Text('$done / ${_fleet.length}',
+                style: TextStyle(
+                    color: _fleetRunning ? AppTheme.accent : AppTheme.success,
+                    fontSize: 10,
+                    fontWeight: FontWeight.w700)),
           ],
         ),
       ),

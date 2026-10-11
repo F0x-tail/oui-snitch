@@ -1,4 +1,3 @@
-import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -9,75 +8,60 @@ import 'package:oui_spy/features/config/config_menu_state.dart';
 import 'package:oui_spy/features/detections/detections_screen.dart';
 import 'package:oui_spy/features/engines/detection_rules.dart';
 import 'package:oui_spy/theme/app_theme.dart';
-import 'package:oui_spy/widgets/ios.dart';
 
 class DetectorScreen extends ConsumerWidget {
   const DetectorScreen({super.key});
-
-  Future<void> _confirmClear(BuildContext context, WidgetRef ref) async {
-    final ok = await showCupertinoDialog<bool>(
-      context: context,
-      builder: (ctx) => CupertinoAlertDialog(
-        title: const Text('Clear detector results?'),
-        content: const Text('Removes this session\'s detector results from the live list. Saved history is kept.'),
-        actions: [
-          CupertinoDialogAction(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
-          CupertinoDialogAction(isDestructiveAction: true, onPressed: () => Navigator.pop(ctx, true), child: const Text('Clear')),
-        ],
-      ),
-    );
-    if (ok == true) ref.read(appStateProvider).clearDetectionsForEngine(Engine.detector);
-  }
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final t = AppTheme.of(context);
     final state = ref.watch(appStateProvider);
     final detections = state.detectionsForEngine(Engine.detector);
-    final watchlistHits = detections
-        .where((d) => d.method == 'ble_watchlist' || d.method == 'wifi_watchlist' || d.method == 'name_match')
-        .length;
-    final active = state.isEngineActive(Engine.detector);
 
     return Scaffold(
       backgroundColor: t.background,
-      body: IosPage(
-        title: 'Detector',
-        leading: CupertinoNavigationBarBackButton(color: AppTheme.accent, onPressed: () => context.canPop() ? context.pop() : context.go('/home')),
+      appBar: AppBar(
+        title: const Text('DETECTOR'),
         actions: [
-          IosNavButton(icon: CupertinoIcons.trash, tooltip: 'Clear detections', onPressed: detections.isEmpty ? null : () => _confirmClear(context, ref)),
-        ],
-        slivers: [
-          SliverToBoxAdapter(
-            child: IosSection(
-              footer: 'Matches nearby devices against your watchlist and the built-in signatures.',
-              children: [
-                IosRow(
-                  leading: const IosIcon(CupertinoIcons.scope, AppTheme.detector),
-                  title: 'Detector',
-                  subtitle: Text(active ? 'Scanning' : 'Off'),
-                  trailing: CupertinoSwitch(
-                    value: active,
-                    activeTrackColor: AppTheme.detector,
-                    onChanged: (on) => setEngineEnabled(ref, Engine.detector, on),
-                  ),
-                ),
-                IosRow(
-                  leading: const IosIcon(CupertinoIcons.clock_fill, AppTheme.accent),
-                  title: 'Detector history',
-                  subtitle: Text('$watchlistHits watchlist, ${detections.length - watchlistHits} signature this session'),
-                  chevron: true,
-                  onTap: () {
-                    ref.read(historyFilterRequestProvider.notifier).state = 'detector';
-                    ref.read(detectionsViewProvider.notifier).state = DetectionsView.history;
-                    context.go('/detections');
-                  },
-                ),
-              ],
+          Transform.scale(
+            scale: 0.7,
+            child: Switch(
+              value: state.isEngineActive(Engine.detector),
+              onChanged: (on) => setEngineEnabled(ref, Engine.detector, on),
+              activeTrackColor: AppTheme.detector.withValues(alpha: 0.3),
+              activeThumbColor: AppTheme.detector,
             ),
           ),
-          const SliverToBoxAdapter(child: WatchlistPanel()),
-          const SliverToBoxAdapter(child: SignaturesPanel()),
+          IconButton(
+            icon: const Icon(Icons.delete_sweep),
+            tooltip: 'Clear detections',
+            onPressed: () => ref.read(appStateProvider).clearDetectionsForEngine(Engine.detector),
+          ),
+        ],
+      ),
+      body: ListView(
+        children: [
+          const WatchlistPanel(),
+          const Divider(height: 1),
+          const SignaturesPanel(),
+          const Divider(height: 1),
+          ListTile(
+            leading: const Icon(Icons.history, color: AppTheme.detector),
+            title: Text(
+              'DETECTOR HISTORY',
+              style: TextStyle(color: t.textPrimary, fontSize: 12, letterSpacing: 2, fontWeight: FontWeight.w700),
+            ),
+            subtitle: Text(
+              '${detections.length} this session · filters, map, export',
+              style: TextStyle(color: t.textDim, fontSize: 11),
+            ),
+            trailing: Icon(Icons.chevron_right, color: t.textDim),
+            onTap: () {
+              ref.read(historyFilterRequestProvider.notifier).state = 'detector';
+              ref.read(detectionsViewProvider.notifier).state = DetectionsView.history;
+              context.go('/detections');
+            },
+          ),
         ],
       ),
     );

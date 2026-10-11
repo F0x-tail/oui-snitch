@@ -14,9 +14,7 @@ void main() {
     );
     final (title, body, channel) = NotificationService.detectionNotificationText(det);
     expect(title, 'Nokia router');
-    expect(body, contains('40:48:6E:8B:D3:1A'));
-    expect(body, contains('Signal -87 dBm'));
-    expect(body, contains('Matched by Watchlist'));
+    expect(body, '40:48:6E · -87dBm · WATCHLIST');
     expect(channel, NotifChannel.detector);
   });
 
@@ -28,6 +26,6 @@ void main() {
       appTimestamp: DateTime(2026),
     );
     expect(NotificationService.detectionNotificationText(det).$1, 'Probe request for "Villasenor"');
-    expect(NotificationService.detectionNotificationText(det).$2, contains('Probe request'));
+    expect(NotificationService.detectionNotificationText(det).$2, contains('PROBE'));
   });
 }

@@ -4,7 +4,6 @@ import 'dart:math' as math;
 import 'dart:ui' as ui;
 import 'dart:io';
 import 'package:file_selector/file_selector.dart';
-import 'package:flutter/cupertino.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
@@ -109,21 +108,27 @@ class _WardriveScreenState extends ConsumerState<WardriveScreen> with WidgetsBin
   Future<bool> _primeLocationPermission() => primeLocationPermission(context);
 
   Future<void> _showReconnectPrompt(WardriveController wd) async {
-    final cont = await showCupertinoDialog<bool>(
+    final t = AppTheme.of(context);
+    final cont = await showDialog<bool>(
       context: context,
       barrierDismissible: false,
-      builder: (ctx) => CupertinoAlertDialog(
-        title: const Text('Connection restored'),
-        content: const Text('The node reconnected during a wardrive. Continue the session?'),
+      builder: (ctx) => AlertDialog(
+        backgroundColor: t.surface,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        title: Text('Connection Restored',
+          style: TextStyle(color: t.textPrimary, fontSize: 16, fontWeight: FontWeight.w600)),
+        content: Text(
+          'The node reconnected during a wardrive. Continue the session?',
+          style: TextStyle(color: t.textSecondary, fontSize: 13),
+        ),
         actions: [
-          CupertinoDialogAction(
+          TextButton(
             onPressed: () => Navigator.of(ctx).pop(false),
-            child: const Text('Stop and save'),
+            child: Text('STOP & SAVE', style: TextStyle(color: t.textDim)),
           ),
-          CupertinoDialogAction(
-            isDefaultAction: true,
+          TextButton(
             onPressed: () => Navigator.of(ctx).pop(true),
-            child: const Text('Continue'),
+            child: const Text('CONTINUE', style: TextStyle(color: AppTheme.accent)),
           ),
         ],
       ),

@@ -31,7 +31,7 @@ class _NodeStatsOverlay extends ConsumerWidget {
       constraints: const BoxConstraints(maxWidth: 220),
       decoration: BoxDecoration(
         color: t.background.withValues(alpha: 0.85),
-        borderRadius: BorderRadius.circular(8),
+        borderRadius: BorderRadius.circular(10),
         border: Border.all(color: t.border, width: 0.5),
       ),
       child: Column(

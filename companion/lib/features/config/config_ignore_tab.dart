@@ -6,139 +6,254 @@ class _IgnoreListTab extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final t = AppTheme.of(context);
-    final entries = ref.watch(ignoreListProvider).entries;
-    final active = entries.where((e) => e.enabled).length;
-    return ListView(children: [
-      IosSection(
-        header: 'Ignored · $active of ${entries.length} on',
-        footer: 'Matching devices are left out of the feed, exports, the database and alerts. Swipe left to delete.',
-        children: entries.isEmpty
-            ? [
-                IosRow(
-                  leading: IosIcon(CupertinoIcons.nosign, t.textDim),
-                  title: 'Nothing ignored',
-                  subtitle: const Text('Add your own router, phone or car so they never show up.'),
+    final allowlist = ref.watch(ignoreListProvider);
+    final entries = allowlist.entries;
+
+    return Column(
+      children: [
+        // Header + add button
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 12, 12, 0),
+          child: Row(
+            children: [
+              Icon(Icons.shield_outlined, size: 14, color: AppTheme.accent),
+              const SizedBox(width: 6),
+              Text(
+                'IGNORE LIST',
+                style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                      letterSpacing: 2,
+                      color: t.textDim,
+                    ),
+              ),
+              const Spacer(),
+              Text(
+                '${entries.where((e) => e.enabled).length} active',
+                style: TextStyle(
+                  color: t.textDim, fontSize: 10,
+                  fontFamily: 'monospace',
                 ),
-              ]
-            : [for (final e in entries) _IgnoreEntryTile(entry: e)],
-      ),
-      IosSection(children: [
-        IosRow(
-          leading: const IosIcon(CupertinoIcons.add, AppTheme.accent),
-          title: 'Add entry',
-          chevron: true,
-          onTap: () => Navigator.of(context).push(CupertinoPageRoute<void>(builder: (_) => const _IgnoreAddPage())),
+              ),
+              const SizedBox(width: 8),
+              GestureDetector(
+                onTap: () => _showAddDialog(context, ref),
+                child: Container(
+                  width: 32, height: 32,
+                  decoration: BoxDecoration(
+                    color: AppTheme.accent.withValues(alpha: 0.1),
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(color: AppTheme.accent.withValues(alpha: 0.3)),
+                  ),
+                  child: const Icon(Icons.add, size: 18, color: AppTheme.accent),
+                ),
+              ),
+            ],
+          ),
         ),
-      ]),
-    ]);
-  }
-}
-
-class _IgnoreAddPage extends ConsumerStatefulWidget {
-  const _IgnoreAddPage();
-
-  @override
-  ConsumerState<_IgnoreAddPage> createState() => _IgnoreAddPageState();
-}
-
-class _IgnoreAddPageState extends ConsumerState<_IgnoreAddPage> {
-  final _value = TextEditingController();
-  final _label = TextEditingController();
-  IgnoreType _type = IgnoreType.ssid;
-  IgnoreScope _scope = IgnoreScope.both;
-
-  @override
-  void dispose() {
-    _value.dispose();
-    _label.dispose();
-    super.dispose();
-  }
-
-  void _save() {
-    final raw = _value.text.trim();
-    if (raw.isEmpty) return;
-    ref.read(ignoreListProvider).add(IgnoreEntry(
-          type: _type,
-          value: IgnoreEntry.normalize(_type, raw),
-          scope: _scope,
-          label: _label.text.trim(),
-        ));
-    Navigator.of(context).pop();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final t = AppTheme.of(context);
-    return Scaffold(
-      backgroundColor: t.background,
-      body: Column(children: [
-        CupertinoNavigationBar(
-          backgroundColor: t.background.withValues(alpha: 0.92),
-          border: Border(bottom: BorderSide(color: t.border, width: 0.5)),
-          transitionBetweenRoutes: false,
-          leading: CupertinoButton(padding: EdgeInsets.zero, onPressed: () => Navigator.of(context).pop(), child: const Text('Cancel')),
-          middle: Text('Ignore a device', style: TextStyle(color: t.textPrimary)),
-          trailing: CupertinoButton(padding: EdgeInsets.zero, onPressed: _save, child: const Text('Add', style: TextStyle(fontWeight: FontWeight.w600))),
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 6, 16, 8),
+          child: Text(
+            'Matching devices are silently excluded from the feed, '
+            'CSV exports, database logging, and alerts.',
+            style: TextStyle(color: t.textDim, fontSize: 11),
+          ),
         ),
+        const Divider(height: 1),
+        // Entry list
         Expanded(
-          child: ListView(children: [
-            Padding(
-              padding: const EdgeInsets.fromLTRB(16, 16, 16, 4),
-              child: IosSegments<IgnoreType>(
-                value: _type,
-                segments: const {IgnoreType.ssid: 'Wi-Fi name', IgnoreType.mac: 'MAC', IgnoreType.oui: 'OUI'},
-                onChanged: (v) => setState(() => _type = v),
-              ),
-            ),
-            IosSection(
-              footer: switch (_type) {
-                IgnoreType.ssid => 'Exact network name, e.g. MyHomeNetwork.',
-                IgnoreType.mac => 'One exact device, e.g. AA:BB:CC:DD:EE:FF.',
-                IgnoreType.oui => 'Every device from one maker, e.g. AA:BB:CC.',
-              },
-              children: [
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-                  child: CupertinoTextField(
-                    controller: _value,
-                    placeholder: switch (_type) {
-                      IgnoreType.ssid => 'MyHomeNetwork',
-                      IgnoreType.mac => 'AA:BB:CC:DD:EE:FF',
-                      IgnoreType.oui => 'AA:BB:CC',
-                    },
-                    autocorrect: false,
-                    textCapitalization: _type == IgnoreType.ssid ? TextCapitalization.none : TextCapitalization.characters,
-                    style: TextStyle(color: t.textPrimary, fontSize: 17, fontFamily: _type == IgnoreType.ssid ? null : 'monospace'),
-                    placeholderStyle: TextStyle(color: t.textDim, fontSize: 17),
-                    decoration: null,
-                    padding: const EdgeInsets.symmetric(vertical: 12),
+          child: entries.isEmpty
+              ? Center(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(Icons.shield_outlined, size: 36, color: t.textDim),
+                      const SizedBox(height: 12),
+                      Text('NO ENTRIES', style: TextStyle(
+                        color: t.textDim, fontSize: 12,
+                        fontWeight: FontWeight.w700, letterSpacing: 2,
+                      )),
+                      const SizedBox(height: 6),
+                      Text(
+                        'Tap + to add SSIDs, MACs, or OUIs\nthat should never be logged.',
+                        textAlign: TextAlign.center,
+                        style: TextStyle(color: t.textDim, fontSize: 11),
+                      ),
+                    ],
                   ),
+                )
+              : ListView.builder(
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                  itemCount: entries.length,
+                  itemBuilder: (_, i) => _IgnoreEntryTile(entry: entries[i]),
                 ),
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-                  child: CupertinoTextField(
-                    controller: _label,
-                    placeholder: 'Label (optional), e.g. Home router',
-                    style: TextStyle(color: t.textPrimary, fontSize: 17),
-                    placeholderStyle: TextStyle(color: t.textDim, fontSize: 17),
-                    decoration: null,
-                    padding: const EdgeInsets.symmetric(vertical: 12),
-                  ),
-                ),
-              ],
-            ),
-            const ConfigSectionHeader(label: 'Applies to'),
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16),
-              child: IosSegments<IgnoreScope>(
-                value: _scope,
-                segments: {for (final s in IgnoreScope.values) s: s.label},
-                onChanged: (v) => setState(() => _scope = v),
-              ),
-            ),
-          ]),
         ),
-      ]),
+      ],
+    );
+  }
+
+  void _showAddDialog(BuildContext context, WidgetRef ref) {
+    final t = AppTheme.of(context);
+    final valueController = TextEditingController();
+    final labelController = TextEditingController();
+    IgnoreType selectedType = IgnoreType.ssid;
+    IgnoreScope selectedScope = IgnoreScope.both;
+
+    showDialog(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setDialogState) {
+          final hintText = switch (selectedType) {
+            IgnoreType.ssid => 'MyHomeNetwork',
+            IgnoreType.mac => 'AA:BB:CC:DD:EE:FF',
+            IgnoreType.oui => 'AA:BB:CC',
+          };
+
+          return AlertDialog(
+            backgroundColor: t.surface,
+            title: Text('Add to Ignore List', style: TextStyle(color: t.textPrimary)),
+            content: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // Type selector
+                  Text('MATCH TYPE', style: TextStyle(
+                    color: t.textDim, fontSize: 10,
+                    fontWeight: FontWeight.w700, letterSpacing: 1,
+                  )),
+                  const SizedBox(height: 6),
+                  Row(
+                    children: IgnoreType.values.map((type) {
+                      final isSelected = selectedType == type;
+                      return Expanded(
+                        child: GestureDetector(
+                          onTap: () => setDialogState(() => selectedType = type),
+                          child: Container(
+                            margin: EdgeInsets.only(
+                              right: type != IgnoreType.oui ? 6 : 0,
+                            ),
+                            padding: const EdgeInsets.symmetric(vertical: 8),
+                            decoration: BoxDecoration(
+                              color: isSelected
+                                  ? AppTheme.accent.withValues(alpha: 0.15)
+                                  : Colors.transparent,
+                              borderRadius: BorderRadius.circular(6),
+                              border: Border.all(
+                                color: isSelected
+                                    ? AppTheme.accent.withValues(alpha: 0.5)
+                                    : t.border,
+                              ),
+                            ),
+                            child: Center(
+                              child: Text(type.label, style: TextStyle(
+                                color: isSelected ? AppTheme.accent : t.textSecondary,
+                                fontSize: 11, fontWeight: FontWeight.w700,
+                                letterSpacing: 0.5,
+                              )),
+                            ),
+                          ),
+                        ),
+                      );
+                    }).toList(),
+                  ),
+                  const SizedBox(height: 14),
+
+                  // Value field
+                  TextField(
+                    controller: valueController,
+                    style: TextStyle(
+                      color: t.textPrimary,
+                      fontFamily: selectedType == IgnoreType.ssid
+                          ? null
+                          : 'monospace',
+                      fontSize: 14,
+                    ),
+                    textCapitalization: selectedType == IgnoreType.ssid
+                        ? TextCapitalization.none
+                        : TextCapitalization.characters,
+                    decoration: InputDecoration(
+                      hintText: hintText,
+                      labelText: selectedType.label,
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+
+                  // Label field
+                  TextField(
+                    controller: labelController,
+                    style: TextStyle(color: t.textPrimary, fontSize: 13),
+                    decoration: const InputDecoration(
+                      hintText: 'e.g. Home Router',
+                      labelText: 'Label (optional)',
+                    ),
+                  ),
+                  const SizedBox(height: 14),
+
+                  // Scope selector
+                  Text('APPLIES TO', style: TextStyle(
+                    color: t.textDim, fontSize: 10,
+                    fontWeight: FontWeight.w700, letterSpacing: 1,
+                  )),
+                  const SizedBox(height: 6),
+                  Row(
+                    children: IgnoreScope.values.map((scope) {
+                      final isSelected = selectedScope == scope;
+                      return Expanded(
+                        child: GestureDetector(
+                          onTap: () => setDialogState(() => selectedScope = scope),
+                          child: Container(
+                            margin: EdgeInsets.only(
+                              right: scope != IgnoreScope.ble ? 6 : 0,
+                            ),
+                            padding: const EdgeInsets.symmetric(vertical: 8),
+                            decoration: BoxDecoration(
+                              color: isSelected
+                                  ? AppTheme.accent.withValues(alpha: 0.15)
+                                  : Colors.transparent,
+                              borderRadius: BorderRadius.circular(6),
+                              border: Border.all(
+                                color: isSelected
+                                    ? AppTheme.accent.withValues(alpha: 0.5)
+                                    : t.border,
+                              ),
+                            ),
+                            child: Center(
+                              child: Text(scope.label, style: TextStyle(
+                                color: isSelected ? AppTheme.accent : t.textSecondary,
+                                fontSize: 10, fontWeight: FontWeight.w600,
+                              )),
+                            ),
+                          ),
+                        ),
+                      );
+                    }).toList(),
+                  ),
+                ],
+              ),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(ctx),
+                child: const Text('CANCEL'),
+              ),
+              ElevatedButton(
+                onPressed: () {
+                  final raw = valueController.text.trim();
+                  if (raw.isEmpty) return;
+                  final normalized = IgnoreEntry.normalize(selectedType, raw);
+                  ref.read(ignoreListProvider).add(IgnoreEntry(
+                    type: selectedType,
+                    value: normalized,
+                    scope: selectedScope,
+                    label: labelController.text.trim(),
+                  ));
+                  Navigator.pop(ctx);
+                },
+                child: const Text('ADD'),
+              ),
+            ],
+          );
+        },
+      ),
     );
   }
 }
@@ -150,34 +265,149 @@ class _IgnoreEntryTile extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final t = AppTheme.of(context);
-    final value = entry.type == IgnoreType.ssid ? entry.value : entry.value.toUpperCase();
+    final isEnabled = entry.enabled;
+
+    final IconData typeIcon = switch (entry.type) {
+      IgnoreType.ssid => Icons.wifi,
+      IgnoreType.mac => Icons.fingerprint,
+      IgnoreType.oui => Icons.radar,
+    };
+
+    final Color scopeColor = switch (entry.scope) {
+      IgnoreScope.wifi => AppTheme.wardrive,
+      IgnoreScope.ble => const Color(0xFF4A9EFF),
+      IgnoreScope.both => AppTheme.accent,
+    };
+
     return Dismissible(
       key: ValueKey('${entry.type.name}:${entry.value}'),
       direction: DismissDirection.endToStart,
       background: Container(
-        color: AppTheme.error,
         alignment: Alignment.centerRight,
-        padding: const EdgeInsets.only(right: 20),
-        child: const Icon(CupertinoIcons.trash, color: Colors.white),
+        padding: const EdgeInsets.only(right: 16),
+        margin: const EdgeInsets.only(bottom: 6),
+        decoration: BoxDecoration(
+          color: AppTheme.error.withValues(alpha: 0.15),
+          borderRadius: BorderRadius.circular(10),
+        ),
+        child: const Icon(Icons.delete_outline, color: AppTheme.error, size: 20),
       ),
       onDismissed: (_) => ref.read(ignoreListProvider).remove(entry),
-      child: IosRow(
-        leading: IosIcon(
-          switch (entry.type) {
-            IgnoreType.ssid => CupertinoIcons.wifi,
-            IgnoreType.mac => CupertinoIcons.number,
-            IgnoreType.oui => CupertinoIcons.building_2_fill,
-          },
-          entry.enabled ? AppTheme.accent : t.textDim,
+      child: Container(
+        margin: const EdgeInsets.only(bottom: 6),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+        decoration: BoxDecoration(
+          color: t.surface,
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(
+            color: isEnabled ? t.border : t.border.withValues(alpha: 0.4),
+          ),
         ),
-        title: entry.label.isNotEmpty ? entry.label : value,
-        subtitle: Text([entry.type.label, if (entry.label.isNotEmpty) value, entry.scope.label].join(' · ')),
-        trailing: CupertinoSwitch(
-          value: entry.enabled,
-          activeTrackColor: AppTheme.accent,
-          onChanged: (v) => ref.read(ignoreListProvider).toggleEnabled(entry, enabled: v),
+        child: Row(
+          children: [
+            // Type icon
+            Container(
+              width: 32, height: 32,
+              decoration: BoxDecoration(
+                color: (isEnabled ? AppTheme.accent : t.textDim).withValues(alpha: 0.1),
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: Icon(
+                typeIcon,
+                size: 16,
+                color: isEnabled ? AppTheme.accent : t.textDim,
+              ),
+            ),
+            const SizedBox(width: 10),
+            // Value + label + scope
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    entry.type == IgnoreType.ssid
+                        ? entry.value
+                        : entry.value.toUpperCase(),
+                    style: TextStyle(
+                      color: isEnabled ? t.textPrimary : t.textDim,
+                      fontSize: 13,
+                      fontFamily: entry.type == IgnoreType.ssid
+                          ? null
+                          : 'monospace',
+                      fontWeight: FontWeight.w600,
+                      letterSpacing: entry.type == IgnoreType.ssid
+                          ? 0
+                          : 0.5,
+                    ),
+                  ),
+                  const SizedBox(height: 3),
+                  Row(
+                    children: [
+                      // Type badge
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
+                        decoration: BoxDecoration(
+                          color: (isEnabled ? AppTheme.accent : t.textDim)
+                              .withValues(alpha: 0.1),
+                          borderRadius: BorderRadius.circular(3),
+                        ),
+                        child: Text(
+                          entry.type.label,
+                          style: TextStyle(
+                            color: isEnabled ? AppTheme.accent : t.textDim,
+                            fontSize: 8, fontWeight: FontWeight.w700,
+                            letterSpacing: 0.5,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 4),
+                      // Scope badge
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
+                        decoration: BoxDecoration(
+                          color: (isEnabled ? scopeColor : t.textDim)
+                              .withValues(alpha: 0.1),
+                          borderRadius: BorderRadius.circular(3),
+                        ),
+                        child: Text(
+                          entry.scope.label,
+                          style: TextStyle(
+                            color: isEnabled ? scopeColor : t.textDim,
+                            fontSize: 8, fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                      ),
+                      if (entry.label.isNotEmpty) ...[
+                        const SizedBox(width: 6),
+                        Expanded(
+                          child: Text(
+                            entry.label,
+                            style: TextStyle(color: t.textDim, fontSize: 10),
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                      ],
+                    ],
+                  ),
+                ],
+              ),
+            ),
+            // Toggle switch
+            Transform.scale(
+              scale: 0.7,
+              child: Switch(
+                value: isEnabled,
+                onChanged: (v) =>
+                    ref.read(ignoreListProvider).toggleEnabled(entry, enabled: v),
+                activeTrackColor: AppTheme.accent.withValues(alpha: 0.3),
+                activeThumbColor: AppTheme.accent,
+              ),
+            ),
+          ],
         ),
       ),
     );
   }
 }
+
+

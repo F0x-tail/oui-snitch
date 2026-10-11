@@ -1,7 +1,5 @@
-import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:go_router/go_router.dart';
 import 'package:oui_spy/core/app_state.dart';
 import 'package:oui_spy/core/engine_control.dart';
 import 'package:oui_spy/core/drone_grouping.dart';
@@ -9,9 +7,7 @@ import 'package:oui_spy/core/models/engine.dart';
 import 'package:oui_spy/core/radio_classifier.dart';
 import 'package:oui_spy/features/engines/drone_map_view.dart';
 import 'package:oui_spy/features/feed/detection_row.dart';
-import 'package:oui_spy/features/home/engine_card.dart' show agoLabel;
 import 'package:oui_spy/theme/app_theme.dart';
-import 'package:oui_spy/widgets/ios.dart';
 
 class SkySpyScreen extends ConsumerWidget {
   const SkySpyScreen({super.key});
@@ -26,53 +22,49 @@ class SkySpyScreen extends ConsumerWidget {
 
     return Scaffold(
       backgroundColor: t.background,
-      body: IosPage(
-        title: 'Drones',
-        leading: CupertinoNavigationBarBackButton(color: AppTheme.accent, onPressed: () => context.canPop() ? context.pop() : context.go('/home')),
-        slivers: [
-          SliverToBoxAdapter(
-            child: IosSection(
-              footer: 'Listens for FAA Remote ID broadcasts over Wi-Fi and Bluetooth.',
-              children: [
-                IosRow(
-                  leading: const IosIcon(CupertinoIcons.airplane, AppTheme.skySpy),
-                  title: 'Sky Spy',
-                  subtitle: Text(isActive ? 'Scanning' : 'Off'),
-                  trailing: CupertinoSwitch(
-                    value: isActive,
-                    activeTrackColor: AppTheme.skySpy,
-                    onChanged: (enable) => setEngineEnabled(ref, Engine.skySpy, enable),
+      appBar: AppBar(
+        title: const Text('SKY SPY'),
+        actions: [
+          Transform.scale(
+            scale: 0.7,
+            child: Switch(
+              value: isActive,
+              onChanged: (enable) => setEngineEnabled(ref, Engine.skySpy, enable),
+              activeTrackColor: AppTheme.skySpy.withValues(alpha: 0.3),
+              activeThumbColor: AppTheme.skySpy,
+            ),
+          ),
+        ],
+      ),
+      body: Column(
+        children: [
+          SizedBox(
+            height: MediaQuery.of(context).size.height * 0.4,
+            child: DroneMapView(drones: droneList),
+          ),
+          Expanded(
+            child: droneList.isEmpty
+                ? Center(
+                    child: Text(
+                        isActive
+                            ? 'SCANNING FOR DRONES...'
+                            : 'ENABLE TO START SCANNING',
+                        style: TextStyle(
+                            color: t.textDim, letterSpacing: 2, fontSize: 12)))
+                : ListView.builder(
+                    itemCount: groups.length,
+                    itemBuilder: (context, index) {
+                      final g = groups[index];
+                      return GestureDetector(
+                        behavior: HitTestBehavior.opaque,
+                        onTap: () => showDetectionDetails(
+                            context, ref, g.representative,
+                            showMapAction: false),
+                        child: _DroneRow(group: g),
+                      );
+                    },
                   ),
-                ),
-              ],
-            ),
           ),
-          SliverToBoxAdapter(
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(16, 4, 16, 10),
-              child: ClipRRect(
-                borderRadius: BorderRadius.circular(12),
-                child: SizedBox(height: MediaQuery.of(context).size.height * 0.35, child: DroneMapView(drones: droneList)),
-              ),
-            ),
-          ),
-          if (groups.isEmpty)
-            SliverToBoxAdapter(
-              child: IosEmpty(
-                icon: CupertinoIcons.airplane,
-                title: isActive ? 'No drones yet' : 'Sky Spy is off',
-                message: isActive ? 'Drones broadcasting Remote ID appear here as they are heard.' : 'Turn on Sky Spy to listen for drones.',
-              ),
-            )
-          else
-            IosSliverSection(
-              header: '${groups.length} drone${groups.length == 1 ? '' : 's'}',
-              itemCount: groups.length,
-              itemBuilder: (context, i) => _DroneRow(
-                group: groups[i],
-                onTap: () => showDetectionDetails(context, ref, groups[i].representative, showMapAction: false),
-              ),
-            ),
         ],
       ),
     );
@@ -80,51 +72,121 @@ class SkySpyScreen extends ConsumerWidget {
 }
 
 class _DroneRow extends StatelessWidget {
-  const _DroneRow({required this.group, required this.onTap});
+  const _DroneRow({required this.group});
   final DroneGroup group;
-  final VoidCallback onTap;
 
-  static String _transport(String method) => switch (method) {
-        'odid_nan' => 'Wi-Fi NAN',
-        'odid_beacon' => 'Wi-Fi beacon',
-        'odid_ble' => 'Bluetooth',
-        _ => method,
-      };
+  static String _transport(String method) {
+    switch (method) {
+      case 'odid_nan':
+        return 'WiFi NAN';
+      case 'odid_beacon':
+        return 'WiFi Beacon';
+      case 'odid_ble':
+        return 'BLE';
+      default:
+        return method.toUpperCase();
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
     final t = AppTheme.of(context);
-    final d = group.representative;
-    final odid = d.odid;
-    final lines = <String>[
-      if (odid != null) ...[
-        'Altitude ${odid.altitudeMsl ?? 0} m · height ${odid.heightAgl ?? 0} m',
-        'Speed ${odid.droneSpeed ?? 0} m/s · heading ${odid.droneHeading ?? 0}°',
-        if (odid.droneLat != null && odid.droneLat != 0 && odid.droneLon != null)
-          'Drone ${odid.droneLat!.toStringAsFixed(4)}, ${odid.droneLon!.toStringAsFixed(4)}'
-        else
-          'Range ${rssiRangeLabel(d.rssi, isBle: isBleMethod(d.method))}',
-        if (odid.pilotLat != null && odid.pilotLat != 0 && odid.pilotLon != null)
-          'Pilot ${odid.pilotLat!.toStringAsFixed(4)}, ${odid.pilotLon!.toStringAsFixed(4)}',
-        if (odid.operatorId != null && odid.operatorId!.isNotEmpty) 'Operator ${odid.operatorId}',
-        if (odid.selfId != null && odid.selfId!.isNotEmpty) odid.selfId!,
-      ],
-      for (var i = 0; i < group.macs.length; i++) '${group.macs[i].toUpperCase()} · ${_transport(group.methods[i])}',
-    ];
-    return IosRow(
-      leading: const IosIcon(CupertinoIcons.airplane, AppTheme.skySpy),
-      title: group.uavId,
-      subtitle: Text(lines.join('\n')),
-      detail: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.end,
+    final detection = group.representative;
+    final odid = detection.odid;
+    final timeDiff = DateTime.now().difference(detection.appTimestamp);
+
+    return Container(
+      margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: t.surface,
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: AppTheme.skySpy.withValues(alpha: 0.3)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text('${d.rssi} dBm', style: TextStyle(color: t.textSecondary, fontSize: 15)),
-          Text(agoLabel(d.appTimestamp), style: TextStyle(color: t.textDim, fontSize: 13)),
+          Row(
+            children: [
+              const Icon(Icons.flight, color: AppTheme.skySpy, size: 16),
+              const SizedBox(width: 8),
+              Expanded(child: Text(
+                group.uavId,
+                style: const TextStyle(color: AppTheme.skySpy, fontSize: 14, fontWeight: FontWeight.w600, fontFamily: 'monospace'),
+              )),
+              Text('${detection.rssi} dBm',
+                  style: TextStyle(color: t.textDim, fontSize: 11, fontFamily: 'monospace')),
+              const SizedBox(width: 8),
+              Text('${timeDiff.inSeconds}s ago',
+                  style: TextStyle(color: t.textDim, fontSize: 10)),
+            ],
+          ),
+          if (odid != null) ...[
+            const SizedBox(height: 8),
+            Row(children: [
+              _Chip('ALT', '${odid.altitudeMsl ?? 0}m'),
+              _Chip('HGT', '${odid.heightAgl ?? 0}m'),
+              _Chip('SPD', '${odid.droneSpeed ?? 0}m/s'),
+              _Chip('HDG', '${odid.droneHeading ?? 0}°'),
+            ]),
+            const SizedBox(height: 4),
+            Row(children: [
+              if (odid.droneLat != null && odid.droneLat != 0 && odid.droneLon != null)
+                _Chip('POS', '${odid.droneLat!.toStringAsFixed(4)}, ${odid.droneLon!.toStringAsFixed(4)}')
+              else
+                _Chip('RANGE',
+                    '${rssiRangeLabel(detection.rssi, isBle: isBleMethod(detection.method))} RSSI'),
+              if (odid.operatorId != null && odid.operatorId!.isNotEmpty)
+                _Chip('OP', odid.operatorId!),
+            ]),
+            if (odid.selfId != null && odid.selfId!.isNotEmpty) ...[
+              const SizedBox(height: 4),
+              _Chip('DESC', odid.selfId!),
+            ],
+            if (odid.pilotLat != null && odid.pilotLat != 0 && odid.pilotLon != null) ...[
+              const SizedBox(height: 4),
+              _Chip('PILOT', '${odid.pilotLat!.toStringAsFixed(4)}, ${odid.pilotLon!.toStringAsFixed(4)}'),
+            ],
+          ],
+          const SizedBox(height: 8),
+          Wrap(
+            spacing: 6,
+            runSpacing: 4,
+            children: [
+              for (var i = 0; i < group.macs.length; i++)
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                  decoration: BoxDecoration(
+                    color: AppTheme.skySpy.withValues(alpha: 0.12),
+                    borderRadius: BorderRadius.circular(4),
+                  ),
+                  child: Text(
+                    '${group.macs[i].toUpperCase()} · ${_transport(group.methods[i])}',
+                    style: TextStyle(color: t.textDim, fontSize: 9, fontFamily: 'monospace'),
+                  ),
+                ),
+            ],
+          ),
         ],
       ),
-      chevron: true,
-      onTap: onTap,
+    );
+  }
+}
+
+class _Chip extends StatelessWidget {
+  const _Chip(this.label, this.value);
+  final String label;
+  final String value;
+
+  @override
+  Widget build(BuildContext context) {
+    final t = AppTheme.of(context);
+    return Padding(
+      padding: const EdgeInsets.only(right: 12),
+      child: Row(mainAxisSize: MainAxisSize.min, children: [
+        Text('$label ', style: TextStyle(color: t.textDim, fontSize: 9, letterSpacing: 0.5)),
+        Text(value, style: TextStyle(color: t.textPrimary, fontSize: 11, fontFamily: 'monospace')),
+      ]),
     );
   }
 }

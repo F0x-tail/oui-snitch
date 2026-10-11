@@ -316,7 +316,7 @@ class AppTheme {
         color: sf,
         elevation: isDark ? 0 : 1,
         shape: RoundedRectangleBorder(
-          borderRadius: const BorderRadius.all(Radius.circular(8)),
+          borderRadius: const BorderRadius.all(Radius.circular(10)),
           side: BorderSide(color: bd, width: 0.5),
         ),
         margin: EdgeInsets.zero,
@@ -382,32 +382,32 @@ class AppTheme {
           textStyle: const WidgetStatePropertyAll(
             TextStyle(fontSize: 11, fontWeight: FontWeight.w700, letterSpacing: 1),
           ),
-          shape: WidgetStatePropertyAll(RoundedRectangleBorder(borderRadius: BorderRadius.circular(8))),
+          shape: WidgetStatePropertyAll(RoundedRectangleBorder(borderRadius: BorderRadius.circular(10))),
         ),
       ),
       bottomNavigationBarTheme: BottomNavigationBarThemeData(
-        backgroundColor: sf,
+        backgroundColor: isDark ? bg : sf,
         selectedItemColor: accent,
         unselectedItemColor: td,
         type: BottomNavigationBarType.fixed,
-        elevation: isDark ? 0 : 2,
+        elevation: 0,
         selectedLabelStyle:
-            const TextStyle(fontSize: 10, fontWeight: FontWeight.w600),
+            const TextStyle(fontSize: 10, fontWeight: FontWeight.w500),
         unselectedLabelStyle: const TextStyle(fontSize: 10),
       ),
       inputDecorationTheme: InputDecorationTheme(
         filled: true,
         fillColor: sfLight,
         border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(8),
+          borderRadius: BorderRadius.circular(10),
           borderSide: BorderSide(color: bd),
         ),
         enabledBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(8),
+          borderRadius: BorderRadius.circular(10),
           borderSide: BorderSide(color: bd),
         ),
         focusedBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(8),
+          borderRadius: BorderRadius.circular(10),
           borderSide: const BorderSide(color: accent),
         ),
         contentPadding:
@@ -420,7 +420,7 @@ class AppTheme {
           backgroundColor: accent,
           foregroundColor: isDark ? bg : Colors.white,
           shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(8),
+            borderRadius: BorderRadius.circular(10),
           ),
           padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
           textStyle: const TextStyle(
@@ -433,7 +433,7 @@ class AppTheme {
           foregroundColor: tp,
           side: BorderSide(color: bd),
           shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(8),
+            borderRadius: BorderRadius.circular(10),
           ),
           padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
         ),
