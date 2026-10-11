@@ -427,19 +427,21 @@ static void mgrReconcileDropWigle(void) {
 void bleGattMgrPersistOfflineTick(void) {
     if (!offlineScanEnabled) return;
     static uint8_t lastMask = 0xFF;
-    static int lastFiltCount = -1;
+    static uint8_t lastFilt[512];
+    static size_t lastFiltLen = 0;
     uint8_t m = mgrCommandedMask;
     int fc = detectorFilterCount();
-    if (m == lastMask && fc == lastFiltCount) return;
+    uint8_t fb[512];
+    size_t fn = detectorSerialize(fb, sizeof(fb));
+    if (m == lastMask && fn == lastFiltLen && memcmp(fb, lastFilt, fn) == 0) return;
     Preferences po;
     po.begin("ouispy-off", false);
     po.putUChar("mgr_mask", m);
-    uint8_t fb[512];
-    size_t fn = detectorSerialize(fb, sizeof(fb));
     po.putBytes("mgr_filt", fb, fn);
     po.end();
     lastMask = m;
-    lastFiltCount = fc;
+    memcpy(lastFilt, fb, fn);
+    lastFiltLen = fn;
     Serial.printf("[OFFLINE-MGR] persisted mask=0x%02X filt=%d\n", m, fc);
 }
 

@@ -707,19 +707,21 @@ static void statusHeartbeatTask(void* param) {
 
         if (bleGattOfflineScanEnabled() && !meshManagerJoined()) {
             static uint8_t lastMask = 0xFF;
-            static int lastFiltCount = -1;
+            static uint8_t lastFilt[512];
+            static size_t lastFiltLen = 0;
             uint8_t m = engineGetActiveMask();
             int fc = detectorFilterCount();
-            if (m != lastMask || fc != lastFiltCount) {
+            uint8_t fb[512];
+            size_t fn = detectorSerialize(fb, sizeof(fb));
+            if (m != lastMask || fn != lastFiltLen || memcmp(fb, lastFilt, fn) != 0) {
                 Preferences po;
                 po.begin("ouispy-off", false);
                 po.putUChar("eng_mask", m);
-                uint8_t fb[512];
-                size_t fn = detectorSerialize(fb, sizeof(fb));
                 po.putBytes("det_filt", fb, fn);
                 po.end();
                 lastMask = m;
-                lastFiltCount = fc;
+                memcpy(lastFilt, fb, fn);
+                lastFiltLen = fn;
                 Serial.printf("[OFFLINE] persisted eng=0x%02X filt=%d\n", m, fc);
             }
         }
