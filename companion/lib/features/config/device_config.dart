@@ -1,58 +1,42 @@
 import 'dart:async';
-import 'dart:math';
 
 import 'package:file_selector/file_selector.dart';
 
-import 'package:flutter/gestures.dart';
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:flutter_map/flutter_map.dart';
+import 'package:oui_spy/widgets/ios.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import 'package:intl/intl.dart';
-import 'package:latlong2/latlong.dart';
 import 'package:oui_spy/core/app_state.dart';
 import 'package:oui_spy/core/prefs.dart';
-import 'package:oui_spy/core/radio_classifier.dart';
 import 'package:oui_spy/core/ble/ble_manager.dart';
 import 'package:oui_spy/core/ble/gatt_uuids.dart';
 import 'package:oui_spy/core/db/app_database.dart' hide Detection;
-import 'package:oui_spy/core/db/detection_mapper.dart';
-import 'package:oui_spy/features/feed/detection_row.dart' show showDetectionDetails;
-import 'package:oui_spy/core/models/detection.dart' show FlockExtension, FlockConfidence, FlockConfidenceX, FlockExtensionSignals;
 import 'package:oui_spy/core/debug_log.dart';
 import 'package:oui_spy/core/ota/ota_service.dart';
 import 'package:oui_spy/core/oui/oui_lookup_service.dart';
 import 'package:oui_spy/core/ignore_list_state.dart';
-import 'package:oui_spy/core/watchlist_state.dart';
-import 'package:oui_spy/core/export/detections_csv.dart' show DetectionsCsv;
-import 'package:oui_spy/core/export/wigle_csv_import.dart';
 import 'package:oui_spy/features/config/widgets/config_widgets.dart';
 import 'package:oui_spy/features/config/config_menu_state.dart';
-import 'package:oui_spy/features/config/widgets/config_nav.dart';
 import 'package:oui_spy/features/config/ota_progress_stepper.dart';
 import 'package:oui_spy/features/config/alert_sounds_screen.dart';
 import 'package:oui_spy/features/engines/detection_rules.dart';
+import 'package:oui_spy/features/export/export_screen.dart';
 import 'package:oui_spy/features/pcap/pcap_library_screen.dart';
 import 'package:oui_spy/features/notifications/notification_settings_screen.dart';
-import 'package:path_provider/path_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:share_plus/share_plus.dart';
-import 'dart:io';
 import 'package:oui_spy/core/wardrive_state.dart';
 import 'package:oui_spy/core/wigle/wigle_api.dart';
 import 'package:oui_spy/core/wigle/wigle_provider.dart';
-import 'package:oui_spy/core/wdgwars/wdgwars_api.dart';
 import 'package:oui_spy/core/wdgwars/wdgwars_provider.dart';
 import 'package:oui_spy/core/app_time.dart';
 import 'package:oui_spy/core/gps/gps_provider.dart';
 import 'package:oui_spy/theme/app_theme.dart';
-import 'package:oui_spy/widgets/map_tiles.dart';
 
 part 'config_wardrive_settings.dart';
 part 'config_wardrive_tab.dart';
 part 'config_ignore_tab.dart';
-part 'config_detections_tab.dart';
 part 'config_ota.dart';
 part 'config_misc.dart';
 
@@ -78,10 +62,36 @@ class DeviceConfigScreen extends ConsumerStatefulWidget {
   ConsumerState<DeviceConfigScreen> createState() => _DeviceConfigScreenState();
 }
 
-class _DeviceConfigScreenState extends ConsumerState<DeviceConfigScreen>
-    with SingleTickerProviderStateMixin {
-  static const _keyLastTab = 'config_last_tab';
-  late TabController _tabController;
+enum _Page {
+  app('App', CupertinoIcons.slider_horizontal_3, AppTheme.accent, 'Appearance, units, connection'),
+  scanning('Scanning', CupertinoIcons.dot_radiowaves_left_right, AppTheme.wardrive, 'Channels, dwell, re-log thresholds'),
+  watchlist('Watchlist', CupertinoIcons.eye_fill, AppTheme.detector, 'MACs, OUIs and UUIDs to alert on'),
+  signatures('Threat signatures', CupertinoIcons.shield_lefthalf_fill, AppTheme.detector, 'Trackers, Flipper, deauth, Axon and more'),
+  ignore('Ignore list', CupertinoIcons.nosign, AppTheme.gpsNone, 'Never log or alert on these'),
+  alerts('Notifications', CupertinoIcons.bell_fill, AppTheme.error, 'What alerts you and how'),
+  hardware('Hardware', CupertinoIcons.memories, AppTheme.warning, 'Buzzer, LED, GPS, offline scanning'),
+  mesh('Mesh', CupertinoIcons.circle_grid_hex_fill, AppTheme.flockBle, 'Multi-node coordination'),
+  firmware('Firmware', CupertinoIcons.arrow_down_circle_fill, AppTheme.success, 'Version and over-the-air updates'),
+  accounts('Wardrive accounts', CupertinoIcons.globe, AppTheme.wigle, 'WiGLE and WDGWars'),
+  pcaps('Packet captures', CupertinoIcons.doc_on_doc_fill, AppTheme.skySpy, 'Saved PCAP files'),
+  export('Export and backup', CupertinoIcons.square_arrow_up_fill, AppTheme.accent, 'CSV, KML, database backup');
+
+  const _Page(this.title, this.icon, this.color, this.summary);
+  final String title;
+  final IconData icon;
+  final Color color;
+  final String summary;
+}
+
+const _groups = <(String, List<_Page>)>[
+  ('App', [_Page.app]),
+  ('Detection', [_Page.scanning, _Page.watchlist, _Page.signatures, _Page.ignore, _Page.alerts]),
+  ('Node', [_Page.hardware, _Page.mesh, _Page.firmware]),
+  ('Data', [_Page.accounts, _Page.pcaps, _Page.export]),
+];
+
+class _DeviceConfigScreenState extends ConsumerState<DeviceConfigScreen> {
+  _Page? _page;
 
   bool _flockExtendedOui = false;
   bool _flockAllowOuiOnly = false;
@@ -111,21 +121,10 @@ class _DeviceConfigScreenState extends ConsumerState<DeviceConfigScreen>
   void initState() {
     super.initState();
     final prefs = ref.read(sharedPreferencesProvider);
-    final requested = kConfigSections.indexWhere((s) => s.label == ref.read(configSectionRequestProvider));
-    _tabController = TabController(
-      length: kConfigSections.length,
-      vsync: this,
-      initialIndex: requested >= 0
-          ? requested
-          : (prefs.getInt(_keyLastTab) ?? 0).clamp(0, kConfigSections.length - 1),
-    );
-    if (requested >= 0) {
+    _page = _pageForRequest(ref.read(configSectionRequestProvider));
+    if (_page != null) {
       WidgetsBinding.instance.addPostFrameCallback((_) => ref.read(configSectionRequestProvider.notifier).state = null);
     }
-    _tabController.addListener(_persistTab);
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted && ref.read(configMenuWantedProvider)) _syncSectionSheet(true);
-    });
     _offlineGpsTag = prefs.getBool('offlineGpsTagEnabled') ?? false;
     _neopixelBrightness = prefs.getInt('neopixelBrightness') ?? _neopixelBrightness;
     _readDeviceConfig();
@@ -144,32 +143,17 @@ class _DeviceConfigScreenState extends ConsumerState<DeviceConfigScreen>
     gps.refreshHwGps();
   }
 
-  void _persistTab() {
-    if (_tabController.indexIsChanging) return;
-    ref.read(sharedPreferencesProvider).setInt(_keyLastTab, _tabController.index);
-  }
-
-  Future<void> _syncSectionSheet(bool wanted) async {
-    if (!mounted) return;
-    if (!wanted) {
-      if (configSectionSheetOpen(context)) await Navigator.of(context).maybePop();
-      return;
-    }
-    await showConfigSectionSheet(context, _tabController);
-    if (!mounted) return;
-    if (ref.read(configMenuWantedProvider)) {
-      ref.read(configMenuWantedProvider.notifier).state = false;
-    }
-  }
+  static _Page? _pageForRequest(String? r) => switch (r) {
+        'NODE' => _Page.mesh,
+        'DATA' => _Page.accounts,
+        null => null,
+        _ => _Page.values.where((p) => p.name.toUpperCase() == r).firstOrNull,
+      };
 
   @override
   void dispose() {
-    // Leaving with the sheet up must not re-open it on the next visit.
-    ref.read(configMenuWantedProvider.notifier).state = false;
     _connStateSub?.cancel();
     _hwGpsSub?.cancel();
-    _tabController.removeListener(_persistTab);
-    _tabController.dispose();
     _ssidController.dispose();
     _passController.dispose();
     super.dispose();
@@ -258,73 +242,87 @@ class _DeviceConfigScreenState extends ConsumerState<DeviceConfigScreen>
     setState(() => _loading = false);
   }
 
+  Widget _pageBody(_Page p) => switch (p) {
+        _Page.app => _buildAppTab(),
+        _Page.scanning => _buildScanTab(),
+        _Page.watchlist => const SingleChildScrollView(child: WatchlistPanel()),
+        _Page.signatures => const SingleChildScrollView(child: SignaturesPanel()),
+        _Page.ignore => const _IgnoreListTab(),
+        _Page.alerts => _buildAlertsTab(),
+        _Page.hardware => _buildHardwareTab(),
+        _Page.mesh => _buildMeshTab(),
+        _Page.firmware => _buildFirmwareTab(),
+        _Page.accounts => const _WardriveConfigTab(),
+        _Page.pcaps => const PcapLibraryScreen(embedded: true),
+        _Page.export => _buildExportTab(),
+      };
+
   @override
   Widget build(BuildContext context) {
     final t = AppTheme.of(context);
-    ref.listen<bool>(configMenuWantedProvider, (_, wanted) {
-      _syncSectionSheet(wanted);
+    ref.listen<String?>(configSectionRequestProvider, (_, r) {
+      final p = _pageForRequest(r);
+      if (p == null) return;
+      setState(() => _page = p);
+      ref.read(configSectionRequestProvider.notifier).state = null;
     });
-    return Scaffold(
-      backgroundColor: t.background,
-      body: GestureDetector(
-        onTap: () => FocusScope.of(context).unfocus(),
-        behavior: HitTestBehavior.translucent,
-        child: SafeArea(
-        bottom: false,
-        child: ConfigNav(
-          controller: _tabController,
+    final page = _page;
+    if (page == null) {
+      final connected = ref.watch(appStateProvider).isConnected;
+      return IosPage(
+        title: 'Settings',
+        actions: [if (_loading && connected) const Padding(padding: EdgeInsets.only(right: 12), child: CupertinoActivityIndicator())],
+        slivers: [
+          for (final (name, pages) in _groups)
+            SliverToBoxAdapter(
+              child: IosSection(
+                header: name,
+                footer: name == 'Node' && !connected ? 'Connect a node to change its settings.' : null,
+                children: [
+                  for (final p in pages)
+                    IosRow(
+                      leading: IosIcon(p.icon, p.color),
+                      title: p.title,
+                      subtitle: Text(p.summary),
+                      chevron: true,
+                      onTap: () => setState(() => _page = p),
+                    ),
+                ],
+              ),
+            ),
+        ],
+      );
+    }
+    return PopScope(
+      canPop: false,
+      onPopInvokedWithResult: (didPop, _) {
+        if (!didPop) setState(() => _page = null);
+      },
+      child: Scaffold(
+        backgroundColor: t.background,
+        body: GestureDetector(
+          onTap: () => FocusScope.of(context).unfocus(),
+          behavior: HitTestBehavior.translucent,
           child: Column(
             children: [
-              _ConfigTitleBar(controller: _tabController, loading: _loading),
-              const Divider(height: 1),
-              Expanded(
-                child: TabBarView(
-                  controller: _tabController,
-                  children: [
-                    _section(_buildAppTab()),
-                    _section(_buildScanTab()),
-                    _section(const Column(
-                      children: [
-                        Flexible(
-                          child: SingleChildScrollView(
-                            child: Column(
-                              children: [WatchlistPanel(), Divider(height: 1), SignaturesPanel(), Divider(height: 1)],
-                            ),
-                          ),
-                        ),
-                        Expanded(child: _IgnoreListTab()),
-                      ],
-                    )),
-                    _section(_buildAlertsTab()),
-                    _section(_Segmented(
-                      labels: const ['HARDWARE', 'MESH', 'FIRMWARE'],
-                      builders: [_buildHardwareTab, _buildMeshTab, _buildFirmwareTab],
-                    )),
-                    _section(_Segmented(
-                      labels: const ['ACCOUNTS', 'PCAPS', 'EXPORT'],
-                      builders: [
-                        () => const _WardriveConfigTab(),
-                        () => const PcapLibraryScreen(embedded: true),
-                        _buildExportTab,
-                      ],
-                    )),
-                  ],
+              CupertinoNavigationBar(
+                backgroundColor: t.background.withValues(alpha: 0.92),
+                border: Border(bottom: BorderSide(color: t.border, width: 0.5)),
+                transitionBetweenRoutes: false,
+                automaticallyImplyLeading: false,
+                leading: CupertinoNavigationBarBackButton(
+                  color: AppTheme.accent,
+                  onPressed: () => setState(() => _page = null),
                 ),
+                middle: Text(page.title, style: TextStyle(color: t.textPrimary)),
               ),
+              Expanded(child: _pageBody(page)),
             ],
           ),
-        ),
         ),
       ),
     );
   }
-
-  Widget _section(Widget body) => Column(
-        children: [
-          Expanded(child: body),
-          const ConfigBottomBar(),
-        ],
-      );
 
   Widget _buildAppTab() {
     final themeMode = ref.watch(themeModeProvider);
@@ -335,137 +333,76 @@ class _DeviceConfigScreenState extends ConsumerState<DeviceConfigScreen>
     final t = AppTheme.of(context);
 
     return ListView(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      padding: const EdgeInsets.only(top: 8, bottom: 24),
       children: [
-        const ConfigSectionHeader(label: 'APPEARANCE'),
-        ConfigToggleRow(
-          icon: isDark ? Icons.dark_mode : Icons.light_mode,
-          label: 'Dark Mode',
-          subtitle: isDark ? 'Dark theme active' : 'Light theme active',
-          color: AppTheme.accent,
-          value: isDark,
-          onChanged: (v) {
-            ref.read(themeModeProvider.notifier).setMode(
-                  v ? ThemeMode.dark : ThemeMode.light,
-                );
-          },
-        ),
-
-        const SizedBox(height: 16),
-        const ConfigSectionHeader(label: 'UNITS'),
-        ConfigToggleRow(
-          icon: isImperial ? Icons.straighten : Icons.square_foot,
-          label: 'Imperial Units',
-          subtitle: isImperial
-              ? 'Distances mi, speed mph, altitude ft'
-              : 'Distances km, speed km/h, altitude m',
-          color: AppTheme.accent,
-          value: isImperial,
-          onChanged: (v) {
-            ref.read(unitSystemProvider.notifier).setSystem(
-                  v ? UnitSystem.imperial : UnitSystem.metric,
-                );
-          },
-        ),
-        ConfigToggleRow(
-          icon: Icons.schedule,
-          label: '24-Hour Time',
-          subtitle: use24Hour ? 'Times shown as 20:13' : 'Times shown as 8:13 PM',
-          color: AppTheme.accent,
-          value: use24Hour,
-          onChanged: (v) => ref.read(use24HourTimeProvider.notifier).set(v),
-        ),
-
-        const SizedBox(height: 16),
-        const ConfigSectionHeader(label: 'CONNECTION'),
-        const _AutoConnectToggle(),
-
-        const SizedBox(height: 16),
-        const ConfigSectionHeader(label: 'ABOUT'),
-        const _VersionRow(),
-        ConfigActionRow(
-          icon: Icons.code,
-          label: 'Source Code',
-          subtitle: 'github.com/lukeswitz/oui-spy-unified-blue',
-          onTap: () => _launchUrl('https://github.com/lukeswitz/oui-spy-unified-blue'),
-          trailing: Icon(Icons.open_in_new, size: 14, color: t.textDim),
-        ),
+        IosSection(header: 'Appearance', children: [
+          ConfigToggleRow(
+            icon: isDark ? Icons.dark_mode : Icons.light_mode,
+            label: 'Dark mode',
+            color: AppTheme.accent,
+            value: isDark,
+            onChanged: (v) => ref.read(themeModeProvider.notifier).setMode(v ? ThemeMode.dark : ThemeMode.light),
+          ),
+        ]),
+        IosSection(header: 'Units', children: [
+          ConfigToggleRow(
+            icon: isImperial ? Icons.straighten : Icons.square_foot,
+            label: 'Imperial units',
+            subtitle: isImperial ? 'Miles, mph, feet' : 'Kilometers, km/h, meters',
+            color: AppTheme.accent,
+            value: isImperial,
+            onChanged: (v) => ref.read(unitSystemProvider.notifier).setSystem(v ? UnitSystem.imperial : UnitSystem.metric),
+          ),
+          ConfigToggleRow(
+            icon: Icons.schedule,
+            label: '24-hour time',
+            subtitle: use24Hour ? 'Shown as 20:13' : 'Shown as 8:13 PM',
+            color: AppTheme.accent,
+            value: use24Hour,
+            onChanged: (v) => ref.read(use24HourTimeProvider.notifier).set(v),
+          ),
+        ]),
+        const IosSection(header: 'Connection', children: [_AutoConnectToggle()]),
+        IosSection(header: 'About', children: [
+          const _VersionRow(),
+          ConfigActionRow(
+            icon: Icons.code,
+            label: 'Source code',
+            subtitle: 'github.com/lukeswitz/oui-spy-unified-blue',
+            onTap: () => _launchUrl('https://github.com/lukeswitz/oui-spy-unified-blue'),
+            trailing: Icon(CupertinoIcons.doc_on_clipboard, size: 18, color: t.textDim),
+          ),
+        ]),
       ],
     );
   }
 
   Widget _buildScanTab() {
-    final t = AppTheme.of(context);
     final isC5 = ref.watch(bleManagerProvider).isC5;
     return ListView(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      padding: const EdgeInsets.only(top: 8, bottom: 24),
       children: [
-        const ConfigSectionHeader(label: 'WARDRIVE — RSSI'),
-        Padding(
-          padding: const EdgeInsets.only(bottom: 8, left: 2),
-          child: Text(
-            'RSSI change threshold before re-logging a seen device',
-            style: TextStyle(color: t.textDim, fontSize: 11),
-          ),
-        ),
-        const _WardriveRssiRow(isBle: false),
-        const _WardriveRssiRow(isBle: true),
-
-        const SizedBox(height: 16),
-        const ConfigSectionHeader(label: 'SCAN TIMING'),
-        Padding(
-          padding: const EdgeInsets.only(bottom: 8, left: 2),
-          child: Text(
-            'Lower values = faster scans, more battery drain',
-            style: TextStyle(color: t.textDim, fontSize: 11),
-          ),
+        const IosSection(
+          header: 'Re-log after signal changes by',
+          footer: 'Smaller numbers log more rows during a wardrive.',
+          children: [_WardriveRssiRow(isBle: false), _WardriveRssiRow(isBle: true)],
         ),
         const _ScanTimingSliders(),
-
-        if (isC5) ...[
-          const SizedBox(height: 16),
-          const ConfigSectionHeader(label: 'WIFI BAND'),
-          Padding(
-            padding: const EdgeInsets.only(bottom: 8, left: 2),
-            child: Text(
-              '5GHz sweeps UNII-1 + UNII-3; applies to all WiFi engines.',
-              style: TextStyle(color: t.textDim, fontSize: 11),
-            ),
+        if (isC5)
+          const IosSection(
+            header: 'Wi-Fi band',
+            footer: '5 GHz sweeps UNII-1 and UNII-3. Applies to every Wi-Fi engine.',
+            children: [Padding(padding: EdgeInsets.all(12), child: _WifiBandSelector())],
           ),
-          const _WifiBandSelector(),
-        ],
-
-        const SizedBox(height: 16),
-        const ConfigSectionHeader(label: 'CHANNEL RANGE'),
-        Padding(
-          padding: const EdgeInsets.only(bottom: 8, left: 2),
-          child: Text(
-            '2.4GHz channels to scan. Narrower range = faster per-channel coverage.',
-            style: TextStyle(color: t.textDim, fontSize: 11),
-          ),
-        ),
         const _ChannelRangeSlider(),
       ],
     );
   }
 
   Widget _buildExportTab() {
-    final t = AppTheme.of(context);
     return ListView(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-      children: [
-        const ConfigSectionHeader(label: 'DATA & BACKUP'),
-        ConfigActionRow(
-          icon: Icons.import_export,
-          label: 'Export & Database Backup',
-          subtitle: 'WiGLE/JSON/KML export, full DB backup & restore',
-          onTap: () => context.push('/export'),
-          trailing: Icon(Icons.chevron_right, size: 18, color: t.textDim),
-        ),
-        const SizedBox(height: 16),
-        const ConfigSectionHeader(label: 'OUI DATABASE'),
-        const _OuiDatabaseSection(),
-      ],
+      padding: const EdgeInsets.only(top: 8, bottom: 24),
+      children: const [ExportSections(), _OuiDatabaseSection()],
     );
   }
 
@@ -486,45 +423,13 @@ class _DeviceConfigScreenState extends ConsumerState<DeviceConfigScreen>
       valueListenable: ota.otaActive,
       builder: (context, otaActive, _) {
         if (otaActive) return _buildOtaReconnecting(t);
-        return Center(
-      child: Padding(
-        padding: const EdgeInsets.all(32),
-        child: Container(
-          padding: const EdgeInsets.all(20),
-          decoration: BoxDecoration(
-            color: t.surface,
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: t.border, width: 0.5),
+        return SingleChildScrollView(
+          child: IosEmpty(
+            icon: CupertinoIcons.bluetooth,
+            title: 'No node connected',
+            message: 'These settings live on the node. Connect one to change them.',
+            action: CupertinoButton.filled(onPressed: () => context.push('/onboarding'), child: const Text('Connect')),
           ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Container(
-                padding: const EdgeInsets.all(14),
-                decoration: BoxDecoration(
-                  color: AppTheme.warning.withValues(alpha: 0.1),
-                  shape: BoxShape.circle,
-                ),
-                child: const Icon(Icons.bluetooth_disabled, size: 32, color: AppTheme.warning),
-              ),
-              const SizedBox(height: 14),
-              Text(
-                'NO NODE CONNECTED',
-                style: TextStyle(
-                  color: t.textPrimary, fontSize: 12,
-                  fontWeight: FontWeight.w700, letterSpacing: 2,
-                ),
-              ),
-              const SizedBox(height: 6),
-              Text(
-                'Connect an OUI-SPY node to configure hardware settings.',
-                textAlign: TextAlign.center,
-                style: TextStyle(color: t.textDim, fontSize: 11),
-              ),
-            ],
-          ),
-        ),
-      ),
         );
       },
     );
@@ -578,13 +483,9 @@ class _DeviceConfigScreenState extends ConsumerState<DeviceConfigScreen>
       icon: icon,
       label: label,
       subtitle: subtitle,
-      color: selected ? const Color(0xFF4AB8FF) : null,
+      color: selected ? AppTheme.accent : AppTheme.textDim,
       onTap: () => ref.read(gpsProvider).setSource(source),
-      trailing: Icon(
-        selected ? Icons.check_circle : Icons.circle_outlined,
-        size: 18,
-        color: selected ? const Color(0xFF4AB8FF) : AppTheme.textDim,
-      ),
+      trailing: selected ? const Icon(CupertinoIcons.check_mark, size: 20, color: AppTheme.accent) : const SizedBox(width: 20),
     );
   }
 
@@ -595,155 +496,142 @@ class _DeviceConfigScreenState extends ConsumerState<DeviceConfigScreen>
         .contains(ref.read(bleManagerProvider).board);
 
     return ListView(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      padding: const EdgeInsets.only(top: 8, bottom: 24),
       children: [
-        if (hasBuzzer) const ConfigSectionHeader(label: 'AUDIO'),
-        if (hasBuzzer) ConfigToggleRow(
-          icon: Icons.volume_up,
-          label: 'Buzzer',
-          subtitle: 'Audible alerts on detections',
-          color: const Color(0xFFFFB84A),
-          value: _buzzerEnabled,
-          onChanged: (v) {
-            setState(() => _buzzerEnabled = v);
-            _writeHardwareConfig();
-          },
-        ),
-        if (hasBuzzer && _buzzerEnabled)
-          ConfigSliderRow(
-            icon: Icons.graphic_eq,
-            label: 'Buzzer Volume',
-            valueLabel: '$_buzzerVolume',
-            min: 1,
-            max: 255,
-            divisions: 254,
-            value: _buzzerVolume.toDouble(),
-            color: const Color(0xFFFFB84A),
+        if (hasBuzzer)
+          IosSection(header: 'Sound', children: [
+            ConfigToggleRow(
+              icon: Icons.volume_up,
+              label: 'Buzzer',
+              subtitle: 'Beep on detections',
+              color: AppTheme.warning,
+              value: _buzzerEnabled,
+              onChanged: (v) {
+                setState(() => _buzzerEnabled = v);
+                _writeHardwareConfig();
+              },
+            ),
+            if (_buzzerEnabled)
+              ConfigSliderRow(
+                icon: Icons.graphic_eq,
+                label: 'Volume',
+                valueLabel: '$_buzzerVolume',
+                min: 1,
+                max: 255,
+                divisions: 254,
+                value: _buzzerVolume.toDouble(),
+                color: AppTheme.warning,
+                onChanged: (v) {
+                  setState(() => _buzzerVolume = v.round());
+                  _writeHardwareConfig();
+                },
+              ),
+            if (_buzzerEnabled)
+              ConfigActionRow(
+                icon: Icons.music_note,
+                label: 'Alert sounds',
+                subtitle: 'Compose melodies and assign them to detections',
+                color: AppTheme.warning,
+                onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const AlertSoundsScreen())),
+              ),
+          ]),
+        IosSection(header: 'Lights', children: [
+          ConfigToggleRow(
+            icon: Icons.lightbulb,
+            label: 'Status LED',
+            subtitle: 'Power and activity indicator',
+            color: AppTheme.success,
+            value: _ledEnabled,
             onChanged: (v) {
-              setState(() => _buzzerVolume = v.round());
+              setState(() => _ledEnabled = v);
               _writeHardwareConfig();
             },
           ),
-        if (hasBuzzer && _buzzerEnabled)
-          ConfigActionRow(
-            icon: Icons.music_note,
-            label: 'Alert sounds',
-            subtitle: 'Compose melodies and assign them to detections',
-            color: const Color(0xFFFFB84A),
-            onTap: () => Navigator.of(context).push(MaterialPageRoute(
-              builder: (_) => const AlertSoundsScreen(),
-            )),
-          ),
-
-        if (hasBuzzer) const SizedBox(height: 16),
-        const ConfigSectionHeader(label: 'LIGHTING'),
-        ConfigToggleRow(
-          icon: Icons.lightbulb,
-          label: 'Status LED',
-          subtitle: 'Power and activity indicator',
-          color: const Color(0xFF4AFF8A),
-          value: _ledEnabled,
-          onChanged: (v) {
-            setState(() => _ledEnabled = v);
-            _writeHardwareConfig();
-          },
-        ),
-        ConfigSliderRow(
-          icon: Icons.brightness_6,
-          label: 'NeoPixel Brightness',
-          valueLabel: '$_neopixelBrightness',
-          min: 0,
-          max: 255,
-          divisions: 255,
-          value: _neopixelBrightness.toDouble(),
-          color: const Color(0xFFB44AFF),
-          onChanged: (v) {
-            setState(() => _neopixelBrightness = v.round());
-            _writeHardwareConfig();
-          },
-        ),
-
-        const SizedBox(height: 16),
-        const ConfigSectionHeader(label: 'GPS SOURCE'),
-        ConfigInfoRow(
-          icon: _hwGps.active ? Icons.satellite_alt : Icons.satellite_alt_outlined,
-          label: 'On-board GPS module',
-          value: _hwGps.active ? 'FIX · ${_hwGps.satellites} sats' : 'NO FIX',
-          color: _hwGps.active ? const Color(0xFF4AFF8A) : const Color(0xFFFF6B6B),
-        ),
-        ConfigInfoRow(
-          icon: Icons.edit_location_alt,
-          label: 'Recording positions from',
-          value: _hwGps.inUse
-              ? 'HARDWARE'
-              : (_hwGps.fallback ? 'PHONE (FALLBACK)' : 'PHONE'),
-          color: _hwGps.fallback
-              ? const Color(0xFFFFB84A)
-              : const Color(0xFF4AB8FF),
-        ),
-        _gpsSourceRow(
-          GpsSource.phone,
-          Icons.smartphone,
-          'Phone (default)',
-          'Record the phone location. The device is never polled for GPS.',
-        ),
-        _gpsSourceRow(
-          GpsSource.hardware,
-          Icons.memory,
-          'On-board GPS module',
-          'Record from the module, falling back to the phone whenever it has no fix.',
-        ),
-
-        const SizedBox(height: 16),
-        const ConfigSectionHeader(label: 'FLOCK DETECTION'),
-        ConfigToggleRow(
-          icon: Icons.lan,
-          label: 'Extended Repo OUI set',
-          subtitle: 'Double the OUIs, expect false postives.',
-          color: const Color(0xFFFF6B6B),
-          value: _flockExtendedOui,
-          onChanged: (v) {
-            setState(() => _flockExtendedOui = v);
-            _writeHardwareConfig();
-          },
-        ),
-        ConfigToggleRow(
-          icon: Icons.fingerprint,
-          label: 'Report OUI-only WiFi hits',
-          subtitle: 'Report a WiFi device on a Flock OUI match alone, without a probe or other corroborating signal. More hits, more false positives.',
-          color: const Color(0xFFFF6B6B),
-          value: _flockAllowOuiOnly,
-          onChanged: (v) {
-            setState(() => _flockAllowOuiOnly = v);
-            _writeHardwareConfig();
-          },
-        ),
-
-        const SizedBox(height: 16),
-        const ConfigSectionHeader(label: 'OFFLINE SCAN (EXPERIMENTAL)'),
-        ConfigToggleRow(
-          icon: Icons.cloud_off,
-          label: 'Keep scanning while disconnected (EXPERIMENTAL)',
-          subtitle: 'EXPERIMENTAL — may be unstable. Node keeps scanning when the app is closed; detections import on reconnect.',
-          color: const Color(0xFF4AB8FF),
-          value: _offlineScanEnabled,
-          onChanged: (v) {
-            setState(() => _offlineScanEnabled = v);
-            _writeHardwareConfig();
-          },
-        ),
-        if (_offlineScanEnabled)
-          ConfigToggleRow(
-            icon: Icons.my_location,
-            label: 'Tag away detections with last GPS',
-            subtitle: 'Detections seen while away get the phone\'s last-known location (approximate).',
-            color: const Color(0xFF4AB8FF),
-            value: _offlineGpsTag,
+          ConfigSliderRow(
+            icon: Icons.brightness_6,
+            label: 'NeoPixel brightness',
+            valueLabel: '$_neopixelBrightness',
+            min: 0,
+            max: 255,
+            divisions: 255,
+            value: _neopixelBrightness.toDouble(),
+            color: AppTheme.detector,
             onChanged: (v) {
-              setState(() => _offlineGpsTag = v);
-              ref.read(sharedPreferencesProvider).setBool('offlineGpsTagEnabled', v);
+              setState(() => _neopixelBrightness = v.round());
+              _writeHardwareConfig();
             },
           ),
+        ]),
+        IosSection(header: 'Location', children: [
+          ConfigInfoRow(
+            icon: _hwGps.active ? Icons.satellite_alt : Icons.satellite_alt_outlined,
+            label: 'GPS module',
+            value: _hwGps.active ? 'Fix, ${_hwGps.satellites} satellites' : 'No fix',
+            color: _hwGps.active ? AppTheme.success : AppTheme.error,
+            monospace: false,
+          ),
+          ConfigInfoRow(
+            icon: Icons.edit_location_alt,
+            label: 'Recording from',
+            value: _hwGps.inUse ? 'GPS module' : (_hwGps.fallback ? 'Phone (fallback)' : 'Phone'),
+            color: _hwGps.fallback ? AppTheme.warning : AppTheme.accent,
+            monospace: false,
+          ),
+          _gpsSourceRow(GpsSource.phone, Icons.smartphone, 'Use phone location', 'The node is never asked for GPS.'),
+          _gpsSourceRow(GpsSource.hardware, Icons.memory, 'Use GPS module', 'Falls back to the phone whenever the module has no fix.'),
+        ]),
+        IosSection(header: 'Flock detection', children: [
+          ConfigToggleRow(
+            icon: Icons.lan,
+            label: 'Extended vendor list',
+            subtitle: 'Twice as many Flock vendor prefixes. More false positives.',
+            color: AppTheme.error,
+            value: _flockExtendedOui,
+            onChanged: (v) {
+              setState(() => _flockExtendedOui = v);
+              _writeHardwareConfig();
+            },
+          ),
+          ConfigToggleRow(
+            icon: Icons.fingerprint,
+            label: 'Report vendor-only Wi-Fi hits',
+            subtitle: 'Report a Wi-Fi device on a Flock vendor match alone, with no probe or other evidence. More hits, more false positives.',
+            color: AppTheme.error,
+            value: _flockAllowOuiOnly,
+            onChanged: (v) {
+              setState(() => _flockAllowOuiOnly = v);
+              _writeHardwareConfig();
+            },
+          ),
+        ]),
+        IosSection(
+          header: 'Offline scanning',
+          footer: 'Experimental. The node keeps scanning while the app is closed and detections import on reconnect.',
+          children: [
+            ConfigToggleRow(
+              icon: Icons.cloud_off,
+              label: 'Scan while disconnected',
+              color: AppTheme.accent,
+              value: _offlineScanEnabled,
+              onChanged: (v) {
+                setState(() => _offlineScanEnabled = v);
+                _writeHardwareConfig();
+              },
+            ),
+            if (_offlineScanEnabled)
+              ConfigToggleRow(
+                icon: Icons.my_location,
+                label: 'Tag with last phone location',
+                subtitle: 'Approximate. Uses where the phone last was.',
+                color: AppTheme.accent,
+                value: _offlineGpsTag,
+                onChanged: (v) {
+                  setState(() => _offlineGpsTag = v);
+                  ref.read(sharedPreferencesProvider).setBool('offlineGpsTagEnabled', v);
+                },
+              ),
+          ],
+        ),
       ],
     );
   }
@@ -757,39 +645,29 @@ class _DeviceConfigScreenState extends ConsumerState<DeviceConfigScreen>
           shrinkWrap: true,
           physics: NeverScrollableScrollPhysics(),
         ),
-        if (appState.isConnected) ...[
-          const Padding(
-            padding: EdgeInsets.fromLTRB(16, 16, 16, 0),
-            child: ConfigSectionHeader(label: 'FIRMWARE TIMING'),
-          ),
-          Padding(
-            padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-            child: Column(
-              children: [
-                ConfigNumberField(
-                  icon: Icons.hourglass_empty,
-                  label: 'Cooldown', suffix: 'ms', value: _cooldownMs,
-                  onChanged: (v) { setState(() => _cooldownMs = v); _writeAlertConfig(); },
-                ),
-                ConfigNumberField(
-                  icon: Icons.favorite,
-                  label: 'Heartbeat', suffix: 'ms', value: _heartbeatMs,
-                  onChanged: (v) { setState(() => _heartbeatMs = v); _writeAlertConfig(); },
-                ),
-                ConfigNumberField(
-                  icon: Icons.refresh,
-                  label: 'Rediscover', suffix: 'ms', value: _rediscoverMs,
-                  onChanged: (v) { setState(() => _rediscoverMs = v); _writeAlertConfig(); },
-                ),
-                ConfigNumberField(
-                  icon: Icons.bolt,
-                  label: 'HB Active', suffix: 'ms', value: _hbActiveMs,
-                  onChanged: (v) { setState(() => _hbActiveMs = v); _writeAlertConfig(); },
-                ),
-              ],
+        if (appState.isConnected)
+          IosSection(header: 'Node alert timing', children: [
+            ConfigNumberField(
+              icon: Icons.hourglass_empty,
+              label: 'Cooldown', suffix: 'ms', value: _cooldownMs,
+              onChanged: (v) { setState(() => _cooldownMs = v); _writeAlertConfig(); },
             ),
-          ),
-        ],
+            ConfigNumberField(
+              icon: Icons.favorite,
+              label: 'Heartbeat', suffix: 'ms', value: _heartbeatMs,
+              onChanged: (v) { setState(() => _heartbeatMs = v); _writeAlertConfig(); },
+            ),
+            ConfigNumberField(
+              icon: Icons.refresh,
+              label: 'Rediscover', suffix: 'ms', value: _rediscoverMs,
+              onChanged: (v) { setState(() => _rediscoverMs = v); _writeAlertConfig(); },
+            ),
+            ConfigNumberField(
+              icon: Icons.bolt,
+              label: 'Active heartbeat', suffix: 'ms', value: _hbActiveMs,
+              onChanged: (v) { setState(() => _hbActiveMs = v); _writeAlertConfig(); },
+            ),
+          ]),
       ],
     );
   }
@@ -813,24 +691,17 @@ class _DeviceConfigScreenState extends ConsumerState<DeviceConfigScreen>
   }
 
   Future<void> _confirmWipeWifi() async {
-    final ok = await showDialog<bool>(
+    final ok = await showCupertinoDialog<bool>(
       context: context,
-      builder: (ctx) => AlertDialog(
+      builder: (ctx) => CupertinoAlertDialog(
         title: const Text('Wipe WiFi credentials?'),
         content: const Text(
           'Device will disconnect from WiFi and forget SSID + password. '
           'You will need to re-enter them to use WiFi OTA again.',
         ),
         actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('CANCEL'),
-          ),
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, true),
-            style: TextButton.styleFrom(foregroundColor: AppTheme.error),
-            child: const Text('WIPE'),
-          ),
+          CupertinoDialogAction(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
+          CupertinoDialogAction(isDestructiveAction: true, onPressed: () => Navigator.pop(ctx, true), child: const Text('Wipe')),
         ],
       ),
     );
@@ -923,100 +794,55 @@ class _DeviceConfigScreenState extends ConsumerState<DeviceConfigScreen>
     final maxPeers = modeEnc ? 6 : (modePlain ? 12 : 0);
     final keyHex = appState.meshKeyFingerprint;
 
+    final heard = appState.liveKnownNodes.where((n) => n.isNotEmpty && n != appState.nodeId).length;
     return ListView(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      padding: const EdgeInsets.only(top: 8, bottom: 24),
       children: [
-        const ConfigSectionHeader(label: 'MODE'),
-        Padding(
-          padding: const EdgeInsets.only(bottom: 12, left: 2),
-          child: Text(
-            'ESP-NOW peer slot limits per Espressif: 6 encrypted OR 12 unencrypted. Broadcast skips the peer table.',
-            style: TextStyle(color: t.textDim, fontSize: 11),
-          ),
+        IosSection(
+          header: 'Mode',
+          footer: 'ESP-NOW allows 6 encrypted or 12 unencrypted peers. Broadcast skips the peer table.',
+          children: [
+            _MeshModeTile(
+              label: 'Off',
+              subtitle: 'Single node',
+              selected: modeOff,
+              onTap: () => appState.disableMesh(),
+            ),
+            _MeshModeTile(
+              label: 'Broadcast',
+              subtitle: 'Unencrypted. Any number of nodes hear every packet on channel 1.',
+              selected: modePlain,
+              onTap: () => appState.enableMesh(encryption: false, peerMacs: const []),
+            ),
+            _MeshModeTile(
+              label: 'Encrypted',
+              subtitle: 'AES-256-GCM with a shared key. Up to 6 peers.',
+              selected: modeEnc,
+              onTap: () async {
+                if (appState.meshKey == null) await appState.generateMeshKey();
+                await appState.enableMesh(encryption: true, peerMacs: const []);
+              },
+            ),
+          ],
         ),
-        _MeshModeTile(
-          label: 'OFF',
-          subtitle: 'Mesh disabled — single-node operation',
-          selected: modeOff,
-          onTap: () => appState.disableMesh(),
-        ),
-        _MeshModeTile(
-          label: 'BROADCAST (PLAINTEXT)',
-          subtitle: 'No peer table. Unlimited nodes hear every packet. ch=1',
-          selected: modePlain,
-          onTap: () => appState.enableMesh(
-            encryption: false,
-            peerMacs: const [],
-          ),
-        ),
-        _MeshModeTile(
-          label: 'ENCRYPTED (AES-256-GCM)',
-          subtitle: 'Up to 6 unicast peers. Shared key. Per ESP-NOW limit.',
-          selected: modeEnc,
-          onTap: () async {
-            if (appState.meshKey == null) {
-              await appState.generateMeshKey();
-            }
-            await appState.enableMesh(
-              encryption: true,
-              peerMacs: const [],
-            );
-          },
-        ),
-        const SizedBox(height: 16),
-        const ConfigSectionHeader(label: 'STATUS'),
-        ConfigInfoRow(
-          icon: Icons.hub,
-          label: 'State',
-          value: modeEnc
-              ? 'ENCRYPTED'
-              : modePlain
-                  ? 'BROADCAST'
-                  : 'OFF',
-        ),
-        ConfigInfoRow(
-          icon: Icons.swap_vert,
-          label: 'TX / RX',
-          value: '${appState.meshTxCount} / ${appState.meshRxCount}',
-        ),
-        ConfigInfoRow(
-          icon: Icons.group,
-          label: 'Peer slots',
-          value: modeOff
-              ? '—'
-              : '${appState.liveKnownNodes.where((n) => n.isNotEmpty && n != appState.nodeId).length} / $maxPeers',
-        ),
-        ConfigInfoRow(
-          icon: Icons.sensors,
-          label: 'Nodes heard',
-          value: appState.liveKnownNodes
-              .where((n) => n.isNotEmpty && n != appState.nodeId)
-              .length
-              .toString(),
-        ),
-        if (modeEnc) ...[
-          const SizedBox(height: 16),
-          const ConfigSectionHeader(label: 'KEY'),
-          ConfigInfoRow(
-            icon: Icons.key,
-            label: 'Fingerprint',
-            value: keyHex.isEmpty ? '(no key)' : keyHex,
-          ),
-          ConfigActionRow(
-            icon: Icons.autorenew,
-            label: 'Generate New Key',
-            subtitle: 'Rotates the shared mesh key on this manager',
-            onTap: () async {
-              await appState.generateMeshKey();
-              await appState.enableMesh(
-                encryption: true,
-                peerMacs: const [],
-              );
-            },
-          ),
-        ],
-        const SizedBox(height: 16),
-        const ConfigSectionHeader(label: 'NODES'),
+        IosSection(header: 'Status', children: [
+          ConfigInfoRow(icon: Icons.swap_vert, label: 'Sent / received', value: '${appState.meshTxCount} / ${appState.meshRxCount}', color: t.textDim),
+          ConfigInfoRow(icon: Icons.group, label: 'Peer slots used', value: modeOff ? 'Off' : '$heard / $maxPeers'),
+          ConfigInfoRow(icon: Icons.sensors, label: 'Nodes heard', value: '$heard'),
+        ]),
+        if (modeEnc)
+          IosSection(header: 'Key', children: [
+            ConfigInfoRow(icon: Icons.key, label: 'Fingerprint', value: keyHex.isEmpty ? 'None' : keyHex),
+            ConfigActionRow(
+              icon: Icons.autorenew,
+              label: 'Generate new key',
+              subtitle: 'Rotates the shared mesh key on this manager',
+              onTap: () async {
+                await appState.generateMeshKey();
+                await appState.enableMesh(encryption: true, peerMacs: const []);
+              },
+            ),
+          ]),
         ..._buildNodeManageRows(appState),
       ],
     );
@@ -1028,12 +854,8 @@ class _DeviceConfigScreenState extends ConsumerState<DeviceConfigScreen>
     final all = <String>{...appState.knownNodes, ...live};
     if (appState.nodeId.isEmpty && !appState.isConnected) all.add('LOCAL');
     if (all.isEmpty) {
-      return [
-        const ConfigInfoRow(
-          icon: Icons.hub_outlined,
-          label: 'No nodes yet',
-          value: '',
-        ),
+      return const [
+        IosSection(header: 'Nodes', children: [IosRow(title: 'No nodes heard yet')]),
       ];
     }
     int sortFn(String a, String b) {
@@ -1054,66 +876,53 @@ class _DeviceConfigScreenState extends ConsumerState<DeviceConfigScreen>
       final isSelf = id == appState.nodeId && id != 'LOCAL';
       final parts = <String>[
         if (hasCustom) id,
-        if (isSelf) 'this device',
+        if (isSelf) 'This device',
         if (appState.nodeBoard(id) != null) boardDisplayName(appState.nodeBoard(id)),
-        online ? 'LIVE' : 'offline',
-        '$dets dets',
+        '$dets detections',
       ];
       return ConfigActionRow(
-        icon: isSelf ? Icons.smartphone : (online ? Icons.memory : Icons.memory_outlined),
+        icon: isSelf ? Icons.smartphone : Icons.memory,
+        color: online ? AppTheme.success : AppTheme.textDim,
         label: label,
-        subtitle: parts.join('  ·  '),
+        subtitle: parts.join(' · '),
         onTap: () => _renameNodeDialog(appState, id),
       );
     }
-    final widgets = <Widget>[];
-    for (final id in liveIds) {
-      widgets.add(row(id, online: true));
-    }
-    if (offlineIds.isNotEmpty) {
-      widgets.add(const SizedBox(height: 8));
-      widgets.add(const ConfigSectionHeader(label: 'OFFLINE'));
-      for (final id in offlineIds) {
-        widgets.add(row(id, online: false));
-      }
-    }
-    return widgets;
+    return [
+      if (liveIds.isNotEmpty)
+        IosSection(
+          header: 'Online nodes',
+          footer: 'Tap a node to rename or forget it.',
+          children: [for (final id in liveIds) row(id, online: true)],
+        ),
+      if (offlineIds.isNotEmpty)
+        IosSection(header: 'Offline nodes', children: [for (final id in offlineIds) row(id, online: false)]),
+    ];
   }
 
   Future<void> _renameNodeDialog(AppState appState, String id) async {
     final controller = TextEditingController(text: appState.nodeLabels[id] ?? '');
-    final result = await showDialog<String>(
+    final result = await showCupertinoDialog<String>(
       context: context,
-      builder: (ctx) => AlertDialog(
+      builder: (ctx) => CupertinoAlertDialog(
         title: Text('Rename $id'),
-        content: TextField(
-          controller: controller,
-          autofocus: true,
-          maxLength: 32,
-          decoration: const InputDecoration(
-            hintText: 'Custom label (blank = reset)',
+        content: Padding(
+          padding: const EdgeInsets.only(top: 8),
+          child: CupertinoTextField(
+            controller: controller,
+            autofocus: true,
+            maxLength: 32,
+            placeholder: 'Custom label (blank = reset)',
+            onSubmitted: (v) => Navigator.pop(ctx, v),
           ),
-          onSubmitted: (v) => Navigator.pop(ctx, v),
         ),
         actions: [
           if (id != 'LOCAL' && id != appState.nodeId)
-            TextButton(
-              onPressed: () => Navigator.pop(ctx, '__forget__'),
-              child: const Text('FORGET', style: TextStyle(color: AppTheme.error)),
-            ),
+            CupertinoDialogAction(isDestructiveAction: true, onPressed: () => Navigator.pop(ctx, '__forget__'), child: const Text('Forget')),
           if (appState.nodeLabels.containsKey(id))
-            TextButton(
-              onPressed: () => Navigator.pop(ctx, ''),
-              child: const Text('CLEAR'),
-            ),
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, null),
-            child: const Text('CANCEL'),
-          ),
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, controller.text),
-            child: const Text('SAVE'),
-          ),
+            CupertinoDialogAction(onPressed: () => Navigator.pop(ctx, ''), child: const Text('Clear')),
+          CupertinoDialogAction(onPressed: () => Navigator.pop(ctx, null), child: const Text('Cancel')),
+          CupertinoDialogAction(isDefaultAction: true, onPressed: () => Navigator.pop(ctx, controller.text), child: const Text('Save')),
         ],
       ),
     );
@@ -1130,119 +939,57 @@ class _DeviceConfigScreenState extends ConsumerState<DeviceConfigScreen>
     if (!appState.isConnected) return _buildDisconnectedPlaceholder();
     final isMgr = ref.read(bleManagerProvider).isManagerConnected;
     return ListView(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      padding: const EdgeInsets.only(top: 8, bottom: 24),
       children: [
-        ConfigSectionHeader(label: isMgr ? 'MANAGER INFO' : 'NODE INFO'),
-        ConfigInfoRow(
-          icon: Icons.numbers, label: 'Version', value: _fwVersion,
-        ),
-        ConfigInfoRow(
-          icon: Icons.developer_board,
-          label: 'Board',
-          value: boardDisplayName(ref.read(bleManagerProvider).board),
-        ),
-        ConfigInfoRow(
-          icon: Icons.fingerprint,
-          label: isMgr ? 'Manager ID' : 'Node ID',
-          value: _nodeId,
-        ),
-        ConfigInfoRow(
-          icon: Icons.memory, label: 'Free Heap', value: _heapFree,
-        ),
-
-        const SizedBox(height: 16),
-        const ConfigSectionHeader(label: 'WIFI NETWORK'),
-        Padding(
-          padding: const EdgeInsets.only(bottom: 12, left: 2),
-          child: Text(
-            'Device joins your network to download firmware over WiFi. Set once — used by the WiFi update below.',
-            style: TextStyle(color: AppTheme.of(context).textDim, fontSize: 11),
-          ),
-        ),
-        _WifiStatusPanel(),
-        const SizedBox(height: 12),
-        _WifiEnableToggle(),
-        const SizedBox(height: 12),
-        ConfigTextField(
-          icon: Icons.wifi,
-          label: 'WiFi SSID',
-          controller: _ssidController,
-        ),
-        ConfigTextField(
-          icon: Icons.lock,
-          label: 'Password',
-          controller: _passController,
-          obscure: true,
-        ),
-        const SizedBox(height: 8),
-        Row(
+        IosSection(header: isMgr ? 'Manager' : 'Node', children: [
+          ConfigInfoRow(icon: Icons.numbers, label: 'Firmware', value: _fwVersion),
+          ConfigInfoRow(icon: Icons.developer_board, label: 'Board', value: boardDisplayName(ref.read(bleManagerProvider).board), monospace: false),
+          ConfigInfoRow(icon: Icons.fingerprint, label: isMgr ? 'Manager ID' : 'Node ID', value: _nodeId),
+          ConfigInfoRow(icon: Icons.memory, label: 'Free memory', value: _heapFree),
+        ]),
+        IosSection(
+          header: 'Wi-Fi network',
+          footer: 'The node joins this network to download firmware updates.',
           children: [
-            Expanded(
-              child: ConfigCompactButton(
-                icon: Icons.save,
-                label: 'Save',
-                color: AppTheme.success,
-                onTap: _writeWifiConfig,
-              ),
-            ),
-            const SizedBox(width: 8),
-            Expanded(
-              child: ConfigCompactButton(
-                icon: Icons.link_off,
-                label: 'Disconnect',
-                onTap: _wifiDisconnect,
-              ),
-            ),
-            const SizedBox(width: 8),
-            Expanded(
-              child: ConfigCompactButton(
-                icon: Icons.delete_forever,
-                label: 'Wipe',
-                destructive: true,
-                onTap: _confirmWipeWifi,
-              ),
-            ),
+            _WifiStatusPanel(),
+            _WifiEnableToggle(),
+            ConfigTextField(icon: Icons.wifi, label: 'Network name', controller: _ssidController),
+            ConfigTextField(icon: Icons.lock, label: 'Password', controller: _passController, obscure: true),
+            ConfigActionRow(icon: Icons.save, label: 'Save and connect', color: AppTheme.success, onTap: _writeWifiConfig),
+            ConfigActionRow(icon: Icons.link_off, label: 'Disconnect', color: AppTheme.warning, onTap: _wifiDisconnect),
+            ConfigActionRow(icon: Icons.delete_forever, label: 'Forget network', destructive: true, onTap: _confirmWipeWifi),
           ],
         ),
-
-        const SizedBox(height: 16),
-        const ConfigSectionHeader(label: 'UPDATES'),
         _OtaSection(currentVersion: _fwVersion),
-
-        const SizedBox(height: 16),
-        const ConfigSectionHeader(label: 'DANGER ZONE'),
-        ConfigActionRow(
-          icon: Icons.refresh,
-          label: 'Reboot Device',
-          subtitle: 'Restart firmware without erasing settings',
-          onTap: _confirmReboot,
-        ),
-        ConfigActionRow(
-          icon: Icons.restart_alt,
-          label: 'Factory Reset',
-          subtitle: 'Erase all settings and reboot',
-          destructive: true,
-          onTap: _confirmFactoryReset,
-        ),
+        IosSection(header: 'Restart', children: [
+          ConfigActionRow(
+            icon: Icons.refresh,
+            label: 'Reboot',
+            subtitle: 'Restart without erasing settings',
+            color: AppTheme.warning,
+            onTap: _confirmReboot,
+          ),
+          ConfigActionRow(
+            icon: Icons.restart_alt,
+            label: 'Factory reset',
+            subtitle: 'Erase all settings and reboot',
+            destructive: true,
+            onTap: _confirmFactoryReset,
+          ),
+        ]),
       ],
     );
   }
 
   Future<void> _confirmReboot() async {
-    final ok = await showDialog<bool>(
+    final ok = await showCupertinoDialog<bool>(
       context: context,
-      builder: (ctx) => AlertDialog(
+      builder: (ctx) => CupertinoAlertDialog(
         title: const Text('Reboot device?'),
         content: const Text('Device will restart. BLE will reconnect automatically.'),
         actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('CANCEL'),
-          ),
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, true),
-            child: const Text('REBOOT'),
-          ),
+          CupertinoDialogAction(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
+          CupertinoDialogAction(onPressed: () => Navigator.pop(ctx, true), child: const Text('Reboot')),
         ],
       ),
     );
@@ -1251,24 +998,17 @@ class _DeviceConfigScreenState extends ConsumerState<DeviceConfigScreen>
   }
 
   Future<void> _confirmFactoryReset() async {
-    final ok = await showDialog<bool>(
+    final ok = await showCupertinoDialog<bool>(
       context: context,
-      builder: (ctx) => AlertDialog(
+      builder: (ctx) => CupertinoAlertDialog(
         title: const Text('Factory reset?'),
         content: const Text(
           'This will ERASE all settings (watchlists, WiFi credentials, '
           'hardware config, mesh keys) and reboot the device. This cannot be undone.',
         ),
         actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('CANCEL'),
-          ),
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, true),
-            style: TextButton.styleFrom(foregroundColor: AppTheme.error),
-            child: const Text('ERASE & REBOOT'),
-          ),
+          CupertinoDialogAction(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
+          CupertinoDialogAction(isDestructiveAction: true, onPressed: () => Navigator.pop(ctx, true), child: const Text('Erase and reboot')),
         ],
       ),
     );
@@ -1317,43 +1057,6 @@ class _DeviceConfigScreenState extends ConsumerState<DeviceConfigScreen>
       );
       _readDeviceConfig();
     }
-  }
-}
-
-class _Segmented extends StatefulWidget {
-  const _Segmented({required this.labels, required this.builders});
-  final List<String> labels;
-  final List<Widget Function()> builders;
-
-  @override
-  State<_Segmented> createState() => _SegmentedState();
-}
-
-class _SegmentedState extends State<_Segmented> {
-  int _i = 0;
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      children: [
-        Padding(
-          padding: const EdgeInsets.fromLTRB(12, 8, 12, 0),
-          child: SizedBox(
-            width: double.infinity,
-            child: SegmentedButton<int>(
-              showSelectedIcon: false,
-              segments: [
-                for (var i = 0; i < widget.labels.length; i++)
-                  ButtonSegment(value: i, label: Text(widget.labels[i])),
-              ],
-              selected: {_i},
-              onSelectionChanged: (s) => setState(() => _i = s.first),
-            ),
-          ),
-        ),
-        Expanded(child: widget.builders[_i]()),
-      ],
-    );
   }
 }
 

@@ -23,28 +23,30 @@ class _ScanTimingSliders extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final wd = ref.watch(wardriveProvider);
 
-    return Column(
+    return IosSection(
+      header: 'Scan timing',
+      footer: 'Wi-Fi rows set how long each channel is listened to. Lower values scan faster and use more battery.',
       children: [
         _TimingRow(
-          icon: Icons.wifi, label: 'Ch 1/6/11 dwell',
+          icon: CupertinoIcons.wifi, label: 'Channels 1, 6, 11',
           value: wd.wifiScanInterval,
           onDown: () => ref.read(wardriveProvider).wifiScanInterval = _prevStep(wd.wifiScanInterval),
           onUp: () => ref.read(wardriveProvider).wifiScanInterval = _nextStep(wd.wifiScanInterval),
         ),
         _TimingRow(
-          icon: Icons.wifi, label: 'Other ch dwell',
+          icon: CupertinoIcons.wifi, label: 'Other channels',
           value: wd.wifiDwellPerCh,
           onDown: () => ref.read(wardriveProvider).wifiDwellPerCh = _prevStep(wd.wifiDwellPerCh),
           onUp: () => ref.read(wardriveProvider).wifiDwellPerCh = _nextStep(wd.wifiDwellPerCh),
         ),
         _TimingRow(
-          icon: Icons.bluetooth, label: 'BLE duration',
+          icon: CupertinoIcons.bluetooth, label: 'Bluetooth scan',
           value: wd.bleScanDuration,
           onDown: () => ref.read(wardriveProvider).bleScanDuration = _prevStep(wd.bleScanDuration),
           onUp: () => ref.read(wardriveProvider).bleScanDuration = _nextStep(wd.bleScanDuration),
         ),
         _TimingRow(
-          icon: Icons.bluetooth, label: 'BLE interval',
+          icon: CupertinoIcons.bluetooth, label: 'Bluetooth scan every',
           value: wd.bleScanInterval,
           onDown: () => ref.read(wardriveProvider).bleScanInterval = _prevStep(wd.bleScanInterval),
           onUp: () => ref.read(wardriveProvider).bleScanInterval = _nextStep(wd.bleScanInterval),
@@ -73,60 +75,30 @@ class _TimingRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final t = AppTheme.of(context);
+    Widget step(IconData i, VoidCallback f, String label) => CupertinoButton(
+          padding: EdgeInsets.zero,
+          minimumSize: const Size(44, 44),
+          onPressed: f,
+          child: Icon(i, size: 28, color: AppTheme.accent, semanticLabel: label),
+        );
     return Container(
-      margin: const EdgeInsets.only(bottom: 6),
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-      decoration: BoxDecoration(
-        color: t.surface,
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: t.border),
-      ),
+      constraints: const BoxConstraints(minHeight: 56),
+      padding: const EdgeInsets.fromLTRB(16, 4, 6, 4),
       child: Row(
         children: [
-          Icon(icon, size: 14, color: t.textSecondary),
-          const SizedBox(width: 8),
+          IosIcon(icon, t.textDim),
+          const SizedBox(width: 14),
           Expanded(
-            child: Text(label, style: TextStyle(
-              color: t.textSecondary, fontSize: 12,
-            )),
-          ),
-          GestureDetector(
-            behavior: HitTestBehavior.opaque,
-            onTap: onDown,
-            child: Container(
-              width: 32, height: 32,
-              decoration: BoxDecoration(
-                color: AppTheme.accent.withValues(alpha: 0.08),
-                borderRadius: BorderRadius.circular(6),
-                border: Border.all(color: AppTheme.accent.withValues(alpha: 0.2)),
-              ),
-              child: const Icon(Icons.remove, size: 16, color: AppTheme.accent),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(label, style: TextStyle(color: t.textPrimary, fontSize: 17, fontWeight: FontWeight.w500)),
+                Text('$value${suffix.isEmpty ? '' : ' $suffix'}', style: const TextStyle(color: AppTheme.accent, fontSize: 15, fontWeight: FontWeight.w600)),
+              ],
             ),
           ),
-          Container(
-            width: 64,
-            alignment: Alignment.center,
-            child: Text(
-              '$value$suffix',
-              style: const TextStyle(
-                color: AppTheme.accent, fontSize: 12,
-                fontFamily: 'monospace', fontWeight: FontWeight.w700,
-              ),
-            ),
-          ),
-          GestureDetector(
-            behavior: HitTestBehavior.opaque,
-            onTap: onUp,
-            child: Container(
-              width: 32, height: 32,
-              decoration: BoxDecoration(
-                color: AppTheme.accent.withValues(alpha: 0.08),
-                borderRadius: BorderRadius.circular(6),
-                border: Border.all(color: AppTheme.accent.withValues(alpha: 0.2)),
-              ),
-              child: const Icon(Icons.add, size: 16, color: AppTheme.accent),
-            ),
-          ),
+          step(CupertinoIcons.minus_circle, onDown, 'Decrease $label'),
+          step(CupertinoIcons.plus_circle, onUp, 'Increase $label'),
         ],
       ),
     );
@@ -140,19 +112,21 @@ class _ChannelRangeSlider extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final wd = ref.watch(wardriveProvider);
 
-    return Column(
+    return IosSection(
+      header: '2.4 GHz channel range',
+      footer: 'A narrower range revisits each channel more often.',
       children: [
         _TimingRow(
-          icon: Icons.cell_tower,
-          label: 'Start CH',
+          icon: CupertinoIcons.antenna_radiowaves_left_right,
+          label: 'First channel',
           value: wd.channelStart,
           suffix: '',
           onDown: () => ref.read(wardriveProvider).channelStart = wd.channelStart - 1,
           onUp: () => ref.read(wardriveProvider).channelStart = wd.channelStart + 1,
         ),
         _TimingRow(
-          icon: Icons.cell_tower,
-          label: 'End CH',
+          icon: CupertinoIcons.antenna_radiowaves_left_right,
+          label: 'Last channel',
           value: wd.channelEnd,
           suffix: '',
           onDown: () => ref.read(wardriveProvider).channelEnd = wd.channelEnd - 1,
@@ -160,22 +134,11 @@ class _ChannelRangeSlider extends ConsumerWidget {
         ),
         if (ref.watch(bleManagerProvider).isC5)
           Padding(
-            padding: const EdgeInsets.only(top: 10),
-            child: Row(
-              children: [
-                const Icon(Icons.cell_tower, size: 18),
-                const SizedBox(width: 10),
-                const Expanded(child: Text('2.4 GHz scan')),
-                ToggleButtons(
-                  borderRadius: BorderRadius.circular(6),
-                  constraints:
-                      const BoxConstraints(minHeight: 32, minWidth: 60),
-                  isSelected: [wd.wardrive24Mode == 0, wd.wardrive24Mode == 1],
-                  onPressed: (i) =>
-                      ref.read(wardriveProvider).wardrive24Mode = i,
-                  children: const [Text('All'), Text('1·6·11')],
-                ),
-              ],
+            padding: const EdgeInsets.all(12),
+            child: IosSegments<int>(
+              value: wd.wardrive24Mode,
+              segments: const {0: 'All channels', 1: 'Only 1, 6, 11'},
+              onChanged: (i) => ref.read(wardriveProvider).wardrive24Mode = i,
             ),
           ),
       ],
@@ -189,19 +152,10 @@ class _WifiBandSelector extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final wd = ref.watch(wardriveProvider);
-    return SizedBox(
-      width: double.infinity,
-      child: SegmentedButton<WifiBand>(
-        segments: const [
-          ButtonSegment(value: WifiBand.band24, label: Text('2.4 GHz')),
-          ButtonSegment(value: WifiBand.band5, label: Text('5 GHz')),
-          ButtonSegment(value: WifiBand.both, label: Text('Both')),
-        ],
-        selected: {wd.wifiBand},
-        showSelectedIcon: false,
-        onSelectionChanged: (s) =>
-            ref.read(wardriveProvider).wifiBand = s.first,
-      ),
+    return IosSegments<WifiBand>(
+      value: wd.wifiBand,
+      segments: const {WifiBand.band24: '2.4 GHz', WifiBand.band5: '5 GHz', WifiBand.both: 'Both'},
+      onChanged: (b) => ref.read(wardriveProvider).wifiBand = b,
     );
   }
 }
@@ -249,8 +203,8 @@ class _WardriveRssiRow extends ConsumerWidget {
     final max = isBle ? 50 : 60;
 
     return _TimingRow(
-      icon: isBle ? Icons.bluetooth : Icons.wifi,
-      label: isBle ? 'BLE re-log' : 'WiFi re-log',
+      icon: isBle ? CupertinoIcons.bluetooth : CupertinoIcons.wifi,
+      label: isBle ? 'Bluetooth' : 'Wi-Fi',
       value: value,
       suffix: 'dB',
       onDown: () {
@@ -271,6 +225,72 @@ class _WardriveRssiRow extends ConsumerWidget {
       },
     );
   }
+}
+
+String _fmtCount(int count) {
+  if (count >= 1000000) return '${(count / 1000000).toStringAsFixed(1)}M';
+  if (count >= 1000) return '${(count / 1000).toStringAsFixed(1)}K';
+  return '$count';
+}
+
+Widget _statRow(BuildContext context, IconData icon, Color color, String label, String value) {
+  final t = AppTheme.of(context);
+  return IosRow(
+    leading: IosIcon(icon, color),
+    title: label,
+    detail: Text(value, style: TextStyle(color: t.textSecondary, fontSize: 17)),
+  );
+}
+
+Widget _credentialField(
+  BuildContext context, {
+  required TextEditingController controller,
+  required String placeholder,
+  bool obscure = false,
+  VoidCallback? onToggleObscure,
+  bool mono = false,
+}) {
+  final t = AppTheme.of(context);
+  return Padding(
+    padding: const EdgeInsets.only(left: 16, right: 4),
+    child: Row(children: [
+      Expanded(
+        child: CupertinoTextField(
+          controller: controller,
+          placeholder: placeholder,
+          obscureText: obscure,
+          autocorrect: false,
+          enableSuggestions: false,
+          style: TextStyle(color: t.textPrimary, fontSize: 17, fontFamily: mono ? 'monospace' : null),
+          placeholderStyle: TextStyle(color: t.textDim, fontSize: 17),
+          decoration: null,
+          padding: const EdgeInsets.symmetric(vertical: 14),
+        ),
+      ),
+      if (onToggleObscure != null)
+        CupertinoButton(
+          padding: const EdgeInsets.symmetric(horizontal: 10),
+          minimumSize: const Size(44, 44),
+          onPressed: onToggleObscure,
+          child: Icon(obscure ? CupertinoIcons.eye_slash : CupertinoIcons.eye, color: t.textDim, semanticLabel: obscure ? 'Show' : 'Hide'),
+        ),
+    ]),
+  );
+}
+
+Future<void> _confirmUnlink(BuildContext context, String service, VoidCallback onUnlink) async {
+  final ok = await showCupertinoDialog<bool>(
+    context: context,
+    builder: (ctx) => CupertinoAlertDialog(
+      title: Text('Unlink $service?'),
+      content: const Text('This removes the stored credentials from this phone. You can link again any time.'),
+      actions: [
+        CupertinoDialogAction(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
+        CupertinoDialogAction(isDestructiveAction: true, onPressed: () => Navigator.pop(ctx, true), child: const Text('Unlink')),
+      ],
+    ),
+  );
+  if (ok == true) onUnlink();
 }
 
 class _WigleSection extends ConsumerStatefulWidget {
@@ -297,215 +317,58 @@ class _WigleSectionState extends ConsumerState<_WigleSection> {
   Widget build(BuildContext context) {
     final t = AppTheme.of(context);
     final wigle = ref.watch(wigleProvider);
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Row(
-          children: [
-            const Icon(Icons.language, size: 16, color: AppTheme.warning),
-            const SizedBox(width: 6),
-            Text(
-              'WIGLE',
-              style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                    letterSpacing: 2,
-                    color: t.textDim,
-                  ),
+    final busy = _testing || wigle.isLoading;
+    if (wigle.isLoggedIn) {
+      final s = wigle.stats;
+      return IosSection(
+        header: 'WiGLE',
+        footer: wigle.rateLimited ? WigleApi.rateLimitMessage : null,
+        children: [
+          if (s == null)
+            const IosRow(title: 'Loading your stats…', trailing: CupertinoActivityIndicator())
+          else ...[
+            IosRow(
+              leading: const IosIcon(CupertinoIcons.person_crop_circle_fill, AppTheme.wigle),
+              title: s.userName,
+              subtitle: const Text('Linked'),
+              detail: Text('Rank #${s.rank}', style: const TextStyle(color: AppTheme.wigle, fontSize: 17, fontWeight: FontWeight.w600)),
             ),
-            const Spacer(),
-            if (wigle.isLoggedIn)
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                decoration: BoxDecoration(
-                  color: AppTheme.success.withValues(alpha: 0.1),
-                  borderRadius: BorderRadius.circular(4),
-                  border: Border.all(color: AppTheme.success.withValues(alpha: 0.3)),
-                ),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    const Icon(Icons.check_circle, size: 10, color: AppTheme.success),
-                    const SizedBox(width: 4),
-                    Text('LINKED', style: TextStyle(
-                      color: AppTheme.success, fontSize: 8,
-                      fontWeight: FontWeight.w700, letterSpacing: 0.5,
-                    )),
-                  ],
-                ),
-              ),
+            _statRow(context, CupertinoIcons.wifi, AppTheme.accent, 'Wi-Fi networks', _fmtCount(s.discoveredWiFi)),
+            _statRow(context, CupertinoIcons.bluetooth, AppTheme.detector, 'Bluetooth devices', _fmtCount(s.discoveredBt)),
+            _statRow(context, CupertinoIcons.antenna_radiowaves_left_right, AppTheme.success, 'Cell towers', _fmtCount(s.discoveredCell)),
+            _statRow(context, CupertinoIcons.chart_bar_alt_fill, AppTheme.warning, 'This month\'s rank', '#${s.monthRank}'),
           ],
-        ),
-        const SizedBox(height: 12),
-
-        if (wigle.isLoggedIn) ...[
-          _WigleStatsCard(stats: wigle.stats),
-          if (wigle.rateLimited) ...[
-            const SizedBox(height: 8),
-            Text(WigleApi.rateLimitMessage,
-                style: const TextStyle(color: AppTheme.error, fontSize: 11)),
-          ],
-          const SizedBox(height: 10),
-          Row(
-            children: [
-              Expanded(
-                child: OutlinedButton.icon(
-                  onPressed: () => ref.read(wigleProvider).refreshStats(),
-                  icon: const Icon(Icons.refresh, size: 14),
-                  label: const Text('REFRESH', style: TextStyle(fontSize: 10, letterSpacing: 1)),
-                  style: OutlinedButton.styleFrom(
-                    foregroundColor: AppTheme.accent,
-                    side: BorderSide(color: AppTheme.accent.withValues(alpha: 0.3)),
-                    padding: const EdgeInsets.symmetric(vertical: 8),
-                  ),
-                ),
-              ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: OutlinedButton.icon(
-                  onPressed: () => _confirmLogout(context),
-                  icon: const Icon(Icons.logout, size: 14),
-                  label: const Text('UNLINK', style: TextStyle(fontSize: 10, letterSpacing: 1)),
-                  style: OutlinedButton.styleFrom(
-                    foregroundColor: AppTheme.error,
-                    side: BorderSide(color: AppTheme.error.withValues(alpha: 0.3)),
-                    padding: const EdgeInsets.symmetric(vertical: 8),
-                  ),
-                ),
-              ),
-            ],
+          IosRow(
+            leading: const IosIcon(CupertinoIcons.arrow_clockwise, AppTheme.accent),
+            title: 'Refresh stats',
+            onTap: () => ref.read(wigleProvider).refreshStats(),
           ),
-        ] else ...[
-          Container(
-            padding: const EdgeInsets.all(12),
-            decoration: BoxDecoration(
-              color: t.surface,
-              borderRadius: BorderRadius.circular(8),
-              border: Border.all(color: t.border),
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  children: [
-                    Icon(Icons.key, size: 14, color: AppTheme.warning),
-                    const SizedBox(width: 6),
-                    Text('API Credentials', style: TextStyle(
-                      color: t.textPrimary, fontSize: 12,
-                      fontWeight: FontWeight.w600,
-                    )),
-                  ],
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  'Get your API Name and Token from wigle.net/account',
-                  style: TextStyle(color: t.textDim, fontSize: 10),
-                ),
-                const SizedBox(height: 12),
-                TextField(
-                  controller: _nameController,
-                  style: TextStyle(color: t.textPrimary, fontSize: 13),
-                  decoration: InputDecoration(
-                    labelText: 'API Name',
-                    labelStyle: TextStyle(color: t.textDim, fontSize: 12),
-                    prefixIcon: Icon(Icons.person_outline, size: 16, color: t.textDim),
-                    isDense: true,
-                    contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(6),
-                      borderSide: BorderSide(color: t.border),
-                    ),
-                    enabledBorder: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(6),
-                      borderSide: BorderSide(color: t.border),
-                    ),
-                    focusedBorder: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(6),
-                      borderSide: const BorderSide(color: AppTheme.accent),
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 8),
-                TextField(
-                  controller: _tokenController,
-                  obscureText: _obscureToken,
-                  style: TextStyle(color: t.textPrimary, fontSize: 13),
-                  decoration: InputDecoration(
-                    labelText: 'API Token',
-                    labelStyle: TextStyle(color: t.textDim, fontSize: 12),
-                    prefixIcon: Icon(Icons.vpn_key_outlined, size: 16, color: t.textDim),
-                    suffixIcon: IconButton(
-                      icon: Icon(
-                        _obscureToken ? Icons.visibility_off : Icons.visibility,
-                        size: 16, color: t.textDim,
-                      ),
-                      onPressed: () => setState(() => _obscureToken = !_obscureToken),
-                    ),
-                    isDense: true,
-                    contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(6),
-                      borderSide: BorderSide(color: t.border),
-                    ),
-                    enabledBorder: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(6),
-                      borderSide: BorderSide(color: t.border),
-                    ),
-                    focusedBorder: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(6),
-                      borderSide: const BorderSide(color: AppTheme.accent),
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 12),
-                SizedBox(
-                  width: double.infinity,
-                  child: ElevatedButton.icon(
-                    onPressed: _testing || wigle.isLoading ? null : _testAndLogin,
-                    icon: _testing || wigle.isLoading
-                        ? const SizedBox(
-                            width: 14, height: 14,
-                            child: CircularProgressIndicator(strokeWidth: 1.5, color: Colors.white),
-                          )
-                        : const Icon(Icons.rocket_launch, size: 16),
-                    label: Text(
-                      _testing || wigle.isLoading ? 'TESTING...' : 'TEST & LINK',
-                      style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w700, letterSpacing: 1),
-                    ),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: AppTheme.accent,
-                      foregroundColor: Colors.white,
-                      padding: const EdgeInsets.symmetric(vertical: 10),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
-                    ),
-                  ),
-                ),
-                if (wigle.error != null) ...[
-                  const SizedBox(height: 8),
-                  Container(
-                    padding: const EdgeInsets.all(8),
-                    decoration: BoxDecoration(
-                      color: AppTheme.error.withValues(alpha: 0.08),
-                      borderRadius: BorderRadius.circular(4),
-                      border: Border.all(color: AppTheme.error.withValues(alpha: 0.2)),
-                    ),
-                    child: Row(
-                      children: [
-                        const Icon(Icons.error_outline, size: 14, color: AppTheme.error),
-                        const SizedBox(width: 6),
-                        Expanded(
-                          child: Text(
-                            wigle.error!,
-                            style: const TextStyle(color: AppTheme.error, fontSize: 10),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
-              ],
-            ),
+          IosRow(
+            leading: const IosIcon(CupertinoIcons.link, AppTheme.error),
+            title: 'Unlink WiGLE',
+            onTap: () => _confirmUnlink(context, 'WiGLE', () => ref.read(wigleProvider).logout()),
           ),
         ],
+      );
+    }
+    return IosSection(
+      header: 'WiGLE',
+      footer: wigle.error ?? 'Find your API Name and Token at wigle.net/account.',
+      children: [
+        _credentialField(context, controller: _nameController, placeholder: 'API name'),
+        _credentialField(
+          context,
+          controller: _tokenController,
+          placeholder: 'API token',
+          obscure: _obscureToken,
+          onToggleObscure: () => setState(() => _obscureToken = !_obscureToken),
+        ),
+        IosRow(
+          leading: const IosIcon(CupertinoIcons.link, AppTheme.wigle),
+          title: busy ? 'Checking…' : 'Link account',
+          trailing: busy ? const CupertinoActivityIndicator() : Icon(CupertinoIcons.chevron_forward, size: 18, color: t.textDim),
+          onTap: busy ? null : _testAndLogin,
+        ),
       ],
     );
   }
@@ -514,196 +377,17 @@ class _WigleSectionState extends ConsumerState<_WigleSection> {
     final name = _nameController.text.trim();
     final token = _tokenController.text.trim();
     if (name.isEmpty || token.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Enter both API Name and Token')),
-      );
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Enter both the API name and token')));
       return;
     }
-
     setState(() => _testing = true);
     final success = await ref.read(wigleProvider).login(name, token);
-    if (mounted) {
-      setState(() => _testing = false);
-      if (success) {
-        final stats = ref.read(wigleProvider).stats;
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            backgroundColor: AppTheme.success,
-            content: Text('Linked as ${stats?.userName ?? name} (rank #${stats?.rank ?? '?'})'),
-          ),
-        );
-      }
+    if (!mounted) return;
+    setState(() => _testing = false);
+    if (success) {
+      final stats = ref.read(wigleProvider).stats;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Linked as ${stats?.userName ?? name} (rank #${stats?.rank ?? '?'})')));
     }
-  }
-
-  void _confirmLogout(BuildContext context) {
-    final t = AppTheme.of(context);
-    showDialog(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        backgroundColor: t.background,
-        title: Text('Unlink WiGLE?', style: TextStyle(color: t.textPrimary)),
-        content: Text(
-          'This removes stored credentials. You can re-link anytime.',
-          style: TextStyle(color: t.textSecondary),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: const Text('CANCEL'),
-          ),
-          ElevatedButton(
-            onPressed: () {
-              Navigator.pop(ctx);
-              ref.read(wigleProvider).logout();
-            },
-            style: ElevatedButton.styleFrom(backgroundColor: AppTheme.error),
-            child: const Text('UNLINK'),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _WigleStatsCard extends StatelessWidget {
-  const _WigleStatsCard({this.stats});
-  final WigleUserStats? stats;
-
-  @override
-  Widget build(BuildContext context) {
-    final t = AppTheme.of(context);
-    final s = stats;
-    if (s == null) {
-      return Container(
-        padding: const EdgeInsets.all(12),
-        decoration: BoxDecoration(
-          color: t.surface,
-          borderRadius: BorderRadius.circular(8),
-          border: Border.all(color: t.border),
-        ),
-        child: Row(
-          children: [
-            const SizedBox(width: 14, height: 14,
-              child: CircularProgressIndicator(strokeWidth: 1.5, color: AppTheme.accent)),
-            const SizedBox(width: 8),
-            Text('Loading stats...', style: TextStyle(color: t.textDim, fontSize: 11)),
-          ],
-        ),
-      );
-    }
-
-    return Container(
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: t.surface,
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: t.border),
-      ),
-      child: Column(
-        children: [
-          Row(
-            children: [
-              Icon(Icons.account_circle, size: 20, color: AppTheme.warning),
-              const SizedBox(width: 8),
-              Expanded(
-                child: Text(
-                  s.userName,
-                  style: TextStyle(
-                    color: t.textPrimary, fontSize: 14,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-              ),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                decoration: BoxDecoration(
-                  color: AppTheme.accent.withValues(alpha: 0.1),
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: AppTheme.accent.withValues(alpha: 0.3)),
-                ),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    const Icon(Icons.emoji_events, size: 12, color: AppTheme.accent),
-                    const SizedBox(width: 4),
-                    Text('#${s.rank}', style: const TextStyle(
-                      color: AppTheme.accent, fontSize: 12,
-                      fontWeight: FontWeight.w700, fontFamily: 'monospace',
-                    )),
-                  ],
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 10),
-          Row(
-            children: [
-              _WigleStat(
-                icon: Icons.wifi, label: 'WiFi',
-                value: _formatCount(s.discoveredWiFi),
-                color: AppTheme.accent,
-              ),
-              _WigleStat(
-                icon: Icons.bluetooth, label: 'BT',
-                value: _formatCount(s.discoveredBt),
-                color: const Color(0xFF4A9EFF),
-              ),
-              _WigleStat(
-                icon: Icons.cell_tower, label: 'Cell',
-                value: _formatCount(s.discoveredCell),
-                color: AppTheme.success,
-              ),
-              _WigleStat(
-                icon: Icons.trending_up, label: 'Month',
-                value: '#${s.monthRank}',
-                color: AppTheme.warning,
-              ),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-
-  String _formatCount(int count) {
-    if (count >= 1000000) return '${(count / 1000000).toStringAsFixed(1)}M';
-    if (count >= 1000) return '${(count / 1000).toStringAsFixed(1)}K';
-    return '$count';
-  }
-}
-
-class _WigleStat extends StatelessWidget {
-  const _WigleStat({
-    required this.icon,
-    required this.label,
-    required this.value,
-    required this.color,
-  });
-  final IconData icon;
-  final String label;
-  final String value;
-  final Color color;
-
-  @override
-  Widget build(BuildContext context) {
-    final t = AppTheme.of(context);
-    return Expanded(
-      child: Column(
-        children: [
-          Icon(icon, size: 14, color: color),
-          const SizedBox(height: 2),
-          Text(value, style: TextStyle(
-            color: t.textPrimary, fontSize: 11,
-            fontWeight: FontWeight.w700, fontFamily: 'monospace',
-          )),
-          Text(label, style: TextStyle(
-            color: t.textDim, fontSize: 8,
-            fontWeight: FontWeight.w600, letterSpacing: 0.5,
-          )),
-        ],
-      ),
-    );
   }
 }
 
@@ -741,521 +425,114 @@ class _WdgwarsSectionState extends ConsumerState<_WdgwarsSection> {
   Widget build(BuildContext context) {
     final t = AppTheme.of(context);
     final w = ref.watch(wdgwarsProvider);
-
-    return Container(
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [
-            AppTheme.wdgwars.withValues(alpha: 0.07),
-            AppTheme.wdgwarsAlt.withValues(alpha: 0.04),
-          ],
-        ),
-        borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: AppTheme.wdgwars.withValues(alpha: 0.35)),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+    final busy = _testing || w.isLoading;
+    if (w.isLoggedIn) {
+      final s = w.stats;
+      final meta = s == null
+          ? const <String>[]
+          : [
+              if (s.country.isNotEmpty) s.country,
+              if (s.joined.isNotEmpty) 'joined ${s.joined}',
+              if (s.notes > 0) '${s.notes} notes',
+              if (s.bountiesCompleted > 0) '${s.bountiesCompleted} bounties',
+              if (s.creditsLifetime > 0) '${_fmtCount(s.creditsLifetime)} credits earned',
+            ];
+      return IosSection(
+        header: 'WDGWars',
+        footer: meta.isEmpty ? null : meta.join(' · '),
         children: [
-          Row(
-            children: [
-              const Icon(Icons.sports_esports, size: 16, color: AppTheme.wdgwars),
-              const SizedBox(width: 6),
-              ShaderMask(
-                shaderCallback: (r) => const LinearGradient(
-                  colors: [AppTheme.wdgwars, AppTheme.wdgwarsAlt],
-                ).createShader(r),
-                child: const Text(
-                  'WDGWARS',
-                  style: TextStyle(
-                    color: Colors.white,
-                    fontSize: 12,
-                    fontWeight: FontWeight.w800,
-                    letterSpacing: 2,
-                  ),
-                ),
-              ),
-              const Spacer(),
-              if (w.isLoggedIn)
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                  decoration: BoxDecoration(
-                    color: AppTheme.wdgwars.withValues(alpha: 0.12),
-                    borderRadius: BorderRadius.circular(4),
-                    border: Border.all(color: AppTheme.wdgwars.withValues(alpha: 0.4)),
-                  ),
-                  child: const Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(Icons.check_circle, size: 10, color: AppTheme.wdgwars),
-                      SizedBox(width: 4),
-                      Text('LINKED', style: TextStyle(
-                        color: AppTheme.wdgwars, fontSize: 8,
-                        fontWeight: FontWeight.w700, letterSpacing: 0.5,
-                      )),
-                    ],
-                  ),
-                ),
-            ],
-          ),
-          const SizedBox(height: 12),
-
-          if (w.isLoggedIn) ...[
-            _WdgwarsStatsCard(stats: w.stats, flockCams: _flockCams),
-            const SizedBox(height: 10),
-            Row(
-              children: [
-                Expanded(
-                  child: OutlinedButton.icon(
-                    onPressed: () {
-                      ref.read(wdgwarsProvider).refreshStats();
-                      _loadFlockCams();
-                    },
-                    icon: const Icon(Icons.refresh, size: 14),
-                    label: const Text('REFRESH', style: TextStyle(fontSize: 10, letterSpacing: 1)),
-                    style: OutlinedButton.styleFrom(
-                      foregroundColor: AppTheme.wdgwarsAlt,
-                      side: BorderSide(color: AppTheme.wdgwarsAlt.withValues(alpha: 0.35)),
-                      padding: const EdgeInsets.symmetric(vertical: 8),
+          if (s == null)
+            const IosRow(title: 'Loading your stats…', trailing: CupertinoActivityIndicator())
+          else ...[
+            IosRow(
+              leading: const IosIcon(CupertinoIcons.person_crop_circle_fill, AppTheme.wdgwars),
+              title: s.username,
+              subtitle: Text(s.gang.isEmpty ? 'Linked' : (s.gangRole.isEmpty ? s.gang : '${s.gang} · ${s.gangRole}')),
+              detail: s.rank == null ? null : Text('Rank #${s.rank}', style: const TextStyle(color: AppTheme.wdgwars, fontSize: 17, fontWeight: FontWeight.w600)),
+            ),
+            _statRow(context, CupertinoIcons.number, AppTheme.wdgwars, 'Total devices', _fmtCount(s.total)),
+            _statRow(context, CupertinoIcons.wifi, AppTheme.accent, 'Wi-Fi', _fmtCount(s.wifi)),
+            _statRow(context, CupertinoIcons.bluetooth, AppTheme.detector, 'Bluetooth', _fmtCount(s.ble)),
+            _statRow(context, CupertinoIcons.airplane, AppTheme.skySpy, 'Aircraft', _fmtCount(s.aircraft)),
+            _statRow(context, CupertinoIcons.circle_grid_hex_fill, AppTheme.success, 'Mesh', _fmtCount(s.mesh)),
+            _statRow(context, CupertinoIcons.calendar_today, AppTheme.wdgwarsAlt, 'Today', _fmtCount(s.recentToday)),
+            _statRow(context, CupertinoIcons.calendar, AppTheme.wdgwars, 'Last 7 days', _fmtCount(s.recent7d)),
+            _statRow(context, CupertinoIcons.shield_fill, AppTheme.wdgwarsAlt, 'Reinforced', _fmtCount(s.reinforced)),
+            _statRow(context, CupertinoIcons.lock_open_fill, AppTheme.error, 'Cracked', _fmtCount(s.cracked)),
+            _statRow(context, CupertinoIcons.money_dollar_circle_fill, AppTheme.warning, 'Credits', _fmtCount(s.credits)),
+            _statRow(context, CupertinoIcons.rosette, AppTheme.warning, 'Badges', '${s.badges.length}'),
+            if (_flockCams != null)
+              _statRow(context, CupertinoIcons.video_camera_solid, AppTheme.flockWifi, 'Flock cameras (this phone)', _fmtCount(_flockCams!)),
+            if (s.dailyCap > 0)
+              IosRow(
+                leading: IosIcon(CupertinoIcons.speedometer, s.dailyRemaining < s.dailyCap * 0.1 ? AppTheme.warning : AppTheme.wdgwars),
+                title: 'Daily new-AP quota',
+                subtitle: Padding(
+                  padding: const EdgeInsets.only(top: 6),
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(3),
+                    child: LinearProgressIndicator(
+                      value: (s.dailyUsed / s.dailyCap).clamp(0.0, 1.0),
+                      minHeight: 6,
+                      backgroundColor: t.surfaceLight,
+                      valueColor: AlwaysStoppedAnimation(s.dailyRemaining < s.dailyCap * 0.1 ? AppTheme.warning : AppTheme.wdgwars),
                     ),
                   ),
                 ),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: OutlinedButton.icon(
-                    onPressed: () => _confirmLogout(context),
-                    icon: const Icon(Icons.logout, size: 14),
-                    label: const Text('UNLINK', style: TextStyle(fontSize: 10, letterSpacing: 1)),
-                    style: OutlinedButton.styleFrom(
-                      foregroundColor: AppTheme.error,
-                      side: BorderSide(color: AppTheme.error.withValues(alpha: 0.3)),
-                      padding: const EdgeInsets.symmetric(vertical: 8),
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ] else ...[
-            Row(
-              children: [
-                const Icon(Icons.key, size: 14, color: AppTheme.wdgwars),
-                const SizedBox(width: 6),
-                Text('API Key', style: TextStyle(
-                  color: t.textPrimary, fontSize: 12, fontWeight: FontWeight.w600,
-                )),
-              ],
-            ),
-            const SizedBox(height: 4),
-            Text(
-              'Register at wdgwars.pl and generate a 64-char API key in your profile.',
-              style: TextStyle(color: t.textDim, fontSize: 10),
-            ),
-            const SizedBox(height: 12),
-            TextField(
-              controller: _keyController,
-              obscureText: _obscureKey,
-              style: TextStyle(color: t.textPrimary, fontSize: 13, fontFamily: 'monospace'),
-              decoration: InputDecoration(
-                labelText: 'X-API-Key',
-                labelStyle: TextStyle(color: t.textDim, fontSize: 12),
-                prefixIcon: const Icon(Icons.vpn_key_outlined, size: 16, color: AppTheme.wdgwars),
-                suffixIcon: IconButton(
-                  icon: Icon(
-                    _obscureKey ? Icons.visibility_off : Icons.visibility,
-                    size: 16, color: t.textDim,
-                  ),
-                  onPressed: () => setState(() => _obscureKey = !_obscureKey),
-                ),
-                isDense: true,
-                contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(6),
-                  borderSide: BorderSide(color: t.border),
-                ),
-                enabledBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(6),
-                  borderSide: BorderSide(color: t.border),
-                ),
-                focusedBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(6),
-                  borderSide: const BorderSide(color: AppTheme.wdgwars),
-                ),
+                detail: Text('${_fmtCount(s.dailyRemaining)} of ${_fmtCount(s.dailyCap)} left', style: TextStyle(color: t.textSecondary, fontSize: 15)),
               ),
-            ),
-            const SizedBox(height: 12),
-            SizedBox(
-              width: double.infinity,
-              child: ElevatedButton.icon(
-                onPressed: _testing || w.isLoading ? null : _testAndLogin,
-                icon: _testing || w.isLoading
-                    ? const SizedBox(
-                        width: 14, height: 14,
-                        child: CircularProgressIndicator(strokeWidth: 1.5, color: Colors.white),
-                      )
-                    : const Icon(Icons.rocket_launch, size: 16),
-                label: Text(
-                  _testing || w.isLoading ? 'TESTING...' : 'TEST & LINK',
-                  style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w700, letterSpacing: 1),
-                ),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: AppTheme.wdgwars,
-                  foregroundColor: const Color(0xFF0D1117),
-                  padding: const EdgeInsets.symmetric(vertical: 10),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
-                ),
-              ),
-            ),
-            if (w.error != null) ...[
-              const SizedBox(height: 8),
-              Container(
-                padding: const EdgeInsets.all(8),
-                decoration: BoxDecoration(
-                  color: AppTheme.error.withValues(alpha: 0.08),
-                  borderRadius: BorderRadius.circular(4),
-                  border: Border.all(color: AppTheme.error.withValues(alpha: 0.2)),
-                ),
-                child: Row(
-                  children: [
-                    const Icon(Icons.error_outline, size: 14, color: AppTheme.error),
-                    const SizedBox(width: 6),
-                    Expanded(
-                      child: Text(
-                        w.error!,
-                        style: const TextStyle(color: AppTheme.error, fontSize: 10),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ],
           ],
+          IosRow(
+            leading: const IosIcon(CupertinoIcons.arrow_clockwise, AppTheme.accent),
+            title: 'Refresh stats',
+            onTap: () {
+              ref.read(wdgwarsProvider).refreshStats();
+              _loadFlockCams();
+            },
+          ),
+          IosRow(
+            leading: const IosIcon(CupertinoIcons.link, AppTheme.error),
+            title: 'Unlink WDGWars',
+            onTap: () => _confirmUnlink(context, 'WDGWars', () => ref.read(wdgwarsProvider).logout()),
+          ),
         ],
-      ),
+      );
+    }
+    return IosSection(
+      header: 'WDGWars',
+      footer: w.error ?? 'Register at wdgwars.pl and create a 64-character API key in your profile.',
+      children: [
+        _credentialField(
+          context,
+          controller: _keyController,
+          placeholder: 'API key',
+          obscure: _obscureKey,
+          mono: true,
+          onToggleObscure: () => setState(() => _obscureKey = !_obscureKey),
+        ),
+        IosRow(
+          leading: const IosIcon(CupertinoIcons.link, AppTheme.wdgwars),
+          title: busy ? 'Checking…' : 'Link account',
+          trailing: busy ? const CupertinoActivityIndicator() : Icon(CupertinoIcons.chevron_forward, size: 18, color: t.textDim),
+          onTap: busy ? null : _testAndLogin,
+        ),
+      ],
     );
   }
 
   Future<void> _testAndLogin() async {
     final key = _keyController.text.trim();
     if (key.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Enter your WDGWars API key')),
-      );
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Enter your WDGWars API key')));
       return;
     }
     setState(() => _testing = true);
     final success = await ref.read(wdgwarsProvider).login(key);
-    if (mounted) {
-      setState(() => _testing = false);
-      if (success) {
-        final stats = ref.read(wdgwarsProvider).stats;
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            backgroundColor: AppTheme.wdgwars,
-            content: Text('Linked as ${stats?.username ?? 'player'} '
-                '(${stats?.total ?? 0} devices)',
-                style: const TextStyle(color: Color(0xFF0D1117))),
-          ),
-        );
-      }
+    if (!mounted) return;
+    setState(() => _testing = false);
+    if (success) {
+      final stats = ref.read(wdgwarsProvider).stats;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Linked as ${stats?.username ?? 'player'} (${stats?.total ?? 0} devices)')));
     }
   }
-
-  void _confirmLogout(BuildContext context) {
-    final t = AppTheme.of(context);
-    showDialog(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        backgroundColor: t.background,
-        title: Text('Unlink WDGWars?', style: TextStyle(color: t.textPrimary)),
-        content: Text(
-          'This removes stored credentials. You can re-link anytime.',
-          style: TextStyle(color: t.textSecondary),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: const Text('CANCEL'),
-          ),
-          ElevatedButton(
-            onPressed: () {
-              Navigator.pop(ctx);
-              ref.read(wdgwarsProvider).logout();
-            },
-            style: ElevatedButton.styleFrom(backgroundColor: AppTheme.error),
-            child: const Text('UNLINK'),
-          ),
-        ],
-      ),
-    );
-  }
 }
-
-class _WdgwarsStatsCard extends StatelessWidget {
-  const _WdgwarsStatsCard({this.stats, this.flockCams});
-  final WdgwarsUserStats? stats;
-  final int? flockCams;
-
-  @override
-  Widget build(BuildContext context) {
-    final t = AppTheme.of(context);
-    final s = stats;
-    if (s == null) {
-      return Container(
-        padding: const EdgeInsets.all(12),
-        decoration: BoxDecoration(
-          color: t.background.withValues(alpha: 0.4),
-          borderRadius: BorderRadius.circular(8),
-          border: Border.all(color: AppTheme.wdgwars.withValues(alpha: 0.2)),
-        ),
-        child: Row(
-          children: [
-            const SizedBox(width: 14, height: 14,
-              child: CircularProgressIndicator(strokeWidth: 1.5, color: AppTheme.wdgwars)),
-            const SizedBox(width: 8),
-            Text('Loading stats...', style: TextStyle(color: t.textDim, fontSize: 11)),
-          ],
-        ),
-      );
-    }
-
-    return Container(
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: t.background.withValues(alpha: 0.4),
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: AppTheme.wdgwars.withValues(alpha: 0.25)),
-      ),
-      child: Column(
-        children: [
-          Row(
-            children: [
-              const Icon(Icons.account_circle, size: 20, color: AppTheme.wdgwars),
-              const SizedBox(width: 8),
-              Expanded(
-                child: Text(
-                  s.username,
-                  style: TextStyle(
-                    color: t.textPrimary, fontSize: 14, fontWeight: FontWeight.w600,
-                  ),
-                ),
-              ),
-              if (s.rank != null) ...[
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                  decoration: BoxDecoration(
-                    color: AppTheme.wdgwars.withValues(alpha: 0.1),
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: AppTheme.wdgwars.withValues(alpha: 0.3)),
-                  ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      const Icon(Icons.emoji_events, size: 12, color: AppTheme.wdgwars),
-                      const SizedBox(width: 4),
-                      Text('#${s.rank}', style: const TextStyle(
-                        color: AppTheme.wdgwars, fontSize: 12,
-                        fontWeight: FontWeight.w700, fontFamily: 'monospace',
-                      )),
-                    ],
-                  ),
-                ),
-                if (s.gang.isNotEmpty) const SizedBox(width: 6),
-              ],
-              if (s.gang.isNotEmpty)
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                  decoration: BoxDecoration(
-                    color: AppTheme.wdgwarsAlt.withValues(alpha: 0.1),
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: AppTheme.wdgwarsAlt.withValues(alpha: 0.3)),
-                  ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      const Icon(Icons.groups, size: 12, color: AppTheme.wdgwarsAlt),
-                      const SizedBox(width: 4),
-                      Text(
-                        s.gangRole.isEmpty
-                            ? s.gang
-                            : '${s.gang} · ${s.gangRole.toUpperCase()}',
-                        style: const TextStyle(
-                          color: AppTheme.wdgwarsAlt,
-                          fontSize: 10,
-                          fontWeight: FontWeight.w700,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-            ],
-          ),
-          const SizedBox(height: 10),
-          Row(
-            children: [
-              _WigleStat(
-                icon: Icons.wifi, label: 'WiFi',
-                value: _fmt(s.wifi), color: AppTheme.wdgwars,
-              ),
-              _WigleStat(
-                icon: Icons.bluetooth, label: 'BLE',
-                value: _fmt(s.ble), color: AppTheme.wdgwarsAlt,
-              ),
-              _WigleStat(
-                icon: Icons.flight, label: 'Air',
-                value: _fmt(s.aircraft), color: const Color(0xFFc4b5fd),
-              ),
-              _WigleStat(
-                icon: Icons.hub, label: 'Mesh',
-                value: _fmt(s.mesh), color: AppTheme.success,
-              ),
-              _WigleStat(
-                icon: Icons.military_tech, label: 'Badges',
-                value: '${s.badges.length}', color: AppTheme.warning,
-              ),
-            ],
-          ),
-          const SizedBox(height: 8),
-          Row(
-            children: [
-              _WigleStat(
-                icon: Icons.today, label: 'Today',
-                value: _fmt(s.recentToday), color: AppTheme.wdgwarsAlt,
-              ),
-              _WigleStat(
-                icon: Icons.date_range, label: '7 Days',
-                value: _fmt(s.recent7d), color: AppTheme.wdgwars,
-              ),
-              _WigleStat(
-                icon: Icons.shield, label: 'Reinforced',
-                value: _fmt(s.reinforced), color: const Color(0xFFc4b5fd),
-              ),
-              _WigleStat(
-                icon: Icons.toll, label: 'Credits',
-                value: _fmt(s.credits), color: AppTheme.warning,
-              ),
-              _WigleStat(
-                icon: Icons.lock_open, label: 'Cracked',
-                value: _fmt(s.cracked), color: AppTheme.error,
-              ),
-            ],
-          ),
-          const SizedBox(height: 10),
-          Row(
-            children: [
-              Expanded(
-                child: Container(
-                  padding: const EdgeInsets.symmetric(vertical: 6),
-                  decoration: BoxDecoration(
-                    color: AppTheme.wdgwars.withValues(alpha: 0.06),
-                    borderRadius: BorderRadius.circular(6),
-                  ),
-                  child: Column(
-                    children: [
-                      Text(_fmt(s.total), style: const TextStyle(
-                        color: AppTheme.wdgwars, fontSize: 18,
-                        fontWeight: FontWeight.w700, fontFamily: 'monospace',
-                      )),
-                      Text('TOTAL DEVICES', style: TextStyle(
-                        color: t.textDim, fontSize: 8,
-                        fontWeight: FontWeight.w600, letterSpacing: 1,
-                      )),
-                    ],
-                  ),
-                ),
-              ),
-              if (flockCams != null) ...[
-                const SizedBox(width: 8),
-                Expanded(
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(vertical: 6),
-                    decoration: BoxDecoration(
-                      color: AppTheme.flockWifi.withValues(alpha: 0.06),
-                      borderRadius: BorderRadius.circular(6),
-                    ),
-                    child: Column(
-                      children: [
-                        Text(_fmt(flockCams!), style: const TextStyle(
-                          color: AppTheme.flockWifi, fontSize: 18,
-                          fontWeight: FontWeight.w700, fontFamily: 'monospace',
-                        )),
-                        Text('FLOCK CAMS (LOCAL)', style: TextStyle(
-                          color: t.textDim, fontSize: 8,
-                          fontWeight: FontWeight.w600, letterSpacing: 1,
-                        )),
-                      ],
-                    ),
-                  ),
-                ),
-              ],
-            ],
-          ),
-          if (s.dailyCap > 0) ...[
-            const SizedBox(height: 8),
-            Builder(builder: (_) {
-              final used = (s.dailyUsed / s.dailyCap).clamp(0.0, 1.0);
-              final low = s.dailyRemaining < s.dailyCap * 0.1;
-              final barColor = low ? AppTheme.warning : AppTheme.wdgwars;
-              return Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    children: [
-                      Icon(Icons.speed, size: 11, color: barColor),
-                      const SizedBox(width: 4),
-                      Text('DAILY NEW-AP QUOTA', style: TextStyle(
-                        color: t.textDim, fontSize: 8,
-                        fontWeight: FontWeight.w600, letterSpacing: 1,
-                      )),
-                      const Spacer(),
-                      Text('${_fmt(s.dailyRemaining)} / ${_fmt(s.dailyCap)} left',
-                          style: TextStyle(
-                            color: barColor, fontSize: 9,
-                            fontWeight: FontWeight.w700, fontFamily: 'monospace',
-                          )),
-                    ],
-                  ),
-                  const SizedBox(height: 4),
-                  ClipRRect(
-                    borderRadius: BorderRadius.circular(3),
-                    child: LinearProgressIndicator(
-                      value: used,
-                      minHeight: 4,
-                      backgroundColor: t.border,
-                      valueColor: AlwaysStoppedAnimation(barColor),
-                    ),
-                  ),
-                ],
-              );
-            }),
-          ],
-          Builder(builder: (_) {
-            final meta = <String>[
-              if (s.country.isNotEmpty) s.country,
-              if (s.joined.isNotEmpty) 'joined ${s.joined}',
-              if (s.notes > 0) '${s.notes} notes',
-              if (s.bountiesCompleted > 0) '${s.bountiesCompleted} bounties',
-              if (s.creditsLifetime > 0) '${_fmt(s.creditsLifetime)} earned',
-            ];
-            if (meta.isEmpty) return const SizedBox.shrink();
-            return Padding(
-              padding: const EdgeInsets.only(top: 8),
-              child: Text(
-                meta.join('  ·  '),
-                style: TextStyle(color: t.textDim, fontSize: 9, letterSpacing: 0.5),
-              ),
-            );
-          }),
-        ],
-      ),
-    );
-  }
-
-  String _fmt(int count) {
-    if (count >= 1000000) return '${(count / 1000000).toStringAsFixed(1)}M';
-    if (count >= 1000) return '${(count / 1000).toStringAsFixed(1)}K';
-    return '$count';
-  }
-}
-
