@@ -1,20 +1,32 @@
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:oui_spy/theme/app_theme.dart';
+import 'package:oui_spy/widgets/ios.dart';
+
+TextStyle _title(ResolvedTheme t, {Color? color}) => TextStyle(color: color ?? t.textPrimary, fontSize: 17);
+
+TextStyle _sub(ResolvedTheme t) => TextStyle(color: t.textDim, fontSize: 14, height: 1.3);
+
+const _rowPad = EdgeInsets.symmetric(horizontal: 16, vertical: 10);
 
 class ConfigSectionHeader extends StatelessWidget {
-  const ConfigSectionHeader({super.key, required this.label, this.topPadding = 4});
+  const ConfigSectionHeader({super.key, required this.label, this.topPadding = 4, this.note});
   final String label;
   final double topPadding;
+  final String? note;
 
   @override
   Widget build(BuildContext context) {
     final t = AppTheme.of(context);
     return Padding(
-      padding: EdgeInsets.only(bottom: 8, top: topPadding),
-      child: Text(label, style: TextStyle(
-        color: t.textDim, fontSize: 10,
-        fontWeight: FontWeight.w700, letterSpacing: 2,
-      )),
+      padding: EdgeInsets.only(bottom: 6, top: topPadding + 10, left: 16, right: 16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(label.toUpperCase(), style: TextStyle(color: t.textDim, fontSize: 13, fontWeight: FontWeight.w500, letterSpacing: 0.2)),
+          if (note != null) Padding(padding: const EdgeInsets.only(top: 2), child: Text(note!, style: TextStyle(color: t.textDim, fontSize: 13))),
+        ],
+      ),
     );
   }
 }
@@ -40,37 +52,23 @@ class ConfigToggleRow extends StatelessWidget {
   Widget build(BuildContext context) {
     final t = AppTheme.of(context);
     return Container(
-      margin: const EdgeInsets.only(bottom: 4),
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-      decoration: BoxDecoration(
-        color: t.surface,
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: t.border, width: 0.5),
-      ),
+      constraints: const BoxConstraints(minHeight: 52),
+      padding: _rowPad,
       child: Row(
         children: [
-          Icon(icon, size: 18, color: value ? color : t.textDim),
-          const SizedBox(width: 10),
+          IosIcon(icon, value ? color : t.textDim),
+          const SizedBox(width: 14),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(label, style: TextStyle(
-                  color: t.textPrimary, fontSize: 13, fontWeight: FontWeight.w600,
-                )),
-                if (subtitle != null)
-                  Text(subtitle!, style: TextStyle(
-                    color: t.textDim, fontSize: 10,
-                  )),
+                Text(label, style: _title(t)),
+                if (subtitle != null) Text(subtitle!, style: _sub(t)),
               ],
             ),
           ),
-          Switch.adaptive(
-            value: value,
-            onChanged: onChanged,
-            activeTrackColor: color.withValues(alpha: 0.5),
-            activeThumbColor: color,
-          ),
+          const SizedBox(width: 8),
+          CupertinoSwitch(value: value, onChanged: onChanged, activeTrackColor: color),
         ],
       ),
     );
@@ -104,44 +102,21 @@ class ConfigSliderRow extends StatelessWidget {
   Widget build(BuildContext context) {
     final t = AppTheme.of(context);
     final c = color ?? AppTheme.accent;
-    return Container(
-      margin: const EdgeInsets.only(bottom: 4),
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-      decoration: BoxDecoration(
-        color: t.surface,
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: t.border, width: 0.5),
-      ),
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 12, 16, 6),
       child: Column(
         children: [
           Row(
             children: [
-              Icon(icon, size: 14, color: t.textDim),
-              const SizedBox(width: 8),
-              Text(label, style: TextStyle(
-                color: t.textPrimary, fontSize: 12, fontWeight: FontWeight.w500,
-              )),
-              const Spacer(),
-              Text(valueLabel, style: TextStyle(
-                color: c, fontSize: 11,
-                fontFamily: 'monospace', fontWeight: FontWeight.w600,
-              )),
+              IosIcon(icon, c),
+              const SizedBox(width: 14),
+              Expanded(child: Text(label, style: _title(t))),
+              Text(valueLabel, style: TextStyle(color: c, fontSize: 17, fontWeight: FontWeight.w600)),
             ],
           ),
-          SliderTheme(
-            data: SliderThemeData(
-              overlayShape: SliderComponentShape.noOverlay,
-              trackHeight: 2,
-            ),
-            child: Slider(
-              value: value,
-              min: min,
-              max: max,
-              divisions: divisions,
-              activeColor: c,
-              inactiveColor: t.border,
-              onChanged: onChanged,
-            ),
+          SizedBox(
+            width: double.infinity,
+            child: CupertinoSlider(value: value, min: min, max: max, divisions: divisions, activeColor: c, onChanged: onChanged),
           ),
         ],
       ),
@@ -167,29 +142,22 @@ class ConfigInfoRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final t = AppTheme.of(context);
-    final c = color ?? t.textDim;
     return Container(
-      margin: const EdgeInsets.only(bottom: 4),
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-      decoration: BoxDecoration(
-        color: t.surface,
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: t.border, width: 0.5),
-      ),
+      constraints: const BoxConstraints(minHeight: 48),
+      padding: _rowPad,
       child: Row(
         children: [
-          Icon(icon, size: 16, color: c),
-          const SizedBox(width: 10),
-          Text(label, style: TextStyle(
-            color: t.textPrimary, fontSize: 12, fontWeight: FontWeight.w500,
-          )),
-          const Spacer(),
-          Text(value, style: TextStyle(
-            color: AppTheme.accent,
-            fontSize: 12,
-            fontFamily: monospace ? 'monospace' : null,
-            fontWeight: FontWeight.w600,
-          )),
+          IosIcon(icon, color ?? t.textDim),
+          const SizedBox(width: 14),
+          Text(label, style: _title(t)),
+          const SizedBox(width: 12),
+          Expanded(
+            child: SelectableText(
+              value,
+              textAlign: TextAlign.right,
+              style: TextStyle(color: t.textSecondary, fontSize: 17, fontFamily: monospace ? 'monospace' : null),
+            ),
+          ),
         ],
       ),
     );
@@ -218,105 +186,28 @@ class ConfigActionRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final t = AppTheme.of(context);
-    final c = destructive
-        ? AppTheme.error
-        : (color ?? AppTheme.accent);
-    return Material(
-      color: Colors.transparent,
+    final c = destructive ? AppTheme.error : (color ?? AppTheme.accent);
+    return Opacity(
+      opacity: onTap == null ? 0.45 : 1,
       child: InkWell(
         onTap: onTap,
-        borderRadius: BorderRadius.circular(8),
         child: Container(
-          margin: const EdgeInsets.only(bottom: 4),
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-          decoration: BoxDecoration(
-            color: t.surface,
-            borderRadius: BorderRadius.circular(8),
-            border: Border.all(
-              color: destructive ? AppTheme.error.withValues(alpha: 0.4) : t.border,
-              width: 0.5,
-            ),
-          ),
+          constraints: const BoxConstraints(minHeight: 52),
+          padding: _rowPad,
           child: Row(
             children: [
-              Icon(icon, size: 18, color: c),
-              const SizedBox(width: 10),
+              IosIcon(icon, c),
+              const SizedBox(width: 14),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(label, style: TextStyle(
-                      color: destructive ? AppTheme.error : t.textPrimary,
-                      fontSize: 13,
-                      fontWeight: FontWeight.w600,
-                    )),
-                    if (subtitle != null)
-                      Text(subtitle!, style: TextStyle(
-                        color: t.textDim, fontSize: 10,
-                      )),
+                    Text(label, style: _title(t, color: destructive ? AppTheme.error : null)),
+                    if (subtitle != null) Text(subtitle!, style: _sub(t)),
                   ],
                 ),
               ),
-              if (trailing != null) trailing!
-              else Icon(Icons.chevron_right, size: 18, color: t.textDim),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class ConfigCompactButton extends StatelessWidget {
-  const ConfigCompactButton({
-    super.key,
-    required this.icon,
-    required this.label,
-    required this.onTap,
-    this.color,
-    this.destructive = false,
-  });
-  final IconData icon;
-  final String label;
-  final VoidCallback? onTap;
-  final Color? color;
-  final bool destructive;
-
-  @override
-  Widget build(BuildContext context) {
-    final t = AppTheme.of(context);
-    final c = destructive ? AppTheme.error : (color ?? AppTheme.accent);
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(8),
-        child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 10),
-          decoration: BoxDecoration(
-            color: t.surface,
-            borderRadius: BorderRadius.circular(8),
-            border: Border.all(
-              color: destructive ? AppTheme.error.withValues(alpha: 0.4) : t.border,
-              width: 0.5,
-            ),
-          ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(icon, size: 18, color: c),
-              const SizedBox(height: 6),
-              Text(
-                label,
-                textAlign: TextAlign.center,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: TextStyle(
-                  color: destructive ? AppTheme.error : t.textPrimary,
-                  fontSize: 11,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
+              if (trailing != null) trailing! else Icon(CupertinoIcons.chevron_forward, size: 18, color: t.textDim),
             ],
           ),
         ),
@@ -344,30 +235,24 @@ class ConfigTextField extends StatelessWidget {
   Widget build(BuildContext context) {
     final t = AppTheme.of(context);
     return Container(
-      margin: const EdgeInsets.only(bottom: 8),
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-      decoration: BoxDecoration(
-        color: t.surface,
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: t.border, width: 0.5),
-      ),
+      constraints: const BoxConstraints(minHeight: 52),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 2),
       child: Row(
         children: [
-          Icon(icon, size: 16, color: t.textDim),
-          const SizedBox(width: 10),
+          IosIcon(icon, t.textDim),
+          const SizedBox(width: 14),
           Expanded(
-            child: TextField(
+            child: CupertinoTextField(
               controller: controller,
               obscureText: obscure,
               keyboardType: keyboardType,
-              style: TextStyle(color: t.textPrimary, fontSize: 13),
-              decoration: InputDecoration(
-                labelText: label,
-                labelStyle: TextStyle(color: t.textDim, fontSize: 12),
-                border: InputBorder.none,
-                isDense: true,
-                contentPadding: const EdgeInsets.symmetric(vertical: 8),
-              ),
+              autocorrect: false,
+              enableSuggestions: false,
+              placeholder: label,
+              style: TextStyle(color: t.textPrimary, fontSize: 17),
+              placeholderStyle: TextStyle(color: t.textDim, fontSize: 17),
+              decoration: null,
+              padding: const EdgeInsets.symmetric(vertical: 14),
             ),
           ),
         ],
@@ -440,43 +325,27 @@ class _ConfigNumberFieldState extends State<ConfigNumberField> {
   Widget build(BuildContext context) {
     final t = AppTheme.of(context);
     return Container(
-      margin: const EdgeInsets.only(bottom: 4),
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-      decoration: BoxDecoration(
-        color: t.surface,
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: t.border, width: 0.5),
-      ),
+      constraints: const BoxConstraints(minHeight: 52),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
       child: Row(
         children: [
-          Icon(widget.icon, size: 16, color: t.textDim),
-          const SizedBox(width: 10),
-          Expanded(
-            child: Text(widget.label, style: TextStyle(
-              color: t.textPrimary, fontSize: 12, fontWeight: FontWeight.w500,
-            )),
-          ),
+          IosIcon(widget.icon, t.textDim),
+          const SizedBox(width: 14),
+          Expanded(child: Text(widget.label, style: _title(t))),
           SizedBox(
-            width: 90,
+            width: 110,
             child: TextFormField(
               controller: _controller,
               focusNode: _focusNode,
               keyboardType: TextInputType.number,
               textInputAction: TextInputAction.done,
-              style: const TextStyle(
-                color: AppTheme.accent,
-                fontFamily: 'monospace',
-                fontSize: 13,
-                fontWeight: FontWeight.w600,
-              ),
+              style: const TextStyle(color: AppTheme.accent, fontSize: 17, fontWeight: FontWeight.w600),
               textAlign: TextAlign.right,
               decoration: InputDecoration(
                 isDense: true,
                 border: InputBorder.none,
                 suffixText: widget.suffix,
-                suffixStyle: TextStyle(
-                  color: t.textDim, fontSize: 11, fontFamily: 'monospace',
-                ),
+                suffixStyle: TextStyle(color: t.textDim, fontSize: 15),
                 contentPadding: const EdgeInsets.symmetric(vertical: 4),
               ),
               onTapOutside: (_) => _focusNode.unfocus(),

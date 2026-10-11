@@ -6,7 +6,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:oui_spy/core/ble/ble_manager.dart';
 
 enum IgnoreType {
-  ssid('SSID'),
+  ssid('Wi-Fi name'),
   mac('MAC'),
   oui('OUI');
 
@@ -15,9 +15,9 @@ enum IgnoreType {
 }
 
 enum IgnoreScope {
-  both('WiFi + BLE'),
-  wifi('WiFi only'),
-  ble('BLE only');
+  both('Wi-Fi and Bluetooth'),
+  wifi('Wi-Fi only'),
+  ble('Bluetooth only');
 
   const IgnoreScope(this.label);
   final String label;

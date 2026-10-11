@@ -1,3 +1,4 @@
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:oui_spy/theme/app_theme.dart';
 
@@ -50,15 +51,6 @@ TextStyle barLabelStyle(BuildContext context, Color color,
   );
 }
 
-TextStyle barLeadingStyle(BuildContext context, Color color) {
-  final base = Theme.of(context).textTheme.titleSmall ?? const TextStyle();
-  return base.copyWith(
-    color: color,
-    fontWeight: FontWeight.w700,
-    letterSpacing: 1.2,
-  );
-}
-
 class CommandBarAction {
   const CommandBarAction({
     required this.icon,
@@ -74,304 +66,6 @@ class CommandBarAction {
   final bool active;
   final Color? color;
 }
-
-class CommandBarLeading {
-  const CommandBarLeading({
-    required this.icon,
-    required this.label,
-    required this.onTap,
-  });
-
-  final IconData icon;
-  final String label;
-  final VoidCallback onTap;
-}
-
-double _measureLabel(BuildContext context, String text, TextStyle style) {
-  final painter = TextPainter(
-    text: TextSpan(text: text, style: style),
-    textDirection: Directionality.of(context),
-    textScaler: MediaQuery.textScalerOf(context),
-    maxLines: 1,
-  )..layout();
-  return painter.width;
-}
-
-class BarLayout {
-  const BarLayout({
-    required this.flex,
-    required this.padScale,
-    required this.showLeadingLabel,
-    required this.showActionLabels,
-  });
-
-  final List<int> flex;
-  final double padScale;
-  final bool showLeadingLabel;
-  final bool showActionLabels;
-
-  static const _rungs = <(double, bool, bool)>[
-    (1.4, true, true),
-    (0.7, true, true),
-    (0.4, true, true),
-    (1.0, true, false),
-    (0.5, true, false),
-    (0.4, false, false),
-  ];
-
-  static BarLayout resolve(
-    BuildContext context, {
-    required double available,
-    required String? leadingLabel,
-    required List<CommandBarAction> actions,
-  }) {
-    final iconSize = barIconSize(context);
-    final gap = barGap(context);
-    final style = barLabelStyle(context, const Color(0xFF000000));
-    final leadStyle = barLeadingStyle(context, const Color(0xFF000000));
-    final cellCount = actions.length + (leadingLabel == null ? 0 : 1);
-    final budget = available - cellCount - 2;
-
-    List<double> widths(
-        double padScale, bool leadingLabelOn, bool actionLabelsOn) {
-      final padding = barGap(context, padScale) * 2;
-      double cell(String label, TextStyle labelStyle,
-          {required bool withLabel, required bool withChevron}) {
-        var w = padding + iconSize;
-        if (withLabel) w += gap + _measureLabel(context, label, labelStyle);
-        if (withChevron) w += gap * 0.5 + iconSize;
-        return w;
-      }
-
-      return [
-        if (leadingLabel != null)
-          cell(leadingLabel, leadStyle,
-                  withLabel: leadingLabelOn, withChevron: true) +
-              gap * 2.4 +
-              2,
-        for (final a in actions)
-          cell(a.label, style, withLabel: actionLabelsOn, withChevron: false),
-      ];
-    }
-
-    double total(List<double> w) => w.fold(0.0, (a, b) => a + b);
-
-    var chosen = _rungs.last;
-    var w = widths(chosen.$1, chosen.$2, chosen.$3);
-    for (final rung in _rungs) {
-      final candidate = widths(rung.$1, rung.$2, rung.$3);
-      if (total(candidate) <= budget) {
-        chosen = rung;
-        w = candidate;
-        break;
-      }
-    }
-
-    final sum = total(w);
-    return BarLayout(
-      flex: [
-        for (final e in w) (e / sum * 10000).ceil().clamp(1, 1 << 24),
-      ],
-      padScale: chosen.$1,
-      showLeadingLabel: chosen.$2,
-      showActionLabels: chosen.$3,
-    );
-  }
-}
-
-class CommandBar extends StatelessWidget {
-  const CommandBar({
-    super.key,
-    this.leading,
-    this.actions = const <CommandBarAction>[],
-  });
-
-  final CommandBarLeading? leading;
-  final List<CommandBarAction> actions;
-
-  @override
-  Widget build(BuildContext context) {
-    final t = AppTheme.of(context);
-    return Container(
-      decoration: BoxDecoration(
-        color: t.surface,
-        border: Border(top: BorderSide(color: t.border)),
-      ),
-      child: SafeArea(
-        top: false,
-        child: LayoutBuilder(
-          builder: (context, constraints) {
-            final layout = BarLayout.resolve(
-              context,
-              available: constraints.maxWidth,
-              leadingLabel: leading?.label,
-              actions: actions,
-            );
-            var cell = 0;
-            return Row(
-              children: [
-                if (leading != null)
-                  Expanded(
-                    flex: layout.flex[cell++],
-                    child: CommandBarLeadingButton(
-                      leading: leading!,
-                      showLabel: layout.showLeadingLabel,
-                      padScale: layout.padScale,
-                    ),
-                  ),
-                for (int i = 0; i < actions.length; i++)
-                  Expanded(
-                    flex: layout.flex[cell++],
-                    child: DecoratedBox(
-                      decoration: BoxDecoration(
-                        border: i == 0 && leading == null
-                            ? null
-                            : Border(left: BorderSide(color: t.border)),
-                      ),
-                      child: CommandBarButton(
-                        action: actions[i],
-                        showLabel: layout.showActionLabels,
-                        padScale: layout.padScale,
-                      ),
-                    ),
-                  ),
-              ],
-            );
-          },
-        ),
-      ),
-    );
-  }
-}
-
-class CommandBarTap extends StatelessWidget {
-  const CommandBarTap({
-    super.key,
-    required this.onTap,
-    required this.child,
-    this.padScale = 1.4,
-  });
-
-  final VoidCallback? onTap;
-  final Widget child;
-  final double padScale;
-
-  @override
-  Widget build(BuildContext context) {
-    return ConstrainedBox(
-      constraints: const BoxConstraints(minHeight: kMinInteractiveDimension),
-      child: InkWell(
-        onTap: onTap,
-        child: Padding(
-          padding: EdgeInsets.symmetric(
-            horizontal: barGap(context, padScale),
-            vertical: barGap(context, 0.8),
-          ),
-          child: Center(child: child),
-        ),
-      ),
-    );
-  }
-}
-
-class CommandBarLeadingButton extends StatelessWidget {
-  const CommandBarLeadingButton({
-    super.key,
-    required this.leading,
-    required this.showLabel,
-    this.padScale = 1.4,
-  });
-
-  final CommandBarLeading leading;
-  final bool showLabel;
-  final double padScale;
-
-  @override
-  Widget build(BuildContext context) {
-    final iconSize = barIconSize(context);
-    final gap = barGap(context);
-    return CommandBarTap(
-      onTap: leading.onTap,
-      padScale: padScale,
-      child: Container(
-        padding: EdgeInsets.symmetric(
-          horizontal: gap * 1.2,
-          vertical: gap * 0.6,
-        ),
-        decoration: BoxDecoration(
-          color: AppTheme.accent.withValues(alpha: 0.12),
-          borderRadius: BorderRadius.circular(gap * 1.5),
-          border: Border.all(color: AppTheme.accent.withValues(alpha: 0.55)),
-        ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(leading.icon, size: iconSize, color: AppTheme.accent),
-            if (showLabel) ...[
-              SizedBox(width: gap),
-              Flexible(
-                child: Text(
-                  leading.label,
-                  softWrap: false,
-                  overflow: TextOverflow.ellipsis,
-                  style: barLeadingStyle(context, AppTheme.accent),
-                ),
-              ),
-            ],
-            SizedBox(width: gap * 0.5),
-            Icon(Icons.expand_less, size: iconSize, color: AppTheme.accent),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class CommandBarButton extends StatelessWidget {
-  const CommandBarButton({
-    super.key,
-    required this.action,
-    this.showLabel = true,
-    this.padScale = 1.4,
-  });
-
-  final CommandBarAction action;
-  final bool showLabel;
-  final double padScale;
-
-  @override
-  Widget build(BuildContext context) {
-    final t = AppTheme.of(context);
-    final tint = action.color ?? AppTheme.accent;
-    final fg = action.onTap == null
-        ? t.textDim.withValues(alpha: 0.4)
-        : (action.active ? tint : t.textSecondary);
-    final iconSize = barIconSize(context);
-    final glyph = Icon(action.icon, size: iconSize, color: fg);
-    return CommandBarTap(
-      onTap: action.onTap,
-      padScale: padScale,
-      child: showLabel
-          ? Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                glyph,
-                SizedBox(width: barGap(context)),
-                Flexible(
-                  child: Text(
-                    action.label,
-                    softWrap: false,
-                    overflow: TextOverflow.ellipsis,
-                    style: barLabelStyle(context, fg),
-                  ),
-                ),
-              ],
-            )
-          : glyph,
-    );
-  }
-}
-
 
 class CommandSheet extends StatelessWidget {
   const CommandSheet({
@@ -409,29 +103,26 @@ class CommandSheet extends StatelessWidget {
                 ),
               ),
             ),
-            Padding(
-              padding: EdgeInsets.fromLTRB(gap * 2, gap * 1.5, gap * 0.5, gap),
-              child: Row(
+            SizedBox(
+              height: 52,
+              width: double.infinity,
+              child: Stack(
+                alignment: Alignment.center,
                 children: [
-                  Expanded(
-                    child: Text(
-                      title,
-                      style: barLabelStyle(context, t.textDim)
-                          .copyWith(letterSpacing: 2.5),
+                  Text(title, style: TextStyle(color: t.textPrimary, fontSize: 17, fontWeight: FontWeight.w600)),
+                  if (trailing != null) Positioned(left: gap, child: trailing!),
+                  Positioned(
+                    right: gap,
+                    child: CupertinoButton(
+                      padding: const EdgeInsets.symmetric(horizontal: 8),
+                      onPressed: () => Navigator.of(context).maybePop(),
+                      child: const Text('Done', style: TextStyle(fontWeight: FontWeight.w600)),
                     ),
-                  ),
-                  ?trailing,
-                  IconButton(
-                    icon: Icon(Icons.close,
-                        size: barIconSize(context), color: t.textDim),
-                    tooltip: 'Close',
-                    visualDensity: VisualDensity.compact,
-                    onPressed: () => Navigator.of(context).maybePop(),
                   ),
                 ],
               ),
             ),
-            const Divider(height: 1),
+            Divider(height: 0.5, thickness: 0.5, color: t.border),
             Flexible(
               child: SingleChildScrollView(
                 padding: EdgeInsets.all(gap * 2),
@@ -500,9 +191,9 @@ class CommandSheetTile extends StatelessWidget {
           ? null
           : Text(
               subtitle!,
-              style: (Theme.of(context).textTheme.bodySmall ??
+              style: (Theme.of(context).textTheme.bodyMedium ??
                       const TextStyle())
-                  .copyWith(color: t.textDim),
+                  .copyWith(color: t.textDim, fontSize: 12),
             ),
       trailing: trailing,
     );
@@ -523,10 +214,10 @@ class CommandSheetGroup extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Padding(
-          padding: EdgeInsets.only(bottom: gap, top: gap * 0.5),
+          padding: EdgeInsets.only(bottom: gap * 0.75, top: gap * 0.5, left: gap * 2),
           child: Text(
-            label,
-            style: barLabelStyle(context, t.textDim).copyWith(letterSpacing: 2),
+            label.toUpperCase(),
+            style: TextStyle(color: t.textDim, fontSize: 13, fontWeight: FontWeight.w500, letterSpacing: 0.2),
           ),
         ),
         child,
@@ -536,8 +227,26 @@ class CommandSheetGroup extends StatelessWidget {
   }
 }
 
-class CommandChip extends StatelessWidget {
-  const CommandChip({
+const _acronyms = {'BLE', 'OUI', 'MAC', 'GPS', 'RSSI', 'SSID', 'UUID', 'MFG', 'GATT', 'DFU', 'ADDR1', 'ADDR2', 'ADDR3', 'IE', 'RID', 'ODID', 'NAN', 'PCAP', 'CH', 'DST', 'SRC', 'BSSID'};
+
+String _sentenceCase(String s) {
+  var first = true;
+  return s.split(' ').map((w) {
+    final bare = w.replaceAll(RegExp(r'[^A-Za-z0-9]'), '');
+    final out = _acronyms.contains(bare.toUpperCase())
+        ? w
+        : w.toUpperCase() == 'WIFI'
+            ? 'Wi-Fi'
+            : first
+                ? (w.isEmpty ? w : w[0].toUpperCase() + w.substring(1).toLowerCase())
+                : w.toLowerCase();
+    first = false;
+    return out;
+  }).join(' ');
+}
+
+class CommandOption extends StatelessWidget {
+  const CommandOption({
     super.key,
     required this.label,
     required this.selected,
@@ -554,48 +263,73 @@ class CommandChip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final t = AppTheme.of(context);
     final gap = barGap(context);
-    final radius = BorderRadius.circular(kMinInteractiveDimension);
-    return Material(
-      color: selected
-          ? color.withValues(alpha: 0.22)
-          : color.withValues(alpha: 0.06),
-      borderRadius: radius,
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: radius,
-        child: Container(
-          constraints:
-              const BoxConstraints(minHeight: kMinInteractiveDimension * 0.8),
-          padding: EdgeInsets.symmetric(
-            horizontal: gap * 1.75,
-            vertical: gap,
-          ),
-          decoration: BoxDecoration(
-            borderRadius: radius,
-            border: Border.all(
-              color: selected ? color : color.withValues(alpha: 0.55),
-              width: selected ? 1.6 : 1.0,
-            ),
-          ),
+    final text = Theme.of(context).textTheme.bodyLarge;
+    final pretty = _sentenceCase(label);
+    return InkWell(
+      onTap: onTap,
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(minHeight: 48),
+        child: Padding(
+          padding: EdgeInsets.symmetric(horizontal: gap * 1.6),
           child: Row(
-            mainAxisSize: MainAxisSize.min,
             children: [
-              Text(label, style: barLabelStyle(context, color)),
-              if (count != null) ...[
-                SizedBox(width: gap * 0.75),
-                Text(
-                  '$count',
-                  style: barLabelStyle(
-                    context,
-                    color.withValues(alpha: 0.65),
-                    bold: false,
+              Container(
+                width: 10,
+                height: 10,
+                decoration: BoxDecoration(color: color, shape: BoxShape.circle),
+              ),
+              SizedBox(width: gap * 1.4),
+              Expanded(
+                child: Text(
+                  pretty,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: text?.copyWith(
+                    color: selected ? t.textPrimary : t.textSecondary,
+                    fontWeight: selected ? FontWeight.w600 : FontWeight.w400,
                   ),
                 ),
-              ],
+              ),
+              if (count != null)
+                Padding(
+                  padding: EdgeInsets.only(left: gap),
+                  child: Text('$count', style: text?.copyWith(color: t.textDim)),
+                ),
+              SizedBox(
+                width: 32,
+                child: selected ? const Icon(Icons.check, size: 20, color: AppTheme.accent) : null,
+              ),
             ],
           ),
         ),
+      ),
+    );
+  }
+}
+
+class CommandOptionList extends StatelessWidget {
+  const CommandOptionList({super.key, required this.children});
+
+  final List<Widget> children;
+
+  @override
+  Widget build(BuildContext context) {
+    final t = AppTheme.of(context);
+    final radius = BorderRadius.circular(barGap(context) * 1.4);
+    return Material(
+      color: t.surfaceLight,
+      borderRadius: radius,
+      clipBehavior: Clip.antiAlias,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          for (var i = 0; i < children.length; i++) ...[
+            if (i > 0) Divider(height: 1, indent: barGap(context) * 4.6, color: t.border),
+            children[i],
+          ],
+        ],
       ),
     );
   }
@@ -606,48 +340,18 @@ class CommandActiveChip extends StatelessWidget {
     super.key,
     required this.label,
     required this.color,
-    required this.onClear,
   });
 
   final String label;
   final Color color;
-  final VoidCallback onClear;
 
   @override
   Widget build(BuildContext context) {
-    final gap = barGap(context);
-    final radius = BorderRadius.circular(kMinInteractiveDimension);
-    return Material(
-      color: color.withValues(alpha: 0.18),
-      borderRadius: radius,
-      child: InkWell(
-        onTap: onClear,
-        borderRadius: radius,
-        child: Container(
-          constraints:
-              const BoxConstraints(minHeight: kMinInteractiveDimension * 0.65),
-          padding: EdgeInsets.fromLTRB(gap * 1.5, gap * 0.5, gap, gap * 0.5),
-          decoration: BoxDecoration(
-            borderRadius: radius,
-            border: Border.all(color: color.withValues(alpha: 0.7)),
-          ),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Flexible(
-                child: Text(
-                  label,
-                  softWrap: false,
-                  overflow: TextOverflow.ellipsis,
-                  style: barLabelStyle(context, color),
-                ),
-              ),
-              SizedBox(width: gap * 0.5),
-              Icon(Icons.close, size: barIconSize(context) * 0.8, color: color),
-            ],
-          ),
-        ),
-      ),
+    return Text(
+      _sentenceCase(label),
+      softWrap: false,
+      overflow: TextOverflow.ellipsis,
+      style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: color, fontWeight: FontWeight.w600),
     );
   }
 }
@@ -672,12 +376,10 @@ Future<void> showSortSheet<T>({
           children: [
             CommandSheetGroup(
               label: 'ORDER BY',
-              child: Wrap(
-                spacing: barGap(ctx),
-                runSpacing: barGap(ctx),
+              child: CommandOptionList(
                 children: [
                   for (var i = 0; i < options.length; i++)
-                    CommandChip(
+                    CommandOption(
                       label: label(options[i]),
                       selected: current() == options[i],
                       color: pillColor(i),
@@ -715,11 +417,15 @@ class CommandHeader extends StatelessWidget {
     this.chips = const [],
     this.indicators = const [],
     this.actions = const <CommandBarAction>[],
+    this.onChipsTap,
+    this.onChipsClear,
   });
 
   final String title;
   final String count;
   final List<Widget> chips;
+  final VoidCallback? onChipsTap;
+  final VoidCallback? onChipsClear;
   final List<Widget> indicators;
   final List<CommandBarAction> actions;
 
@@ -730,29 +436,65 @@ class CommandHeader extends StatelessWidget {
     final style = Theme.of(context).textTheme.titleSmall;
     return Padding(
       padding: EdgeInsets.fromLTRB(gap * 2, gap * 1.5, gap * 2, gap * 1.5),
-      child: Row(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
         children: [
-          Text(title, style: style?.copyWith(letterSpacing: 3, color: t.textDim, fontWeight: FontWeight.w700)),
-          SizedBox(width: gap),
-          Expanded(
-            child: SingleChildScrollView(
-              scrollDirection: Axis.horizontal,
-              child: Row(spacing: gap * 0.75, children: chips),
-            ),
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  title,
+                  maxLines: 1,
+                  softWrap: false,
+                  overflow: TextOverflow.ellipsis,
+                  style: style?.copyWith(letterSpacing: 3, color: t.textDim, fontWeight: FontWeight.w700),
+                ),
+              ),
+              for (final i in indicators) ...[i, SizedBox(width: gap * 0.5)],
+              Text(
+                count,
+                style: style?.copyWith(color: AppTheme.accent, fontFamily: 'monospace', fontWeight: FontWeight.w700),
+              ),
+              if (actions.isNotEmpty) SizedBox(width: gap * 0.5),
+              for (final a in actions)
+                IconButton(
+                  tooltip: a.label,
+                  onPressed: a.onTap,
+                  visualDensity: VisualDensity.compact,
+                  icon: Icon(a.icon, size: barIconSize(context)),
+                  color: a.color ?? (a.active ? AppTheme.accent : t.textSecondary),
+                ),
+            ],
           ),
-          for (final i in indicators) ...[i, SizedBox(width: gap * 0.5)],
-          Text(
-            count,
-            style: style?.copyWith(color: AppTheme.accent, fontFamily: 'monospace', fontWeight: FontWeight.w700),
-          ),
-          if (actions.isNotEmpty) SizedBox(width: gap * 0.5),
-          for (final a in actions)
-            IconButton(
-              tooltip: a.label,
-              onPressed: a.onTap,
-              visualDensity: VisualDensity.compact,
-              icon: Icon(a.icon, size: barIconSize(context)),
-              color: a.color ?? (a.active ? AppTheme.accent : t.textSecondary),
+          if (chips.isNotEmpty)
+            Padding(
+              padding: EdgeInsets.only(top: gap * 0.75),
+              child: Material(
+                color: t.surface,
+                borderRadius: BorderRadius.circular(gap),
+                child: InkWell(
+                  onTap: onChipsTap,
+                  borderRadius: BorderRadius.circular(gap),
+                  child: Padding(
+                    padding: EdgeInsets.fromLTRB(gap, gap * 0.5, gap * 0.25, gap * 0.5),
+                    child: Row(
+                      children: [
+                        Icon(Icons.filter_alt, size: barIconSize(context) * 0.8, color: AppTheme.accent),
+                        SizedBox(width: gap * 0.75),
+                        Expanded(
+                          child: Wrap(spacing: gap * 0.75, runSpacing: gap * 0.75, children: chips),
+                        ),
+                        if (onChipsClear != null)
+                          TextButton(
+                            onPressed: onChipsClear,
+                            child: Text('CLEAR', style: barLabelStyle(context, AppTheme.accent)),
+                          ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
             ),
         ],
       ),

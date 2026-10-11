@@ -3,18 +3,14 @@ import 'package:flutter/material.dart';
 /// All scan engines available in the OUI-SPY firmware.
 enum Engine {
   // Mid-tone hues: vivid on the dark background, still legible on white.
-  detector('Detector', 'WiFi + BLE watchlist alerting', Color(0xFF3286E6), 0x01),
-  flockBle('Flock BLE', 'Flock Safety BLE detection', Color(0xFF9A35E6), 0x02),
-  flockWifi(
-      'Flock WiFi', 'Flock Safety WiFi promiscuous', Color(0xFFE63577), 0x04),
-  foxhunter('Foxhunter', 'WiFi + BLE proximity tracker', Color(0xFF1FA866), 0x08),
-  skySpy('Sky Spy', 'FAA Remote ID / ODID detection', Color(0xFF15A89B), 0x10),
-  uniPwn(
-      'UniPwn', 'Unitree robot exploitation', Color(0xFFE63535), 0x20),
-  wardrive(
-      'Wardrive', 'WiGLE-style WiFi + BLE capture', Color(0xFFE67435), 0x40),
-  pcap(
-      'PCAP', 'WiFi/BLE PCAP capture & audit', Color(0xFF13A884), 0x80);
+  detector('Detector', 'Watchlist and threat signatures over Wi-Fi and Bluetooth', Color(0xFF3286E6), 0x01),
+  flockBle('Flock BLE', 'Flock Safety cameras over Bluetooth', Color(0xFF9A35E6), 0x02),
+  flockWifi('Flock Wi-Fi', 'Flock Safety cameras over Wi-Fi', Color(0xFFE63577), 0x04),
+  foxhunter('Foxhunter', 'Track one device by signal strength', Color(0xFF1FA866), 0x08),
+  skySpy('Sky Spy', 'Drone Remote ID (FAA / ASTM)', Color(0xFF15A89B), 0x10),
+  uniPwn('UniPwn', 'Unitree robot Bluetooth exploit', Color(0xFFE63535), 0x20),
+  wardrive('Wardrive', 'Log Wi-Fi and Bluetooth for WiGLE and WDGWars', Color(0xFFE67435), 0x40),
+  pcap('PCAP', 'Packet capture of Wi-Fi or Bluetooth', Color(0xFF13A884), 0x80);
 
   const Engine(this.label, this.description, this.color, this.bitmask);
 
