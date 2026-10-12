@@ -291,6 +291,7 @@ extern volatile bool    hwAlertsSuppressed;  // set by phone (inside geofence) /
 #define MELODY_OP_CLEAR       0x02
 #define MELODY_OP_CLEAR_ALL   0x03
 #define MELODY_OP_PREVIEW     0x04
+#define MELODY_OP_SYNC        0x05
 typedef struct __attribute__((packed)) {
     uint8_t engine;
     uint8_t method;

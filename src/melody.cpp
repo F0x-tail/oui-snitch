@@ -57,6 +57,22 @@ void melodyApply(const uint8_t* d, size_t len) {
             memcpy(melTable[i].notes, d + 4, (size_t)n * 3);
         }
         portEXIT_CRITICAL(&melMux);
+    } else if (op == MELODY_OP_SYNC && len >= 6) {
+        uint8_t idx = d[1], total = d[2];
+        uint8_t n = d[5] > MELODY_MAX_NOTES ? MELODY_MAX_NOTES : d[5];
+        if (len < 6 + (size_t)n * 3) n = (uint8_t)((len - 6) / 3);
+        if (idx < total && total <= MELODY_MAX_ENTRIES) {
+            portENTER_CRITICAL(&melMux);
+            changed = melCount != total || melTable[idx].engine != d[3] ||
+                      melTable[idx].method != d[4] || melTable[idx].n != n ||
+                      memcmp(melTable[idx].notes, d + 6, (size_t)n * 3) != 0;
+            melTable[idx].engine = d[3];
+            melTable[idx].method = d[4];
+            melTable[idx].n = n;
+            memcpy(melTable[idx].notes, d + 6, (size_t)n * 3);
+            melCount = total;
+            portEXIT_CRITICAL(&melMux);
+        }
     } else if (op == MELODY_OP_CLEAR && len >= 3) {
         portENTER_CRITICAL(&melMux);
         int i = melFind(d[1], d[2]);
@@ -76,9 +92,10 @@ size_t melodyGetEntryOp(uint8_t idx, uint8_t* out) {
     portENTER_CRITICAL(&melMux);
     if (idx < melCount) {
         const MelodyEntry& e = melTable[idx];
-        out[0] = MELODY_OP_SET; out[1] = e.engine; out[2] = e.method; out[3] = e.n;
-        memcpy(out + 4, e.notes, (size_t)e.n * 3);
-        len = 4 + (size_t)e.n * 3;
+        out[0] = MELODY_OP_SYNC; out[1] = idx; out[2] = melCount;
+        out[3] = e.engine; out[4] = e.method; out[5] = e.n;
+        memcpy(out + 6, e.notes, (size_t)e.n * 3);
+        len = 6 + (size_t)e.n * 3;
     }
     portEXIT_CRITICAL(&melMux);
     return len;

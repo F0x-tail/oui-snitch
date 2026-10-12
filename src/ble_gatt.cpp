@@ -1244,10 +1244,13 @@ void bleGattRebroadcastConfigs(void) {
     if (mgrBandCfgLen)  meshBroadcastConfig(MESH_CFG_KIND_WIFIBAND, mgrBandCfg, mgrBandCfgLen);
     static uint8_t melIdx = 0;
     if (melodyCount()) {
-        uint8_t op[4 + MELODY_MAX_NOTES * 3];
+        uint8_t op[6 + MELODY_MAX_NOTES * 3];
         if (melIdx >= melodyCount()) melIdx = 0;
         size_t l = melodyGetEntryOp(melIdx++, op);
         if (l) meshBroadcastConfig(MESH_CFG_KIND_MELODY, op, l);
+    } else {
+        uint8_t clr = MELODY_OP_CLEAR_ALL;
+        meshBroadcastConfig(MESH_CFG_KIND_MELODY, &clr, 1);
     }
 
     uint8_t m = mgrCommandedMask;
@@ -1306,7 +1309,7 @@ class HardwareConfigCallbacks : public NimBLECharacteristicCallbacks {
     void onRead(NimBLECharacteristic* chr) override {
         Preferences p;
         p.begin("ouispy-hw", true);
-        uint8_t buf[6];
+        uint8_t buf[7];
         buf[0] = p.getBool("buzzer", true) ? 1 : 0;
         buf[1] = p.getBool("led", true) ? 1 : 0;
         buf[2] = p.getUChar("neo_brt", 50);
@@ -1377,6 +1380,8 @@ class MelodyCallbacks : public NimBLECharacteristicCallbacks {
         if (d[0] == MELODY_OP_PREVIEW) {
 #ifndef OUISPY_ROLE_MANAGER
             melodyPreview(d + 1, len - 1);
+#else
+            if (meshIsEnabled()) meshBroadcastConfig(MESH_CFG_KIND_MELODY, d, len);
 #endif
             return;
         }

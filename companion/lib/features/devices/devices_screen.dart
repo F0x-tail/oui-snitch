@@ -581,8 +581,8 @@ class _DeviceRow extends ConsumerWidget {
                               maxLines: 2,
                               overflow: TextOverflow.ellipsis,
                               style: text.bodyMedium?.copyWith(
-                                color: t.textPrimary,
-                                fontWeight: FontWeight.w600,
+                                color: Color.lerp(accent, t.textPrimary, 0.35),
+                                fontWeight: FontWeight.w700,
                               ),
                             ),
                           ),
