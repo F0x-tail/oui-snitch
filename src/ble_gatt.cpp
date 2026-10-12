@@ -2411,7 +2411,9 @@ void bleGattInit(void) {
     otaSetNotifyCallback(dfuNotifyTrampoline);
     wifiOtaSetNotifyCallback(wifiOtaNotifyTrampoline);
 
+#ifndef OUISPY_NIMBLE2_API
     svc->start();
+#endif
 
     NimBLEAdvertising* adv = NimBLEDevice::getAdvertising();
     adv->addServiceUUID(SVC_UUID);
