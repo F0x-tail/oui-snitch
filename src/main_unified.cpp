@@ -663,14 +663,21 @@ static void statusHeartbeatTask(void* param) {
         }
 
 #ifdef OUISPY_STATUS_LOG
-        Serial.printf("[STATUS] engines=0x%02X heap=%d gps=%s id=%s cmdRx=%lu rxWin=%lu slice=%d\n",
+        Serial.printf("[STATUS] engines=0x%02X heap=%d gps=%s id=%s cmdRx=%lu rxWin=%lu rawRx=%lu slice=%d\n",
                       engineGetActiveMask(),
                       esp_get_free_heap_size(),
                       gpsValid ? "valid" : "none",
                       meshGetLocalNodeId(),
                       (unsigned long)g_meshCmdRx,
                       (unsigned long)g_meshRxWin,
+                      (unsigned long)g_meshRawRx,
                       meshTimeSlicingActive() ? 1 : 0);
+        {
+            extern volatile uint32_t g_bleRawSeen;
+            extern volatile uint32_t g_bleUniq;
+            Serial.printf("[STATUS] bleRaw=%lu bleUniq=%lu\n",
+                          (unsigned long)g_bleRawSeen, (unsigned long)g_bleUniq);
+        }
 #endif
 
         if (g_ledOffAtMs != 0 && (int32_t)(millis() - g_ledOffAtMs) >= 0) {

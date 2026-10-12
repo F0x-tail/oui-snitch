@@ -755,6 +755,13 @@ static void e2eSmokeTask(void* arg) {
     Serial.printf("[E2E] node joined after %dms\n", waited);
     bool pass = true;
 
+    const uint8_t ign[] = {2, 0, 0, 6, 0xAA, 0xBB, 0xCC, 0x11, 0x22, 0x33, 1, 0, 4, 't', 'e', 's', 't'};
+    ignoreListSet(ign, sizeof(ign));
+    uint8_t ib[256];
+    size_t in = ignoreListSerialize(ib, sizeof(ib));
+    meshBroadcastIgnoreList(ib, in);
+    Serial.printf("[E2E] ignore list seeded + broadcast len=%u\n", (unsigned)in);
+
     Serial.println("[E2E] PHASE A: phone present -> enable flock+drone+detect+WIGLE on node");
     bool prevOffline = offlineScanEnabled;
     offlineScanEnabled = true;
@@ -2419,6 +2426,9 @@ void bleGattInit(void) {
     adv->addServiceUUID(SVC_UUID);
 #ifndef OUISPY_NIMBLE2_API
     adv->setScanResponse(true);
+#else
+    adv->enableScanResponse(true);
+    adv->setName(devName);
 #endif
     if (!adv->start()) {
         Serial.println("[BLE] WARNING: advertising failed to start");

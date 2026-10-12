@@ -6,6 +6,7 @@ static const char* SVC        = "00000001-0a15-4b70-ba00-c010ae1ba01c";
 static const char* CHR_ENGINE = "00000002-0a15-4b70-ba00-c010ae1ba01c";
 static const char* CHR_HWCFG  = "00000020-0a15-4b70-ba00-c010ae1ba01c";
 static const char* CHR_DETCFG = "00000100-0a15-4b70-ba00-c010ae1ba01c";
+static const char* CHR_IGNORE = "00000023-0a15-4b70-ba00-c010ae1ba01c";
 
 static NimBLEClient* cli = nullptr;
 static NimBLEAdvertisedDevice target;
@@ -29,7 +30,11 @@ static ScanCB scanCb;
 static bool findNode(uint32_t ms) {
     found = false;
     NimBLEScan* s = NimBLEDevice::getScan();
+#ifdef OUISPY_NIMBLE2_API
+    s->start(ms, false, true);
+#else
     s->start(ms / 1000, false);
+#endif
     uint32_t t0 = millis();
     while (!found && millis() - t0 < ms + 1000) delay(50);
     return found;
@@ -70,7 +75,21 @@ static void configureNode() {
     delay(100);
     uint8_t en[2] = {0x01, 0x00};                // enable detector (engine 0)
     writeChr(CHR_ENGINE, en, 2);
-    Serial.println("[DRV] configured: offline ON + detector BLE + watchlist + ENABLE");
+    delay(150);
+#ifdef OUISPY_DRV_DETECTOR_ONLY
+    for (uint8_t e : {1, 2, 3, 4, 5, 6}) {
+        uint8_t off[2] = {0x00, e};
+        writeChr(CHR_ENGINE, off, 2);
+        delay(120);
+    }
+#else
+    uint8_t sky[2] = {0x01, 0x04};
+    writeChr(CHR_ENGINE, sky, 2);
+#endif
+    delay(150);
+    uint8_t ign[19] = {2, 0, 0, 6, 0xAA, 0xBB, 0xCC, 0x11, 0x22, 0x33, 1, 0, 4, 't', 'e', 's', 't', 0, 0};
+    writeChr(CHR_IGNORE, ign, 17);
+    Serial.println("[DRV] configured: offline ON + detector BLE + watchlist + skyspy + ignore list + ENABLE");
 }
 
 void setup() {

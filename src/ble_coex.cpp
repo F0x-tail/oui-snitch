@@ -8,10 +8,23 @@ static NimBLEAdvertisedDeviceCallbacks* g_cbs[BLE_COEX_MAX];
 static volatile int g_count = 0;
 static bool g_wantActive = false;
 static portMUX_TYPE g_mux = portMUX_INITIALIZER_UNLOCKED;
+volatile uint32_t g_bleRawSeen = 0;
+#ifdef OUISPY_STATUS_LOG
+static uint8_t g_uniq[64][6];
+volatile uint32_t g_bleUniq = 0;
+#endif
 
 class BleCoexDispatch : public NimBLEAdvertisedDeviceCallbacks {
   public:
     void onResult(NimBLEAdvertisedDevice* dev) override {
+        g_bleRawSeen++;
+#ifdef OUISPY_STATUS_LOG
+        const uint8_t* a = dev->getAddress().getBase()->val;
+        bool seen = false;
+        for (uint32_t i = 0; i < g_bleUniq && i < 64; i++)
+            if (memcmp(g_uniq[i], a, 6) == 0) { seen = true; break; }
+        if (!seen && g_bleUniq < 64) memcpy(g_uniq[g_bleUniq++], a, 6);
+#endif
         NimBLEAdvertisedDeviceCallbacks* local[BLE_COEX_MAX];
         portENTER_CRITICAL(&g_mux);
         int n = g_count;
@@ -56,9 +69,7 @@ void bleCoexPauseForMesh(void) {
 
 void bleCoexEnsureScanning(void) {
     if (g_count == 0) return;
-#if CONFIG_IDF_TARGET_ESP32
     if (meshIsEnabled() && meshInMeshWindow()) return;
-#endif
     NimBLEScan* s = NimBLEDevice::getScan();
     if (s->isScanning()) return;
     s->setActiveScan(g_wantActive);

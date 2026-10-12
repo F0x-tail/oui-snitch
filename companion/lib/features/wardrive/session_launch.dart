@@ -80,7 +80,7 @@ class SessionBar extends ConsumerWidget {
                 ),
             ],
           ),
-          if (!app.isManagerConnected && !wd.isActive)
+          if (!wd.isActive)
             Row(
               children: [
                 for (final r in WardriveRadio.values)
@@ -145,8 +145,17 @@ class SessionBar extends ConsumerWidget {
               ),
               if (!wd.isActive)
                 FilledButton.icon(
+                  style: FilledButton.styleFrom(
+                    backgroundColor: Engine.wardrive.color,
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                    minimumSize: Size.zero,
+                    tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                    textStyle: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700, letterSpacing: 1),
+                  ),
                   onPressed: busy ? null : () => startWardriveSession(context, ref),
-                  icon: const Icon(Icons.play_arrow),
+                  icon: const Icon(Icons.play_arrow, size: 18),
                   label: const Text('START'),
                 )
               else ...[

@@ -31,6 +31,7 @@ void meshAddFleetMac(const uint8_t* mac);
 bool meshIsFleetMac(const uint8_t* mac);
 extern volatile uint32_t g_meshCmdRx;
 extern volatile uint32_t g_meshRxWin;
+extern volatile uint32_t g_meshRawRx;
 extern volatile bool g_meshManagerActive;
 void meshResetTxDedup(void);
 void meshBroadcastIgnoreList(const uint8_t* data, size_t len);

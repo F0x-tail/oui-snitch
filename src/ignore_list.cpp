@@ -15,6 +15,9 @@ static IgnoreSlot g_entries[IGNORE_MAX_ENTRIES];
 static uint8_t g_count = 0;
 static uint32_t g_version = 0;
 static portMUX_TYPE g_mux = portMUX_INITIALIZER_UNLOCKED;
+static IgnoreSlot g_tmp[IGNORE_MAX_ENTRIES];
+static StaticSemaphore_t g_tmpLockBuf;
+static SemaphoreHandle_t g_tmpLock = xSemaphoreCreateMutexStatic(&g_tmpLockBuf);
 
 void ignoreListInit(void) {
     Preferences p;
@@ -37,7 +40,8 @@ void ignoreListSet(const uint8_t* buf, size_t len) {
         Serial.println("[IGNORE] list cleared");
         return;
     }
-    IgnoreSlot tmp[IGNORE_MAX_ENTRIES];
+    xSemaphoreTake(g_tmpLock, portMAX_DELAY);
+    IgnoreSlot* tmp = g_tmp;
     uint8_t cnt = 0;
     size_t i = 0;
     uint8_t declared = buf[i++];
@@ -63,6 +67,7 @@ void ignoreListSet(const uint8_t* buf, size_t len) {
         g_version++;
     }
     portEXIT_CRITICAL(&g_mux);
+    xSemaphoreGive(g_tmpLock);
     if (same) return;
     Serial.printf("[IGNORE] list set: %u entries (declared %u, v%lu)\n",
                   cnt, declared, (unsigned long)g_version);

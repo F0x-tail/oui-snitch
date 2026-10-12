@@ -109,6 +109,7 @@ static void cmdHealthMiss(const char* id) {
 
 volatile uint32_t g_meshCmdRx = 0;
 volatile uint32_t g_meshRxWin = 0;
+volatile uint32_t g_meshRawRx = 0;
 volatile bool g_meshManagerActive = true;
 static TaskHandle_t      retryTaskHandle = NULL;
 static uint8_t           seqCounter = 0;
@@ -1200,6 +1201,7 @@ static void onEspNowRecv(const esp_now_recv_info_t* info, const uint8_t* data, i
 #else
 static void onEspNowRecv(const uint8_t* macAddr, const uint8_t* data, int len) {
 #endif
+    g_meshRawRx++;
     if (!meshCurrentConfig.enabled) return;
     if (len <= 0 || len > MESH_TX_MAX_LEN) return;
 #ifdef OUISPY_ROLE_MANAGER
@@ -1237,6 +1239,8 @@ static void onEspNowSend(const uint8_t* macAddr, esp_now_send_status_t status) {
 #define MESH_RID_WINDOW_MS 250
 #define MESH_RID_SCAN_MS 500
 #define MESH_DISCOVER_MS 30000
+#define MESH_STANDALONE_PROBE_MS 30000
+#define MESH_PROBE_WINDOW_MS 1600
 static volatile bool g_meshWindow = false;
 static volatile bool g_ridWindow = false;
 static volatile uint32_t g_lastHomeMs = 0;
@@ -1338,6 +1342,7 @@ void meshDebugForceManager(void) {
 static void meshSchedTaskFn(void* arg) {
     (void)arg;
     uint32_t discoverStartMs = millis();
+    uint32_t lastProbeMs = millis();
     uint8_t lastMask = engineGetActiveMask();
     bool wasJoined = false;
     for (;;) {
@@ -1348,10 +1353,16 @@ static void meshSchedTaskFn(void* arg) {
         bool joinedNow = meshManagerJoined();
         if (wasJoined && !joinedNow) discoverStartMs = millis();
         wasJoined = joinedNow;
+        bool probe = false;
         if (meshIsStandalone() &&
             (uint32_t)(millis() - discoverStartMs) >= MESH_DISCOVER_MS) {
-            vTaskDelay(pdMS_TO_TICKS(200));
-            continue;
+            if (!meshCurrentConfig.enabled || !meshNodeHopsWifi() ||
+                (uint32_t)(millis() - lastProbeMs) < MESH_STANDALONE_PROBE_MS) {
+                vTaskDelay(pdMS_TO_TICKS(200));
+                continue;
+            }
+            lastProbeMs = millis();
+            probe = true;
         }
         bool ridScan = false;
         if (meshSkyspyOwnsChannel() && txMutex &&
@@ -1375,21 +1386,19 @@ static void meshSchedTaskFn(void* arg) {
         uint32_t gap = (uint32_t)(millis() - g_lastHomeMs);
         if (sliceOn && gap < MESH_HOME_MAX_GAP_MS &&
             meshMgrSilenceMs() < MESH_MGR_SILENCE_FORCE_MS) continue;
-        if (reacquire && gap < MESH_REACQUIRE_MS) continue;
+        if (reacquire && !probe && gap < MESH_REACQUIRE_MS) continue;
         g_meshWindow = true;
         g_meshRxWin++;
         if (txMutex && xSemaphoreTake(txMutex, pdMS_TO_TICKS(50)) == pdTRUE) {
             esp_wifi_set_channel(MESH_RENDEZVOUS_CH, WIFI_SECOND_CHAN_NONE);
             xSemaphoreGive(txMutex);
         }
-#if CONFIG_IDF_TARGET_ESP32
         bleCoexPauseForMesh();
-#endif
         if (meshTxTaskHandle) xTaskNotifyGive(meshTxTaskHandle);
         uint32_t t0 = millis();
         for (;;) {
             uint32_t el = millis() - t0;
-            if (el >= MESH_RX_WINDOW_MS) break;
+            if (el >= (probe ? MESH_PROBE_WINDOW_MS : MESH_RX_WINDOW_MS)) break;
             if (el >= MESH_RX_MIN_MS && meshTxQueue &&
                 uxQueueMessagesWaiting(meshTxQueue) == 0 &&
                 meshMgrSilenceMs() < MESH_MGR_SILENCE_FORCE_MS) break;

@@ -144,6 +144,7 @@ class _ScanScreenState extends ConsumerState<ScanScreen> {
       return;
     }
 
+    await FlutterBluePlus.isScanning.where((s) => !s).first;
     if (mounted) setState(() => _scanning = false);
   }
 
@@ -273,7 +274,9 @@ class _ScanScreenState extends ConsumerState<ScanScreen> {
         title: const Text('CONNECT'),
         leading: IconButton(icon: const Icon(Icons.arrow_back), onPressed: () => context.go('/home')),
       ),
-      body: Column(
+      body: SizedBox(
+        width: double.infinity,
+        child: Column(
         children: [
           if (_error != null)
             Padding(
@@ -440,6 +443,7 @@ class _ScanScreenState extends ConsumerState<ScanScreen> {
             ),
           ],
         ],
+      ),
       ),
     );
   }

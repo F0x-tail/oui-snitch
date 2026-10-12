@@ -721,7 +721,6 @@
         baudrate: 115200,
         flashSize: '4MB', flashMode: 'keep', flashFreq: 'keep',
         bootloaderOffset: 0x1000,
-        rtsPulseReset: true,
       },
       'node-stickc_plus': {
         role: 'node', name: 'M5StickC PLUS', chip: 'ESP32', bands: '2.4GHz', flash: '4MB',
@@ -731,7 +730,6 @@
         baudrate: 115200,
         flashSize: '4MB', flashMode: 'keep', flashFreq: 'keep',
         bootloaderOffset: 0x1000,
-        rtsPulseReset: true,
       },
       'node-stickc_plus2': {
         role: 'node', name: 'M5StickC PLUS2', chip: 'ESP32', bands: '2.4GHz', flash: '8MB',
@@ -741,7 +739,6 @@
         baudrate: 230400,
         flashSize: '8MB', flashMode: 'keep', flashFreq: 'keep',
         bootloaderOffset: 0x1000,
-        rtsPulseReset: true,
       },
       'mgr-wroom': {
         role: 'mgr', name: 'ESP32 WROOM', chip: 'ESP32', flash: '4MB',
@@ -1008,6 +1005,16 @@
           baudrate: TARGETS[currentTarget].baudrate || 460800,
           romBaudrate: 115200,
           serialOptions: { bufferSize: 16384 },
+          resetConstructors: {
+            hardReset: (t, usingUsbOtg) => ({
+              async reset() {
+                await t.setRTS(true);
+                await new Promise(r => setTimeout(r, usingUsbOtg ? 200 : 100));
+                await t.setRTS(false);
+                if (usingUsbOtg) await new Promise(r => setTimeout(r, 200));
+              }
+            })
+          },
           terminal: {
             clean() {},
             writeLine(data) { log(data.trim()); },
@@ -1086,15 +1093,8 @@
         });
 
         try {
-          if (tgt.rtsPulseReset) {
-            await transport.setDTR(false);
-            await transport.setRTS(true);
-            await new Promise(r => setTimeout(r, 100));
-            await transport.setRTS(false);
-            log('Reset: RTS pulse (EN low 100ms) — board rebooting into new firmware.');
-          } else {
-            await esploader.after('hard_reset');
-          }
+          await esploader.after('hard_reset', port.getInfo().usbVendorId === 0x303a);
+          log('Reset: board rebooting into new firmware.');
         } catch (e) {
           log('Reset failed (' + e.message + ') — unplug and replug to boot.');
         }
@@ -1102,9 +1102,8 @@
         setProgress(100, 'COMPLETE');
         progressFill.classList.add('complete');
         setStatus('FLASH COMPLETE', 'done');
-        log('Flash complete — unplug and replug the board for the update to take effect.', 'success');
+        log('Flash complete.', 'success');
 
-        await esploader.after("hard_reset");
         await transport.disconnect();
 
         flashBtn.textContent = 'DONE';
