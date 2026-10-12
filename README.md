@@ -50,7 +50,7 @@ On Android set Location to **Allow all the time**, or scanning stops when the sc
 | M5StickC PLUS2 | 2.4 GHz | LCD, 3 buttons | – | built in | **no** | `node-stickc_plus2` |
 | M5StickC (original) | 2.4 GHz | LCD, 3 buttons | – | none | **no** | `node-stickc` |
 
-Manager boards: XIAO ESP32-S3 (`mgr-xiao_s3`), ESP32-S3 DevKitC (`mgr-s3_devkitc`), XIAO ESP32-C3 (`mgr-xiao_c3`), ESP32 WROOM (`mgr-wroom`). A manager does no scanning.
+Manager boards: XIAO ESP32-S3 (`mgr-xiao_s3`), ESP32-S3 DevKitC (`mgr-s3_devkitc`), XIAO ESP32-C5 (`mgr-xiao_c5`), XIAO ESP32-C3 (`mgr-xiao_c3`), ESP32 WROOM (`mgr-wroom`). A manager does no scanning.
 
 The original M5StickC and the PLUS2 are built without mesh to fit their RAM. They connect straight to the phone or run standalone. On boards with no buzzer the app hides the buzzer settings.
 
@@ -59,9 +59,9 @@ The original M5StickC and the PLUS2 are built without mesh to fit their RAM. The
 | Engine | Finds |
 |---|---|
 | **Detector** | Your watchlist (MAC, OUI prefix, name, 16-bit BLE service UUID), plus built-in signatures, all off by default: Find My / AirTag following you, Flipper Zero, Wi-Fi deauth floods, directed probes, Pwnagotchi, Meta Ray-Ban / Oakley glasses, Axon / law-enforcement gear |
-| **Flock BLE / Flock WiFi** | Flock Safety ALPR cameras and Raven gunshot sensors |
+| **Flock BLE / Flock WiFi** | Flock Safety ALPR cameras and Raven gunshot sensors. Optional OUI-only Wi-Fi hits |
 | **Sky Spy** | Drones broadcasting FAA Remote ID over BLE and Wi-Fi: ID, position, altitude, speed, pilot position |
-| **Foxhunter** | One target device. Beep rate (or the RSSI meter on boards without a buzzer) rises as you get closer. Law-enforcement devices cannot be targeted |
+| **Foxhunter** | One target device. Beep rate (or the RSSI meter on boards without a buzzer) rises as you get closer |
 | **UniPwn** | Unitree robots by BLE name (`Go2_`, `G1_`, `H1_`, …) |
 | **Wardrive** | Every Wi-Fi AP and BLE device, GPS-stamped, WiGLE CSV format. 2.4 GHz channels 1–14 by default; C5 boards add 5 GHz including DFS |
 | **PCAP** | Raw 802.11 or BLE advertising frames to a Wireshark `.pcap` |
@@ -89,6 +89,7 @@ Bottom tabs: **HOME · DETECTIONS · MAP · SETTINGS**.
 - **Phone scan**: off by default. Turn on from the DEVICES menu (SCAN WITH THIS PHONE) to have the phone's own Bluetooth listen alongside the board, 8 s every 20 s. The ESP32 / PHONE filter shows which radio saw each device.
 - **Notifications**: title is the matched target (watchlist name, signature, probed SSID); body is device, MAC prefix, RSSI, method.
 - **Watchlist**: import and export as CSV or JSON in SETTINGS → RULES.
+- **Alert sounds**: choose a built-in melody or compose your own for each alert type, and preview it on the board.
 - **Map**: choose targets (WiGLE / Flock / Drone / Detector) and radio (Wi-Fi / BLE / both), then START. Sessions save as WiGLE CSV, upload to [WiGLE](https://wigle.net) and [WDGWars](https://wdgwars.pl), and replay on the map.
 - **Map layers**: *MAPPED ALPRs* scores each Flock hit against cameras already on OpenStreetMap (`ON MAP` within 75 m, `UNMAPPED` beyond 250 m). Turning it on sends the visible map area to `overpass-api.de` (fallback `overpass.private.coffee`). *WDG TERRITORY* shows WDGWars territory for a linked account.
 - **Geofences**: inside a zone the app drops detections from the feed, log and notifications, and the board stops beeping. Radios keep scanning; a T-Dongle still writes to its SD card.
@@ -144,7 +145,7 @@ Foxhunt picks, in order: the target set in the app, else the last Detector / Flo
 - Nodes join on their own within about 10 s. Single hop: every node must reach the manager directly, about 200 m line of sight.
 - Default is plaintext broadcast. SETTINGS → NODE → MESH can switch to AES-256-GCM with a shared key.
 - A node silent for 45 s drops off and rejoins when back in range.
-- Buzzer, LED, alert, ignore-list, wardrive-radio and Wi-Fi-band settings set on the manager are pushed to every node.
+- Buzzer, LED, alert, alert-sound, ignore-list, wardrive-radio and Wi-Fi-band settings set on the manager are pushed to every node.
 - Any mix of node boards works under one manager (e.g. T-Dongle-S3 + T-Dongle-C5 + M5StickC PLUS + XIAO).
 - Each node reports its board to the manager; the app shows it on every node row.
 - Fleet update (SETTINGS → NODE → FIRMWARE) updates every node over Wi-Fi, and each node downloads the image for its own board. Nodes on firmware older than this release do not report a board and take the image for the board picked in the app.
@@ -169,6 +170,7 @@ pio run -e v3_app_controlled_stickc_plus     # node, M5StickC PLUS (also _stickc
 ./build_c5.sh                                # node, XIAO ESP32-C5
 OUISPY_C5_ENV=v3_app_controlled_tdongle_c5 ./build_c5.sh   # node, T-Dongle-C5
 pio run -e v3_node_manager_s3                # manager, XIAO ESP32-S3 (also _s3_devkitc, _xiao_c3, _wroom)
+OUISPY_C5_ENV=v3_node_manager_c5 ./build_c5.sh             # manager, XIAO ESP32-C5
 ```
 
 C5 builds use the pioarduino platform in a separate core dir (`~/.platformio-c5`) via `build_c5.sh`.
