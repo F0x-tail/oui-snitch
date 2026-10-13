@@ -130,6 +130,7 @@ class _ScanScreenState extends ConsumerState<ScanScreen> {
 
     try {
       await FlutterBluePlus.startScan(
+        withServices: [GattUuids.service],
         timeout: const Duration(seconds: 15),
         androidUsesFineLocation: false,
       );

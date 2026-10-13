@@ -15,9 +15,10 @@ void main() {
       {'esp32'},
     );
     expect(ClassAlert.of(d), ClassAlert.cameras);
-    final (title, body) = NotificationService.classNotificationText(d, ClassAlert.cameras);
-    expect(title, 'Flock Safety');
-    expect(body, 'Surveillance cameras · matched Flock Safety\nB4:1E:52:11:22:33 · WIFI · -61dBm · via esp32');
+    final (title, subtitle, body) = NotificationService.classNotificationText(d, ClassAlert.cameras);
+    expect(title, 'Surveillance camera: Flock Safety');
+    expect(subtitle, 'Signature match');
+    expect(body, '-61 dBm · Wi-Fi · B4:1E:52:11:22:33');
   });
 
   test('vendor classification (factory MAC, Axon) -> law-enforcement alert', () {
@@ -28,7 +29,7 @@ void main() {
       vendor: 'Axon Enterprise, Inc.',
     );
     expect(ClassAlert.of(d), ClassAlert.lawEnforcement);
-    expect(NotificationService.classNotificationText(d, ClassAlert.lawEnforcement).$1, 'an Axon body camera or device');
+    expect(NotificationService.classNotificationText(d, ClassAlert.lawEnforcement).$1, 'Public safety / fleet: an Axon body camera or device');
   });
 
   test('low-confidence vendor guess never alerts; unrelated device never alerts', () {

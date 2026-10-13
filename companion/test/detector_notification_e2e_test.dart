@@ -14,9 +14,10 @@ void main() {
       nodeId: 'n',
       appTimestamp: DateTime(2026),
     );
-    final (title, body, channel) = NotificationService.detectionNotificationText(det);
+    final (title, subtitle, body, channel) = NotificationService.detectionNotificationText(det)!;
     expect(title, 'Nokia router');
-    expect(body, 'Detector · WATCHLIST\n40:48:6E:8B:D3:1A · ch6 · -87dBm');
+    expect(subtitle, 'Detector · WATCHLIST');
+    expect(body, '-87 dBm · ch 6 · 40:48:6E:8B:D3:1A');
     expect(channel, NotifChannel.detector);
   });
 
@@ -27,9 +28,10 @@ void main() {
       nodeId: 'n',
       appTimestamp: DateTime(2026),
     );
-    expect(NotificationService.detectionNotificationText(det).$1, 'Probe request for "Villasenor"');
-    expect(NotificationService.detectionNotificationText(det).$2, contains('PROBE'));
-    expect(NotificationService.detectionNotificationText(det).$2, 'Detector · PROBE\n5C:FC:E1:00:6A:24 · ch6 · -89dBm');
+    final (title, subtitle, body, _) = NotificationService.detectionNotificationText(det)!;
+    expect(title, 'Probe request for "Villasenor"');
+    expect(subtitle, 'Detector · PROBE');
+    expect(body, '-89 dBm · ch 6 · 5C:FC:E1:00:6A:24');
   });
 
   test('pwnagotchi hit carries hit, class, engine and device data', () {
@@ -47,9 +49,10 @@ void main() {
       deviceName: 'pwny',
       sourceNodeId: 'node2',
     );
-    final (title, body, channel) = NotificationService.detectionNotificationText(det);
+    final (title, subtitle, body, channel) = NotificationService.detectionNotificationText(det)!;
     expect(title, 'PWNAGOTCHI');
-    expect(body, 'Detector · PWNAGOTCHI\npwny · DE:AD:BE:EF:00:01 · ch6 · -61dBm · via node2');
+    expect(subtitle, 'Detector · PWNAGOTCHI');
+    expect(body, '-61 dBm · ch 6 · pwny · DE:AD:BE:EF:00:01 · node node2');
     expect(channel, NotifChannel.detector);
   });
 }

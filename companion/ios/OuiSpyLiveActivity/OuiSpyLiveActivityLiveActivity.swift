@@ -14,7 +14,10 @@ import WidgetKit
 struct OuiSpyLiveActivityLiveActivity: Widget {
     var body: some WidgetConfiguration {
         ActivityConfiguration(for: OuiSpyLiveActivityAttributes.self) { context in
-            LockScreenView(state: context.state)
+            VStack(alignment: .leading, spacing: 8) {
+                LockScreenView(state: context.state)
+                AlertRow(state: context.state)
+            }
                 .padding(12)
                 .activityBackgroundTint(Color(red: 0.031, green: 0.035, blue: 0.055))
                 .activitySystemActionForegroundColor(.white)
@@ -30,7 +33,10 @@ struct OuiSpyLiveActivityLiveActivity: Widget {
                     ExpandedCenter(state: context.state)
                 }
                 DynamicIslandExpandedRegion(.bottom) {
-                    ExpandedBottom(state: context.state)
+                    VStack(alignment: .leading, spacing: 6) {
+                        ExpandedBottom(state: context.state)
+                        AlertRow(state: context.state)
+                    }
                 }
             } compactLeading: {
                 CompactLeading(state: context.state)
@@ -230,6 +236,44 @@ private struct ExpandedBottom: View {
                 Text(state.exploitStatus)
                     .font(.system(size: 10, weight: .bold, design: .monospaced))
                     .foregroundColor(engineColor(.uniPwn))
+            }
+        }
+    }
+}
+
+private struct AlertRow: View {
+    let state: OuiSpyLiveActivityAttributes.ContentState
+
+    var body: some View {
+        if !state.lastAlert.isEmpty {
+            HStack(alignment: .top, spacing: 8) {
+                Image(systemName: "exclamationmark.triangle.fill")
+                    .font(.system(size: 12, weight: .bold))
+                    .foregroundColor(.orange)
+                VStack(alignment: .leading, spacing: 1) {
+                    HStack(spacing: 6) {
+                        Text(state.lastAlert)
+                            .font(.system(size: 12, weight: .semibold))
+                            .foregroundColor(.white)
+                            .lineLimit(1)
+                            .truncationMode(.tail)
+                        Spacer(minLength: 4)
+                        if state.lastAlertAt > 0 {
+                            Text(Date(timeIntervalSince1970: state.lastAlertAt), style: .relative)
+                                .font(.system(size: 10, weight: .medium, design: .monospaced))
+                                .foregroundColor(.white.opacity(0.5))
+                                .multilineTextAlignment(.trailing)
+                                .frame(maxWidth: 70, alignment: .trailing)
+                        }
+                    }
+                    if !state.lastAlertDetail.isEmpty {
+                        Text(state.lastAlertDetail)
+                            .font(.system(size: 10, weight: .medium, design: .monospaced))
+                            .foregroundColor(.white.opacity(0.65))
+                            .lineLimit(1)
+                            .truncationMode(.tail)
+                    }
+                }
             }
         }
     }

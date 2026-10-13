@@ -39,6 +39,31 @@ class LiveActivityService {
     }
   }
 
+  String _lastAlert = '';
+  String _lastAlertDetail = '';
+  double _lastAlertAt = 0;
+  Map<String, Object?>? _lastPayload;
+
+  Future<void> showAlert(String title, String detail) async {
+    _lastAlert = title;
+    _lastAlertDetail = detail;
+    _lastAlertAt = DateTime.now().millisecondsSinceEpoch / 1000.0;
+    final id = _activityId;
+    final last = _lastPayload;
+    if (!_supported || id == null || last == null) return;
+    final upd = Map<String, Object?>.from(last)
+      ..['lastAlert'] = _lastAlert
+      ..['lastAlertDetail'] = _lastAlertDetail
+      ..['lastAlertAt'] = _lastAlertAt
+      ..['activityId'] = id;
+    _lastPayload = upd;
+    try {
+      await _channel.invokeMethod('updateActivity', upd);
+    } catch (e) {
+      DebugLog.log('LIVE_ACTIVITY: alert update error: $e');
+    }
+  }
+
   Future<void> update({
     required String primaryMode,
     String activeLabel = '',
@@ -61,6 +86,9 @@ class LiveActivityService {
     if (!_supported) return;
 
     final payload = <String, Object?>{
+      'lastAlert': _lastAlert,
+      'lastAlertDetail': _lastAlertDetail,
+      'lastAlertAt': _lastAlertAt,
       'mode': primaryMode,
       'activeLabel': activeLabel,
       'uniqueCount': uniqueCount,
@@ -79,6 +107,7 @@ class LiveActivityService {
       'isImperial': isImperial,
     };
 
+    _lastPayload = payload;
     try {
       if (_activityId != null) {
         payload['activityId'] = _activityId;
@@ -135,6 +164,10 @@ class LiveActivityService {
     } finally {
       _activityId = null;
       _mode = null;
+      _lastPayload = null;
+      _lastAlert = '';
+      _lastAlertDetail = '';
+      _lastAlertAt = 0;
     }
   }
 

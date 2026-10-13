@@ -184,6 +184,22 @@ class _CollectionStatsView extends ConsumerWidget {
         .take(8)
         .toList();
 
+    final reg = ref.watch(deviceRegistryProvider);
+    final byClass = <String, int>{};
+    final bySig = <String, int>{};
+    var classified = 0;
+    for (final d in reg.devices) {
+      final c = d.primaryClass;
+      if (c == null) continue;
+      classified++;
+      byClass[c.label] = (byClass[c.label] ?? 0) + 1;
+      for (final n in d.signatureNames.toSet()) {
+        bySig[n] = (bySig[n] ?? 0) + 1;
+      }
+    }
+    final classCounts = (byClass.entries.toList()..sort((a, b) => b.value.compareTo(a.value)));
+    final sigCounts = (bySig.entries.toList()..sort((a, b) => b.value.compareTo(a.value))).take(10).toList();
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -264,6 +280,41 @@ class _CollectionStatsView extends ConsumerWidget {
                     value: e.value,
                     max: maxV,
                     color: AppTheme.flockBle,
+                    labelAbove: true,
+                  ),
+                ));
+          }(),
+          const SizedBox(height: 18),
+        ],
+
+        if (classCounts.isNotEmpty) ...[
+          _StatBlockLabel('CLASSIFIED DEVICES · ${_fmt(classified)} of ${_fmt(reg.count)} seen', Icons.category),
+          const SizedBox(height: 8),
+          ...() {
+            final maxV = classCounts.first.value;
+            return classCounts.map((e) => Padding(
+                  padding: const EdgeInsets.only(bottom: 6),
+                  child: _BarRow(
+                    label: e.key,
+                    value: e.value,
+                    max: maxV,
+                    color: _heat(e.value, maxV),
+                    labelAbove: true,
+                  ),
+                ));
+          }(),
+          const SizedBox(height: 10),
+          _StatBlockLabel('TOP SIGNATURES', Icons.fingerprint),
+          const SizedBox(height: 8),
+          ...() {
+            final maxV = sigCounts.first.value;
+            return sigCounts.map((e) => Padding(
+                  padding: const EdgeInsets.only(bottom: 6),
+                  child: _BarRow(
+                    label: e.key,
+                    value: e.value,
+                    max: maxV,
+                    color: AppTheme.detector,
                     labelAbove: true,
                   ),
                 ));

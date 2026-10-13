@@ -173,6 +173,7 @@ class PhoneBleSource extends ObservationSource {
   }
 
   void _onResults(List<ScanResult> results) {
+    if (!_active) return;
     final now = DateTime.now().millisecondsSinceEpoch;
     final fix = here?.call();
     for (final r in results) {
@@ -184,7 +185,7 @@ class PhoneBleSource extends ObservationSource {
         key: 'BLE:${isMac ? mac : id}',
         kind: RadioKind.ble,
         mac: mac,
-        name: adv.advName,
+        name: adv.advName.isNotEmpty ? adv.advName : r.device.platformName,
         rssi: r.rssi,
         firstSeenMs: now,
         lastSeenMs: now,

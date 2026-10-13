@@ -415,7 +415,7 @@ class BleManager {
       await FlutterBluePlus.turnOn();
     }
 
-    await FlutterBluePlus.startScan(timeout: timeout);
+    await FlutterBluePlus.startScan(withServices: [GattUuids.service], timeout: timeout);
   }
 
   /// Stream of scan results (list updated each scan cycle).

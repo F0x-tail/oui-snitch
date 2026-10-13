@@ -7,6 +7,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:oui_spy/app.dart';
 import 'package:oui_spy/core/app_state.dart';
 import 'package:oui_spy/core/ble/ble_manager.dart';
+import 'package:oui_spy/core/ble/gatt_uuids.dart';
 import 'package:oui_spy/core/classify/device_registry.dart';
 import 'package:oui_spy/core/melody_state.dart';
 import 'package:oui_spy/core/wardrive_state.dart';
@@ -130,23 +131,12 @@ Future<void> _autoConnect(ProviderContainer container) async {
     }
 
     final lastPrimaryIsManager = prefs.getBool('lastPrimaryIsManager') ?? false;
-    if (lastPrimaryIsManager && lastPrimaryId != null && lastPrimaryId.isNotEmpty) {
-      DebugLog.log('AUTO: fast reconnect by id $lastPrimaryId (manager, no scan)');
-      final ble = container.read(bleManagerProvider);
-      final ok = await ble.connectByIdAndReady(lastPrimaryId,
-          timeout: const Duration(seconds: 12));
-      if (ok) {
-        ble.markAsPrimary();
-        await _onConnected(container, lastPrimaryId);
-        return;
-      }
-      DebugLog.log('AUTO: fast reconnect failed — falling back to scan');
-    }
 
-    DebugLog.log('AUTO: scanning (no filter, 8s)...');
+    DebugLog.log('AUTO: scanning (OUI-SPY service filter, 8s)...');
 
     final completer = Completer<BluetoothDevice?>();
     BluetoothDevice? preferredDevice;
+    Timer? fallbackGrace;
 
     final sub = FlutterBluePlus.onScanResults.listen((results) {
       for (final r in results) {
@@ -182,22 +172,44 @@ Future<void> _autoConnect(ProviderContainer container) async {
             FlutterBluePlus.stopScan();
             if (!completer.isCompleted) completer.complete(r.device);
             return;
-          } else {
-            preferredDevice ??= r.device;
+          } else if (preferredDevice == null) {
+            preferredDevice = r.device;
             DebugLog.log('AUTO: node MATCH (fallback): $name/$advName');
+            fallbackGrace = Timer(const Duration(milliseconds: 1500), () {
+              if (!completer.isCompleted) completer.complete(preferredDevice);
+            });
           }
         }
       }
     });
 
-    FlutterBluePlus.startScan(timeout: const Duration(seconds: 8));
+    FlutterBluePlus.startScan(
+        withServices: [GattUuids.service],
+        timeout: const Duration(seconds: 8));
 
     final found = await completer.future
         .timeout(const Duration(seconds: 10),
             onTimeout: () => preferredDevice ?? connNode);
 
+    fallbackGrace?.cancel();
     await sub.cancel();
     await FlutterBluePlus.stopScan();
+
+    if (found == null &&
+        lastPrimaryIsManager &&
+        lastPrimaryId != null &&
+        lastPrimaryId.isNotEmpty) {
+      DebugLog.log('AUTO: nothing advertising — reconnect by id $lastPrimaryId (manager)');
+      final ble = container.read(bleManagerProvider);
+      final ok = await ble.connectByIdAndReady(lastPrimaryId,
+          timeout: const Duration(seconds: 12));
+      if (ok) {
+        ble.markAsPrimary();
+        await _onConnected(container, lastPrimaryId);
+        return;
+      }
+      DebugLog.log('AUTO: reconnect by id failed');
+    }
 
     if (found != null) {
       DebugLog.log('AUTO: connecting to ${found.platformName}...');

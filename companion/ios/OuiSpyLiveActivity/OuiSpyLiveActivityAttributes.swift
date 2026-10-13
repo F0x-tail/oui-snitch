@@ -26,6 +26,9 @@ struct OuiSpyLiveActivityAttributes: ActivityAttributes {
         var exploitStatus: String
         var isImperial: Bool = false
         var activeLabel: String = ""
+        var lastAlert: String = ""
+        var lastAlertDetail: String = ""
+        var lastAlertAt: Double = 0
 
         /// Title text: prefer the app-supplied multi-engine label (e.g.
         /// "WiGLE+Flock+Drone") so every active radio path shows; fall back to
@@ -74,7 +77,10 @@ struct OuiSpyLiveActivityAttributes: ActivityAttributes {
             robotType: String,
             exploitStatus: String,
             isImperial: Bool = false,
-            activeLabel: String = ""
+            activeLabel: String = "",
+            lastAlert: String = "",
+            lastAlertDetail: String = "",
+            lastAlertAt: Double = 0
         ) {
             self.mode = mode
             self.uniqueCount = uniqueCount
@@ -92,6 +98,9 @@ struct OuiSpyLiveActivityAttributes: ActivityAttributes {
             self.exploitStatus = exploitStatus
             self.isImperial = isImperial
             self.activeLabel = activeLabel
+            self.lastAlert = lastAlert
+            self.lastAlertDetail = lastAlertDetail
+            self.lastAlertAt = lastAlertAt
         }
 
         // Backward-compatible decoder: tolerate ContentState payloads written
@@ -99,7 +108,8 @@ struct OuiSpyLiveActivityAttributes: ActivityAttributes {
         private enum CodingKeys: String, CodingKey {
             case mode, uniqueCount, wifiCount, bleCount, flockCount, droneCount,
                  detectorHits, distanceKm, speedKmh, targetMac, rssi, intervalMs,
-                 robotType, exploitStatus, isImperial, activeLabel
+                 robotType, exploitStatus, isImperial, activeLabel,
+                 lastAlert, lastAlertDetail, lastAlertAt
         }
 
         init(from decoder: Decoder) throws {
@@ -120,6 +130,9 @@ struct OuiSpyLiveActivityAttributes: ActivityAttributes {
             exploitStatus = try c.decode(String.self, forKey: .exploitStatus)
             isImperial = try c.decodeIfPresent(Bool.self, forKey: .isImperial) ?? false
             activeLabel = try c.decodeIfPresent(String.self, forKey: .activeLabel) ?? ""
+            lastAlert = try c.decodeIfPresent(String.self, forKey: .lastAlert) ?? ""
+            lastAlertDetail = try c.decodeIfPresent(String.self, forKey: .lastAlertDetail) ?? ""
+            lastAlertAt = try c.decodeIfPresent(Double.self, forKey: .lastAlertAt) ?? 0
         }
     }
 

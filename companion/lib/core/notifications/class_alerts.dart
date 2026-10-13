@@ -3,14 +3,15 @@ import 'package:oui_spy/core/classify/device_registry.dart';
 import 'package:oui_spy/core/classify/signature_engine.dart';
 
 enum ClassAlert {
-  cameras('Surveillance cameras', {SignatureClass.surveillance, SignatureClass.camera}, {'camera'}),
-  lawEnforcement('Law enforcement / body cams', {SignatureClass.lawEnforcement}, {'radio', 'law-enforcement', 'bodyworn'}),
-  drones('Drones', {SignatureClass.drone}, {'drone'}),
-  glasses('Smart glasses', {SignatureClass.glasses}, {'glasses'}),
-  trackers('Tracker tags', {SignatureClass.finder}, {'tag'});
+  cameras('Surveillance cameras', 'Surveillance camera', {SignatureClass.surveillance, SignatureClass.camera}, {'camera'}),
+  lawEnforcement('Public safety & fleet', 'Public safety / fleet', {SignatureClass.lawEnforcement}, {'radio', 'law-enforcement', 'bodyworn'}),
+  drones('Drones', 'Drone', {SignatureClass.drone}, {'drone'}),
+  glasses('Smart glasses', 'Smart glasses', {SignatureClass.glasses}, {'glasses'}),
+  trackers('Tracker tags', 'Tracker tag', {SignatureClass.finder}, {'tag'});
 
-  const ClassAlert(this.label, this.kinds, this.buckets);
+  const ClassAlert(this.label, this.noun, this.kinds, this.buckets);
   final String label;
+  final String noun;
   final Set<SignatureClass> kinds;
   final Set<String> buckets;
 

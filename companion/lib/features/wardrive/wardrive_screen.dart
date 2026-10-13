@@ -16,6 +16,7 @@ import 'package:oui_spy/core/app_state.dart';
 import 'package:oui_spy/core/gps/gps_provider.dart';
 import 'package:oui_spy/core/models/detection.dart';
 import 'package:oui_spy/core/models/engine.dart';
+import 'package:oui_spy/core/notifications/notification_service.dart';
 import 'package:oui_spy/core/radio_classifier.dart';
 import 'package:oui_spy/core/watchlist_state.dart';
 
@@ -551,6 +552,7 @@ class _WardriveScreenState extends ConsumerState<WardriveScreen> with WidgetsBin
       });
     }
 
+    ref.watch(notificationServiceProvider.select((n) => n.classAlertedMacs.length));
     final detectionLayers = _buildDetectionLayers(wd, wt);
     final tileStyle = wt.mapTileOverride ?? mapStyle;
     final darkBase = tileStyle.isDark;
@@ -1057,7 +1059,8 @@ class _WardriveScreenState extends ConsumerState<WardriveScreen> with WidgetsBin
   _DetectionLayers _buildDetectionLayers(WardriveController wd, WardriveThemeData wt) {
     final recentLen = ref.read(appStateProvider).recentDetections.length;
     final focus = _focusedDetection;
-    final key = '${wd.dedupedDetections.length}|$recentLen|${wd.flockFilter}|'
+    final alerted = ref.read(notificationServiceProvider).classAlertedMacs.length;
+    final key = '$alerted|${wd.dedupedDetections.length}|$recentLen|${wd.flockFilter}|'
         '${wd.detectorFilter}|${_currentZoom.toStringAsFixed(1)}|${wd.sessionId}|'
         '${focus == null ? '' : '${focus.macAddress}|${focus.engine.name}'}';
     if (_cachedLayersKey == key && _cachedLayers != null) return _cachedLayers!;
@@ -1069,6 +1072,8 @@ class _WardriveScreenState extends ConsumerState<WardriveScreen> with WidgetsBin
 
   _DetectionLayers _computeDetectionLayers(WardriveController wd, WardriveThemeData wt) {
     final appState = ref.read(appStateProvider);
+    final alertedMacs = ref.read(notificationServiceProvider).classAlertedMacs;
+    bool isAlerted(Detection d) => alertedMacs.contains(d.macAddress.toUpperCase());
     final source = <Detection>[...wd.dedupedDetections];
     final seenKeys = <String>{
       for (final d in source) '${d.macAddress}|${d.engine.name}',
@@ -1113,7 +1118,7 @@ class _WardriveScreenState extends ConsumerState<WardriveScreen> with WidgetsBin
             (d.engine == Engine.flockBle || d.engine == Engine.flockWifi)) {
           return true;
         }
-        if (wd.detectorFilter && d.engine == Engine.detector) return true;
+        if (wd.detectorFilter && (d.engine == Engine.detector || isAlerted(d))) return true;
         return false;
       }).toList();
     } else {
@@ -1130,7 +1135,7 @@ class _WardriveScreenState extends ConsumerState<WardriveScreen> with WidgetsBin
       final isFlock = d.engine == Engine.flockBle || d.engine == Engine.flockWifi;
       final isDrone = d.engine == Engine.skySpy;
       final isDetector = d.engine == Engine.detector;
-      if (isFlock || isDrone || isDetector) {
+      if (isFlock || isDrone || isDetector || isAlerted(d)) {
         priority.add(d);
       } else {
         clusterable.add(d);
@@ -1391,7 +1396,9 @@ class _WardriveScreenState extends ConsumerState<WardriveScreen> with WidgetsBin
         continue;
       }
 
-      final pinColor = wt.engineColor(d.engine);
+      final pinColor = isAlerted(d) && d.engine != Engine.detector && d.engine != Engine.flockBle && d.engine != Engine.flockWifi
+          ? AppTheme.warning
+          : wt.engineColor(d.engine);
       final box = (fan.length + pinHead + 5) * 2;
       pins.add(Marker(
         point: LatLng(d.latitude!, d.longitude!),
