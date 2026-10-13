@@ -29,7 +29,7 @@ const List<DetectorSignature> detectorSignatures = [
       'WiFi deauth / disassociation attack frames'),
   DetectorSignature(sigProbe, 'Probe requests', 'Probe', Icons.wifi_find,
       'Devices probing for saved WiFi networks'),
-  DetectorSignature(sigPwnagotchi, 'Pwnagotchi', 'Pwnagotchi', Icons.smart_toy,
+  DetectorSignature(sigPwnagotchi, 'Pwnagotchi', 'Pwna-\ngotchi', Icons.smart_toy,
       'Pwnagotchi handshake-harvester beacons'),
   DetectorSignature(sigGlasses, 'Meta glasses', 'Meta glasses', Icons.visibility,
       'Ray-Ban / Oakley Meta smart glasses — Luxottica CID 0x0D53, service 0xFD5F, name or frame OUI (excludes Quest/Portal)'),

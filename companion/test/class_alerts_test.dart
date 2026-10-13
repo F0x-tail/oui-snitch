@@ -17,7 +17,7 @@ void main() {
     expect(ClassAlert.of(d), ClassAlert.cameras);
     final (title, body) = NotificationService.classNotificationText(d, ClassAlert.cameras);
     expect(title, 'Flock Safety');
-    expect(body, 'Surveillance cameras · B4:1E:52 · -61dBm');
+    expect(body, 'Surveillance cameras · matched Flock Safety\nB4:1E:52:11:22:33 · WIFI · -61dBm · via esp32');
   });
 
   test('vendor classification (factory MAC, Axon) -> law-enforcement alert', () {

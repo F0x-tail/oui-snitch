@@ -39,6 +39,7 @@ class Observation {
   final List<GpsSample> gpsTrail;
   final int channel;
   final int? authMode;
+  final bool isAp;
 
   const Observation({
     required this.key,
@@ -59,6 +60,7 @@ class Observation {
     this.gpsTrail = const [],
     this.channel = 0,
     this.authMode,
+    this.isAp = false,
   }) : rssiMin = rssiMin ?? rssi,
        rssiMax = rssiMax ?? rssi;
 
@@ -84,6 +86,7 @@ class Observation {
     gpsTrail: trail,
     channel: channel,
     authMode: authMode,
+    isAp: isAp,
   );
 
   Observation merge(Observation next) => Observation(
@@ -105,6 +108,7 @@ class Observation {
     gpsTrail: next.gpsTrail.isEmpty ? gpsTrail : [...gpsTrail, ...next.gpsTrail],
     channel: next.channel != 0 ? next.channel : channel,
     authMode: next.authMode ?? authMode,
+    isAp: isAp || next.isAp,
   );
 }
 

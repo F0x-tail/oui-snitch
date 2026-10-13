@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter/foundation.dart';
@@ -41,7 +42,20 @@ class NotificationService extends ChangeNotifier {
   bool foxhuntEnabled = false; // foxhunt is high-frequency, off by default
   bool wardriveStatusEnabled = true;
   Set<ClassAlert> classAlerts = ClassAlert.values.toSet();
-  final _classAlerted = <String>{};
+  final _classAlerted = <String, DateTime>{};
+  final _classPending = <String, ClassifiedDevice>{};
+  Timer? _classRetry;
+
+  void _scheduleClassRetry() {
+    if (_classRetry != null || _recentNotifications.isEmpty) return;
+    final wait = _recentNotifications.first.add(const Duration(minutes: 1)).difference(DateTime.now());
+    _classRetry = Timer(wait.isNegative ? Duration.zero : wait + const Duration(milliseconds: 50), () {
+      _classRetry = null;
+      final pending = _classPending.values.toList();
+      _classPending.clear();
+      pending.forEach(onClassified);
+    });
+  }
 
   // Cooldown per MAC to avoid repeat alerts (seconds)
   int cooldownSeconds = 300; // 5 minutes
@@ -191,8 +205,19 @@ class NotificationService extends ChangeNotifier {
     final alert = ClassAlert.of(d);
     if (alert == null || !classAlerts.contains(alert)) return;
     final key = d.obs.mac.isNotEmpty ? d.obs.mac : d.obs.key;
-    if (_classAlerted.contains(key) || _isRateLimited()) return;
-    _classAlerted.add(key);
+    final last = _classAlerted[key];
+    final now = DateTime.now();
+    if (last != null && now.difference(last).inSeconds < cooldownSeconds) return;
+    if (_isRateLimited()) {
+      _classPending[key] = d;
+      _scheduleClassRetry();
+      return;
+    }
+    _classPending.remove(key);
+    _classAlerted[key] = now;
+    if (_classAlerted.length > 1000) {
+      _classAlerted.removeWhere((_, t) => now.difference(t).inSeconds >= cooldownSeconds);
+    }
     _recordRateLimit();
     final (title, body) = classNotificationText(d, alert);
     _fireNotification(
@@ -208,8 +233,19 @@ class NotificationService extends ChangeNotifier {
     final named = d.signatures.where((s) => alert.kinds.contains(s.kind)).map((s) => s.name).firstOrNull;
     final what = named ??
         d.guess.headline.replaceFirst(RegExp(r'^(Most likely|Probably|Could be) '), '');
-    final id = d.obs.mac.isNotEmpty ? _formatMac(d.obs.mac) : (d.obs.name.isNotEmpty ? d.obs.name : 'BLE');
-    return (what, '${alert.label} · $id · ${d.obs.rssi}dBm');
+    final matched = d.signatures.where((s) => alert.kinds.contains(s.kind)).map((s) => s.name).toSet();
+    final trigger = matched.isNotEmpty
+        ? 'matched ${matched.join(', ')}'
+        : (d.vendor != null ? 'vendor ${d.vendor}' : 'classifier guess');
+    final device = [
+      if (d.obs.name.isNotEmpty) d.obs.name,
+      if (d.obs.mac.isNotEmpty) d.obs.mac.toUpperCase(),
+      d.obs.kind.name.toUpperCase(),
+      if (d.obs.channel > 0) 'ch${d.obs.channel}',
+      '${d.obs.rssi}dBm',
+      if (d.sources.isNotEmpty) 'via ${d.sources.join('+')}',
+    ].join(' · ');
+    return (what, '${alert.label} · $trigger\n$device');
   }
 
   void setClassAlert(ClassAlert a, bool on) {
@@ -256,7 +292,7 @@ class NotificationService extends ChangeNotifier {
         id: _notifId(NotifChannel.foxhunt),
         channel: NotifChannel.foxhunt,
         title: 'Foxhunt: CLOSE',
-        body: 'Target ${_formatMac(mac)} signal ${rssi}dBm — very close!',
+        body: 'Foxhunter · crossed -50dBm (was ${previousRssi}dBm)\n${mac.toUpperCase()} · ${rssi}dBm',
         groupKey: NotifChannel.foxhunt,
       );
     } else if (rssi > -65 && previousRssi <= -65) {
@@ -265,7 +301,7 @@ class NotificationService extends ChangeNotifier {
         id: _notifId(NotifChannel.foxhunt),
         channel: NotifChannel.foxhunt,
         title: 'Foxhunt: Getting warm',
-        body: 'Target ${_formatMac(mac)} signal ${rssi}dBm',
+        body: 'Foxhunter · crossed -65dBm (was ${previousRssi}dBm)\n${mac.toUpperCase()} · ${rssi}dBm',
         groupKey: NotifChannel.foxhunt,
       );
     }
@@ -327,31 +363,44 @@ class NotificationService extends ChangeNotifier {
   }
 
   static (String?, String?, String?) detectionNotificationText(Detection det) {
+    final body = _detectionBody(det);
     return switch (det.engine) {
       Engine.flockBle || Engine.flockWifi => (
           'Flock Camera Detected',
-          det.engine == Engine.flockBle
-              ? '${_formatMac(det.macAddress)} BLE ${det.rssi}dBm'
-              : '${_formatMac(det.macAddress)} WiFi ch${det.channel} ${det.rssi}dBm',
+          body,
           NotifChannel.flock,
         ),
       Engine.detector => (
           detectorTitle(det),
-          '${det.deviceName.isNotEmpty ? '${det.deviceName} ' : ''}${_formatMac(det.macAddress)} · ${det.rssi}dBm · ${methodLabel(det.method)}',
+          body,
           NotifChannel.detector,
         ),
       Engine.skySpy => (
           'Drone Detected',
-          '${det.odid?.uavId ?? _formatMac(det.macAddress)} ${det.rssi}dBm',
+          body,
           NotifChannel.drone,
         ),
       Engine.foxhunter => (
           'Foxhunt Signal',
-          '${_formatMac(det.macAddress)} ${det.rssi}dBm',
+          body,
           NotifChannel.foxhunt,
         ),
       _ => (null, null, null),
     };
+  }
+
+  static String _detectionBody(Detection det) {
+    final uavId = det.odid?.uavId;
+    final device = [
+      if (uavId != null && uavId.isNotEmpty) uavId,
+      if (det.deviceName.isNotEmpty) det.deviceName,
+      det.macAddress.toUpperCase(),
+      if (det.ssid.isNotEmpty) '"${det.ssid}"',
+      if (det.channel > 0) 'ch${det.channel}',
+      '${det.rssi}dBm',
+      if (det.sourceNodeId.isNotEmpty) 'via ${det.sourceNodeId}',
+    ].join(' · ');
+    return '${det.engine.label} · ${methodLabel(det.method)}\n$device';
   }
 
   void _fireMilestoneNotification(int count) {
@@ -375,6 +424,7 @@ class NotificationService extends ChangeNotifier {
       channel,
       channel,
       groupKey: groupKey,
+      styleInformation: BigTextStyleInformation(body),
       playSound: soundEnabled,
       enableVibration: vibrationEnabled,
       priority: Priority.high,
@@ -395,6 +445,12 @@ class NotificationService extends ChangeNotifier {
     );
 
     await _plugin.show(id, title, body, details);
+  }
+
+  @override
+  void dispose() {
+    _classRetry?.cancel();
+    super.dispose();
   }
 
   Future<void> cancelAll() async {
@@ -428,8 +484,6 @@ class NotificationService extends ChangeNotifier {
     return base + seq;
   }
 
-  static String _formatMac(String mac) =>
-      mac.length >= 8 ? mac.substring(0, 8).toUpperCase() : mac.toUpperCase();
 
   // --- Preferences persistence ---
 

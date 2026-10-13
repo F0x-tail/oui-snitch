@@ -111,6 +111,7 @@ Observation observationFromDetection(Detection d) {
     channel: ble ? 0 : d.channel,
     authMode: ble || d.method != 'wifi_ap' ? null : d.wardrive?.authMode,
     hiddenSsid: !ble && d.method == 'wifi_ap' && d.ssid.trim().isEmpty,
+    isAp: !ble && d.method == 'wifi_ap',
     vendorIeOuis: ieOuis,
     gpsTrail: d.latitude != null && d.longitude != null && !d.approxGps
         ? [GpsSample(at, d.latitude!, d.longitude!, d.rssi)]

@@ -436,7 +436,7 @@ class SignatureEngine {
     if (r.kind != RuleKind.radioKind && r.radio != null && o.kind != r.radio) return false;
     switch (r.kind) {
       case RuleKind.oui:
-        final univ = o.kind == RadioKind.wifi ? MacUtil.wifiOui24Universal(o.mac) : null;
+        final univ = o.kind == RadioKind.wifi && o.isAp ? MacUtil.wifiOui24Universal(o.mac) : null;
         final want = hexOnly(r.text);
         return MacUtil.matchesPrefix(o.mac, r.text) ||
             _vendorIeHits(o, r.text) ||
@@ -457,7 +457,7 @@ class SignatureEngine {
     final bssid = o.kind == RadioKind.wifi ? _bssidWifi : _bssidBle;
     hits.addAll(bssid[oui6] ?? const []);
     if (o.kind == RadioKind.wifi) {
-      final univ = MacUtil.wifiOui24Universal(o.mac);
+      final univ = o.isAp ? MacUtil.wifiOui24Universal(o.mac) : null;
       if (univ != null) hits.addAll(bssid[univ] ?? const []);
       for (final ie in o.vendorIeOuis) {
         final h = hexOnly(ie);
