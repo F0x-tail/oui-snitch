@@ -2,11 +2,13 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:oui_spy/core/app_state.dart';
+import 'package:oui_spy/core/detector_signatures.dart';
+import 'package:oui_spy/core/watchlist_state.dart';
+import 'package:oui_spy/features/feed/detection_row.dart';
 import 'package:oui_spy/core/engine_control.dart';
 import 'package:oui_spy/core/models/engine.dart';
 import 'package:oui_spy/features/config/config_menu_state.dart';
 import 'package:oui_spy/features/detections/detections_screen.dart';
-import 'package:oui_spy/features/engines/detection_rules.dart';
 import 'package:oui_spy/theme/app_theme.dart';
 
 class DetectorScreen extends ConsumerWidget {
@@ -17,11 +19,18 @@ class DetectorScreen extends ConsumerWidget {
     final t = AppTheme.of(context);
     final state = ref.watch(appStateProvider);
     final detections = state.detectionsForEngine(Engine.detector);
+    final sigMask = ref.watch(detectorSigMaskProvider);
+    final targets = ref.watch(watchlistProvider).entries.length;
+    final watching = [
+      for (final s in detectorSignatures)
+        if (sigMask & s.bit != 0) s.short.replaceAll('-\n', ''),
+      if (targets > 0) '$targets watchlist target${targets == 1 ? '' : 's'}',
+    ];
 
     return Scaffold(
       backgroundColor: t.background,
       appBar: AppBar(
-        title: const Text('DETECTOR'),
+        title: const Text('Detector'),
         actions: [
           Transform.scale(
             scale: 0.7,
@@ -41,19 +50,42 @@ class DetectorScreen extends ConsumerWidget {
       ),
       body: ListView(
         children: [
-          const WatchlistPanel(),
+          ListTile(
+            leading: const Icon(Icons.track_changes, color: AppTheme.detector),
+            title: Text('Watching for',
+                style: TextStyle(color: t.textPrimary, fontSize: 15, fontWeight: FontWeight.w600)),
+            subtitle: Text(
+              watching.isEmpty ? 'Nothing selected · tap to choose' : watching.join(', '),
+              style: TextStyle(color: t.textDim, fontSize: 12),
+            ),
+            trailing: Icon(Icons.chevron_right, color: t.textDim),
+            onTap: () {
+              ref.read(configSectionRequestProvider.notifier).state = 'DETECTION';
+              context.go('/config');
+            },
+          ),
           const Divider(height: 1),
-          const SignaturesPanel(),
+          if (detections.isEmpty)
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 48),
+              child: Text(
+                state.isEngineActive(Engine.detector)
+                    ? 'No hits yet. Hits show up here as the board finds them.'
+                    : 'Turn the detector on to start watching.',
+                textAlign: TextAlign.center,
+                style: TextStyle(color: t.textDim, fontSize: 13),
+              ),
+            )
+          else
+            for (final d in detections.take(50)) DetectionRow(detection: d),
           const Divider(height: 1),
           ListTile(
             leading: const Icon(Icons.history, color: AppTheme.detector),
-            title: Text(
-              'DETECTOR HISTORY',
-              style: TextStyle(color: t.textPrimary, fontSize: 12, letterSpacing: 2, fontWeight: FontWeight.w700),
-            ),
+            title: Text('History',
+                style: TextStyle(color: t.textPrimary, fontSize: 15, fontWeight: FontWeight.w600)),
             subtitle: Text(
               '${detections.length} this session · filters, map, export',
-              style: TextStyle(color: t.textDim, fontSize: 11),
+              style: TextStyle(color: t.textDim, fontSize: 12),
             ),
             trailing: Icon(Icons.chevron_right, color: t.textDim),
             onTap: () {

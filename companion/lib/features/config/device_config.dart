@@ -24,13 +24,17 @@ import 'package:oui_spy/core/models/detection.dart' show FlockExtension, FlockCo
 import 'package:oui_spy/core/debug_log.dart';
 import 'package:oui_spy/core/ota/ota_service.dart';
 import 'package:oui_spy/core/oui/oui_lookup_service.dart';
+import 'package:oui_spy/core/classify/signature_engine.dart';
+import 'package:oui_spy/core/detector_signatures.dart';
 import 'package:oui_spy/core/ignore_list_state.dart';
+import 'package:oui_spy/core/notifications/notification_service.dart';
 import 'package:oui_spy/core/watchlist_state.dart';
 import 'package:oui_spy/core/export/detections_csv.dart' show DetectionsCsv;
 import 'package:oui_spy/core/export/wigle_csv_import.dart';
 import 'package:oui_spy/features/config/widgets/config_widgets.dart';
 import 'package:oui_spy/features/config/config_menu_state.dart';
 import 'package:oui_spy/features/config/widgets/config_nav.dart';
+import 'package:oui_spy/widgets/command_bar.dart';
 import 'package:oui_spy/features/config/ota_progress_stepper.dart';
 import 'package:oui_spy/features/config/alert_sounds_screen.dart';
 import 'package:oui_spy/features/engines/detection_rules.dart';
@@ -53,6 +57,7 @@ import 'package:oui_spy/widgets/map_tiles.dart';
 part 'config_wardrive_settings.dart';
 part 'config_wardrive_tab.dart';
 part 'config_ignore_tab.dart';
+part 'config_detection_settings.dart';
 part 'config_detections_tab.dart';
 part 'config_ota.dart';
 part 'config_misc.dart';
@@ -79,11 +84,7 @@ class DeviceConfigScreen extends ConsumerStatefulWidget {
   ConsumerState<DeviceConfigScreen> createState() => _DeviceConfigScreenState();
 }
 
-class _DeviceConfigScreenState extends ConsumerState<DeviceConfigScreen>
-    with SingleTickerProviderStateMixin {
-  static const _keyLastTab = 'config_last_tab';
-  late TabController _tabController;
-
+class _DeviceConfigScreenState extends ConsumerState<DeviceConfigScreen> {
   bool _flockExtendedOui = false;
   bool _flockAllowOuiOnly = false;
   bool _offlineScanEnabled = false;
@@ -108,25 +109,20 @@ class _DeviceConfigScreenState extends ConsumerState<DeviceConfigScreen>
   HwGpsState _hwGps = const HwGpsState(
       active: false, satellites: 0, source: GpsSource.phone, inUse: false);
 
+  late final StateController<bool> _menuWanted;
+  int? _open;
+  int? _sub;
+
   @override
   void initState() {
     super.initState();
+    _menuWanted = ref.read(configMenuWantedProvider.notifier);
     final prefs = ref.read(sharedPreferencesProvider);
     final requested = kConfigSections.indexWhere((s) => s.label == ref.read(configSectionRequestProvider));
-    _tabController = TabController(
-      length: kConfigSections.length,
-      vsync: this,
-      initialIndex: requested >= 0
-          ? requested
-          : (prefs.getInt(_keyLastTab) ?? 0).clamp(0, kConfigSections.length - 1),
-    );
     if (requested >= 0) {
+      _open = requested;
       WidgetsBinding.instance.addPostFrameCallback((_) => ref.read(configSectionRequestProvider.notifier).state = null);
     }
-    _tabController.addListener(_persistTab);
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted && ref.read(configMenuWantedProvider)) _syncSectionSheet(true);
-    });
     _offlineGpsTag = prefs.getBool('offlineGpsTagEnabled') ?? false;
     _neopixelBrightness = prefs.getInt('neopixelBrightness') ?? _neopixelBrightness;
     _readDeviceConfig();
@@ -145,32 +141,12 @@ class _DeviceConfigScreenState extends ConsumerState<DeviceConfigScreen>
     gps.refreshHwGps();
   }
 
-  void _persistTab() {
-    if (_tabController.indexIsChanging) return;
-    ref.read(sharedPreferencesProvider).setInt(_keyLastTab, _tabController.index);
-  }
-
-  Future<void> _syncSectionSheet(bool wanted) async {
-    if (!mounted) return;
-    if (!wanted) {
-      if (configSectionSheetOpen(context)) await Navigator.of(context).maybePop();
-      return;
-    }
-    await showConfigSectionSheet(context, _tabController);
-    if (!mounted) return;
-    if (ref.read(configMenuWantedProvider)) {
-      ref.read(configMenuWantedProvider.notifier).state = false;
-    }
-  }
-
   @override
   void dispose() {
-    // Leaving with the sheet up must not re-open it on the next visit.
-    ref.read(configMenuWantedProvider.notifier).state = false;
+    final menuWanted = _menuWanted;
+    Future.microtask(() => menuWanted.state = false);
     _connStateSub?.cancel();
     _hwGpsSub?.cancel();
-    _tabController.removeListener(_persistTab);
-    _tabController.dispose();
     _ssidController.dispose();
     _passController.dispose();
     super.dispose();
@@ -263,69 +239,153 @@ class _DeviceConfigScreenState extends ConsumerState<DeviceConfigScreen>
   Widget build(BuildContext context) {
     final t = AppTheme.of(context);
     ref.listen<bool>(configMenuWantedProvider, (_, wanted) {
-      _syncSectionSheet(wanted);
+      if (!wanted) return;
+      _menuWanted.state = false;
+      if (_open != null) setState(() => _open = _sub = null);
     });
-    return Scaffold(
-      backgroundColor: t.background,
-      body: GestureDetector(
-        onTap: () => FocusScope.of(context).unfocus(),
-        behavior: HitTestBehavior.translucent,
-        child: SafeArea(
-        bottom: false,
-        child: ConfigNav(
-          controller: _tabController,
-          child: Column(
-            children: [
-              _ConfigTitleBar(controller: _tabController, loading: _loading),
-              const Divider(height: 1),
-              Expanded(
-                child: TabBarView(
-                  controller: _tabController,
-                  children: [
-                    _section(_buildAppTab()),
-                    _section(_buildScanTab()),
-                    _section(const Column(
-                      children: [
-                        Flexible(
-                          child: SingleChildScrollView(
-                            child: Column(
-                              children: [WatchlistPanel(), Divider(height: 1), SignaturesPanel(), Divider(height: 1)],
-                            ),
-                          ),
-                        ),
-                        Expanded(child: _IgnoreListTab()),
-                      ],
-                    )),
-                    _section(_buildAlertsTab()),
-                    _section(_Segmented(
-                      labels: const ['HARDWARE', 'MESH', 'FIRMWARE'],
-                      builders: [_buildHardwareTab, _buildMeshTab, _buildFirmwareTab],
-                    )),
-                    _section(_Segmented(
-                      labels: const ['ACCOUNTS', 'PCAPS', 'EXPORT'],
-                      builders: [
-                        () => const _WardriveConfigTab(),
-                        () => const PcapLibraryScreen(embedded: true),
-                        _buildExportTab,
-                      ],
-                    )),
-                  ],
-                ),
-              ),
-            ],
+    final open = _open;
+    return PopScope(
+      canPop: open == null,
+      onPopInvokedWithResult: (didPop, _) {
+        if (!didPop && _open != null) _back();
+      },
+      child: Scaffold(
+        backgroundColor: t.background,
+        body: GestureDetector(
+          onTap: () => FocusScope.of(context).unfocus(),
+          behavior: HitTestBehavior.translucent,
+          child: SafeArea(
+            bottom: false,
+            child: open == null ? _overview(t) : _sectionPage(t, open),
           ),
-        ),
         ),
       ),
     );
   }
 
-  Widget _section(Widget body) => Column(
+  static const _sectionTitles = ['App', 'Scanning', 'Detection', 'Alerts', 'Node', 'Data', 'About'];
+  static const _aboutIndex = 6;
+
+  String _sectionSummary(int i) {
+    final ble = ref.read(bleManagerProvider);
+    return switch (i) {
+      0 => 'Appearance, units, auto-connect',
+      1 => 'Re-log thresholds, scan timing, channels',
+      2 => 'What to watch for, watchlist, ignore list',
+      3 => 'Foxhunt, milestones, limits, sound',
+      4 => ble.isConnected ? '$_nodeId · fw $_fwVersion' : 'Not connected',
+      _ => 'Accounts, captures, export',
+    };
+  }
+
+  Widget _overview(ResolvedTheme t) => ListView(
+        padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
         children: [
-          Expanded(child: body),
-          const ConfigBottomBar(),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(4, 8, 4, 16),
+            child: Text('Settings',
+                style: TextStyle(color: t.textPrimary, fontSize: 28, fontWeight: FontWeight.w700)),
+          ),
+          for (var i = 0; i < kConfigSections.length; i++)
+            ConfigActionRow(
+              icon: kConfigSections[i].icon,
+              label: _sectionTitles[i],
+              subtitle: _sectionSummary(i),
+              color: AppTheme.accent,
+              onTap: () => setState(() {
+                _open = i;
+                _sub = null;
+              }),
+            ),
+          const SizedBox(height: 16),
+          ConfigActionRow(
+            icon: Icons.info_outline,
+            label: 'About',
+            subtitle: 'Version, source code',
+            color: t.textDim,
+            onTap: () => setState(() {
+              _open = _aboutIndex;
+              _sub = null;
+            }),
+          ),
         ],
       );
+
+  List<(String, String, IconData, Widget Function())>? _subPages(int i) => switch (i) {
+        4 => [
+            ('Hardware', 'Sound, lights, GPS source, Flock detection, offline scan', Icons.memory, _buildHardwareTab),
+            ('Mesh', 'Mode, status, key, nodes', Icons.hub, _buildMeshTab),
+            ('Firmware', 'Device info, Wi-Fi network, updates', Icons.system_update, _buildFirmwareTab),
+          ],
+        5 => [
+            ('Accounts', 'WiGLE and WDGWars, your capture database', Icons.cloud_upload, () => const _WardriveConfigTab()),
+            ('Captures', 'Saved PCAP files', Icons.folder_open, () => const PcapLibraryScreen(embedded: true)),
+            ('Export', 'Data and backup, OUI database', Icons.ios_share, _buildExportTab),
+          ],
+        _ => null,
+      };
+
+  void _back() => setState(() => _sub != null ? _sub = null : _open = null);
+
+  Widget _sectionPage(ResolvedTheme t, int i) {
+    final subs = _subPages(i);
+    final sub = _sub;
+    final title = subs != null && sub != null ? subs[sub].$1 : _sectionTitles[i];
+    final Widget body = switch (i) {
+      0 => _buildAppTab(),
+      1 => _buildScanTab(),
+      2 => const _DetectionSettingsTab(),
+      3 => _buildAlertsTab(),
+      _aboutIndex => _buildAboutTab(),
+      _ when sub != null => subs![sub].$4(),
+      _ => ListView(
+          padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
+          children: [
+            if (i == 4 && !ref.read(bleManagerProvider).isConnected)
+              Padding(
+                padding: const EdgeInsets.fromLTRB(4, 0, 4, 12),
+                child: Text('Connect an OUI-SPY board to change its settings.',
+                    style: TextStyle(color: t.textDim, fontSize: 12)),
+              ),
+            for (var s = 0; s < subs!.length; s++)
+              ConfigActionRow(
+                icon: subs[s].$3,
+                label: subs[s].$1,
+                subtitle: subs[s].$2,
+                color: AppTheme.accent,
+                onTap: () => setState(() => _sub = s),
+              ),
+          ],
+        ),
+    };
+    return Column(
+      children: [
+        SizedBox(
+          height: 52,
+          child: Row(
+            children: [
+              IconButton(
+                icon: Icon(Icons.chevron_left, color: t.textPrimary),
+                tooltip: sub != null ? _sectionTitles[i] : 'Settings',
+                onPressed: _back,
+              ),
+              Expanded(
+                child: Text(title,
+                    style: TextStyle(color: t.textPrimary, fontSize: 17, fontWeight: FontWeight.w600)),
+              ),
+              if (_loading && i == 4)
+                const Padding(
+                  padding: EdgeInsets.only(right: 16),
+                  child: SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2)),
+                ),
+            ],
+          ),
+        ),
+        const Divider(height: 1),
+        Expanded(child: body),
+      ],
+    );
+  }
 
   Widget _buildAppTab() {
     final themeMode = ref.watch(themeModeProvider);
@@ -333,7 +393,6 @@ class _DeviceConfigScreenState extends ConsumerState<DeviceConfigScreen>
     final unitSystem = ref.watch(unitSystemProvider);
     final isImperial = unitSystem == UnitSystem.imperial;
     final use24Hour = ref.watch(use24HourTimeProvider);
-    final t = AppTheme.of(context);
 
     return ListView(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
@@ -380,9 +439,15 @@ class _DeviceConfigScreenState extends ConsumerState<DeviceConfigScreen>
         const SizedBox(height: 16),
         const ConfigSectionHeader(label: 'CONNECTION'),
         const _AutoConnectToggle(),
+      ],
+    );
+  }
 
-        const SizedBox(height: 16),
-        const ConfigSectionHeader(label: 'ABOUT'),
+  Widget _buildAboutTab() {
+    final t = AppTheme.of(context);
+    return ListView(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      children: [
         const _VersionRow(),
         ConfigActionRow(
           icon: Icons.code,
@@ -1318,43 +1383,6 @@ class _DeviceConfigScreenState extends ConsumerState<DeviceConfigScreen>
       );
       _readDeviceConfig();
     }
-  }
-}
-
-class _Segmented extends StatefulWidget {
-  const _Segmented({required this.labels, required this.builders});
-  final List<String> labels;
-  final List<Widget Function()> builders;
-
-  @override
-  State<_Segmented> createState() => _SegmentedState();
-}
-
-class _SegmentedState extends State<_Segmented> {
-  int _i = 0;
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      children: [
-        Padding(
-          padding: const EdgeInsets.fromLTRB(12, 8, 12, 0),
-          child: SizedBox(
-            width: double.infinity,
-            child: SegmentedButton<int>(
-              showSelectedIcon: false,
-              segments: [
-                for (var i = 0; i < widget.labels.length; i++)
-                  ButtonSegment(value: i, label: Text(widget.labels[i])),
-              ],
-              selected: {_i},
-              onSelectionChanged: (s) => setState(() => _i = s.first),
-            ),
-          ),
-        ),
-        Expanded(child: widget.builders[_i]()),
-      ],
-    );
   }
 }
 

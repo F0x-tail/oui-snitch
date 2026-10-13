@@ -10,6 +10,7 @@ class _IgnoreListTab extends ConsumerWidget {
     final entries = allowlist.entries;
 
     return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         // Header + add button
         Padding(
@@ -59,7 +60,8 @@ class _IgnoreListTab extends ConsumerWidget {
         ),
         const Divider(height: 1),
         // Entry list
-        Expanded(
+        Padding(
+          padding: const EdgeInsets.symmetric(vertical: 16),
           child: entries.isEmpty
               ? Center(
                   child: Column(
@@ -81,6 +83,8 @@ class _IgnoreListTab extends ConsumerWidget {
                   ),
                 )
               : ListView.builder(
+                  shrinkWrap: true,
+                  physics: const NeverScrollableScrollPhysics(),
                   padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
                   itemCount: entries.length,
                   itemBuilder: (_, i) => _IgnoreEntryTile(entry: entries[i]),

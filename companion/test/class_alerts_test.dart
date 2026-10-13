@@ -14,11 +14,12 @@ void main() {
       [_sig],
       {'esp32'},
     );
-    expect(ClassAlert.of(d), ClassAlert.cameras);
-    final (title, subtitle, body) = NotificationService.classNotificationText(d, ClassAlert.cameras);
-    expect(title, 'Surveillance camera: Flock Safety');
+    expect(alertClassOf(d, defaultAlertClasses), SignatureClass.surveillance);
+    expect(alertClassOf(d, {SignatureClass.finder}), isNull);
+    final (title, subtitle, body) = NotificationService.classNotificationText(d, SignatureClass.surveillance);
+    expect(title, 'Surveillance: Flock Safety');
     expect(subtitle, 'Signature match');
-    expect(body, '-61 dBm · Wi-Fi · B4:1E:52:11:22:33');
+    expect(body, 'Signal -61 dBm over Wi-Fi. MAC B4:1E:52:11:22:33.');
   });
 
   test('vendor classification (factory MAC, Axon) -> law-enforcement alert', () {
@@ -28,8 +29,8 @@ void main() {
       {'esp32'},
       vendor: 'Axon Enterprise, Inc.',
     );
-    expect(ClassAlert.of(d), ClassAlert.lawEnforcement);
-    expect(NotificationService.classNotificationText(d, ClassAlert.lawEnforcement).$1, 'Public safety / fleet: an Axon body camera or device');
+    expect(alertClassOf(d, defaultAlertClasses), SignatureClass.lawEnforcement);
+    expect(NotificationService.classNotificationText(d, SignatureClass.lawEnforcement).$1, 'Public safety: an Axon body camera or device');
   });
 
   test('low-confidence vendor guess never alerts; unrelated device never alerts', () {
@@ -39,13 +40,13 @@ void main() {
       {'esp32'},
       vendor: 'Samsung Electronics Co.,Ltd',
     );
-    expect(ClassAlert.of(weak), isNull);
+    expect(alertClassOf(weak, alertableClasses.toSet()), isNull);
     const randomized = ClassifiedDevice(
       Observation(key: 'W:4', kind: RadioKind.wifi, mac: '02:25:DF:11:22:33'),
       [],
       {'esp32'},
       vendor: 'Axon Enterprise, Inc.',
     );
-    expect(ClassAlert.of(randomized), isNull);
+    expect(alertClassOf(randomized, alertableClasses.toSet()), isNull);
   });
 }

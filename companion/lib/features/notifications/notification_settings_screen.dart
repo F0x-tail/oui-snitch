@@ -49,31 +49,7 @@ class NotificationSettingsBody extends ConsumerWidget {
             ),
           ),
 
-        const ConfigSectionHeader(label: 'DETECTION ALERTS'),
-        ConfigToggleRow(
-          icon: Icons.videocam,
-          label: 'Flock Safety',
-          subtitle: 'Alert on new camera detection',
-          color: const Color(0xFFB44AFF),
-          value: notif.flockEnabled,
-          onChanged: notif.setFlockEnabled,
-        ),
-        ConfigToggleRow(
-          icon: Icons.radar,
-          label: 'Watchlist / Detector',
-          subtitle: 'Alert on watchlist MAC hits',
-          color: const Color(0xFF4A9EFF),
-          value: notif.detectorEnabled,
-          onChanged: notif.setDetectorEnabled,
-        ),
-        ConfigToggleRow(
-          icon: Icons.flight,
-          label: 'Drone / Sky Spy',
-          subtitle: 'Alert on Remote ID drone detection',
-          color: const Color(0xFF4AFFEA),
-          value: notif.droneEnabled,
-          onChanged: notif.setDroneEnabled,
-        ),
+        const ConfigSectionHeader(label: 'FOXHUNT'),
         ConfigToggleRow(
           icon: Icons.gps_fixed,
           label: 'Foxhunt Proximity',

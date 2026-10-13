@@ -47,10 +47,10 @@ class SkySpyScreen extends ConsumerWidget {
                 ? Center(
                     child: Text(
                         isActive
-                            ? 'SCANNING FOR DRONES...'
-                            : 'ENABLE TO START SCANNING',
-                        style: TextStyle(
-                            color: t.textDim, letterSpacing: 2, fontSize: 12)))
+                            ? 'Scanning for drones…'
+                            : 'Turn on Sky Spy with the switch above to scan for drones.',
+                        textAlign: TextAlign.center,
+                        style: TextStyle(color: t.textDim, fontSize: 13)))
                 : ListView.builder(
                     itemCount: groups.length,
                     itemBuilder: (context, index) {

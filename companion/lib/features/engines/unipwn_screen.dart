@@ -97,8 +97,11 @@ class _UnipwnScreenState extends ConsumerState<UnipwnScreen> {
             child: robots.isEmpty
                 ? Center(
                     child: Text(
-                      isActive ? 'SCANNING FOR UNITREE ROBOTS...' : 'ENABLE TO START SCANNING',
-                      style: TextStyle(color: t.textDim, letterSpacing: 1, fontSize: 11),
+                      isActive
+                          ? 'Scanning for Unitree robots…'
+                          : 'Turn on UniPwn with the switch above to scan for robots.',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(color: t.textDim, fontSize: 13),
                     ),
                   )
                 : ListView.builder(
@@ -168,8 +171,9 @@ class _UnipwnScreenState extends ConsumerState<UnipwnScreen> {
             child: _selectedTarget == null
                 ? Center(
                     child: Text(
-                      'SELECT A TARGET',
-                      style: TextStyle(color: t.textDim, letterSpacing: 2, fontSize: 12),
+                      'Pick a robot above to see what you can do.',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(color: t.textDim, fontSize: 13),
                     ),
                   )
                 : ListView(

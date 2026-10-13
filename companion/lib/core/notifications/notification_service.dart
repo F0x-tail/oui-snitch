@@ -6,11 +6,11 @@ import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:oui_spy/core/debug_log.dart';
-import 'package:oui_spy/core/detector_signatures.dart';
 import 'package:oui_spy/core/models/detection.dart';
 import 'package:oui_spy/core/models/engine.dart';
 import 'package:oui_spy/core/classify/device_registry.dart';
 import 'package:oui_spy/core/classify/observation.dart';
+import 'package:oui_spy/core/classify/signature_engine.dart';
 import 'package:oui_spy/core/notifications/class_alerts.dart';
 import 'package:oui_spy/core/notifications/live_activity_service.dart';
 import 'package:oui_spy/features/feed/detection_row.dart' show detectorTitle, methodLabel;
@@ -44,7 +44,7 @@ class NotificationService extends ChangeNotifier {
   bool droneEnabled = true;
   bool foxhuntEnabled = false; // foxhunt is high-frequency, off by default
   bool wardriveStatusEnabled = true;
-  Set<ClassAlert> classAlerts = ClassAlert.values.toSet();
+  Set<SignatureClass> classAlerts = {...defaultAlertClasses};
   final _classAlerted = <String, DateTime>{};
   final _classPending = <String, ClassifiedDevice>{};
   Timer? _classRetry;
@@ -205,8 +205,8 @@ class NotificationService extends ChangeNotifier {
 
   void onClassified(ClassifiedDevice d) {
     if (!_initialized || !_permissionGranted) return;
-    final alert = ClassAlert.of(d);
-    if (alert == null || !classAlerts.contains(alert) || !_classGateOn(alert)) return;
+    final alert = alertClassOf(d, classAlerts);
+    if (alert == null) return;
     final key = d.obs.mac.isNotEmpty ? d.obs.mac : d.obs.key;
     final last = _classAlerted[key];
     final now = DateTime.now();
@@ -237,8 +237,8 @@ class NotificationService extends ChangeNotifier {
     );
   }
 
-  static (String, String, String) classNotificationText(ClassifiedDevice d, ClassAlert alert) {
-    final matched = d.signatures.where((s) => alert.kinds.contains(s.kind)).map((s) => s.name).toSet();
+  static (String, String, String) classNotificationText(ClassifiedDevice d, SignatureClass alert) {
+    final matched = d.signatures.where((s) => s.kind.folded == alert).map((s) => s.name).toSet();
     final what = matched.firstOrNull ??
         d.guess.headline.replaceFirst(RegExp(r'^(Most likely|Probably|Could be) '), '');
     final why = matched.length > 1
@@ -248,29 +248,19 @@ class NotificationService extends ChangeNotifier {
             : d.vendor != null
                 ? 'Vendor ${d.vendor}'
                 : 'Classifier estimate';
+    final radio = d.obs.kind == RadioKind.ble ? 'Bluetooth' : 'Wi-Fi';
     final body = [
-      '${d.obs.rssi} dBm',
-      d.obs.kind == RadioKind.ble ? 'BLE' : 'Wi-Fi',
-      if (d.obs.channel > 0) 'ch ${d.obs.channel}',
-      if (d.obs.name.isNotEmpty && d.obs.name != what) d.obs.name,
-      if (d.obs.mac.isNotEmpty) d.obs.mac.toUpperCase(),
-    ].join(' · ');
-    return ('${alert.noun}: $what', why, body);
+      'Signal ${d.obs.rssi} dBm over $radio${d.obs.channel > 0 ? ' on channel ${d.obs.channel}' : ''}.',
+      if (d.obs.name.isNotEmpty && d.obs.name != what) 'Name ${d.obs.name}.',
+      if (d.obs.mac.isNotEmpty) 'MAC ${d.obs.mac.toUpperCase()}.',
+    ].join(' ');
+    return ('${alert.label}: $what', why, body);
   }
 
-  int detectorSigMask = 0;
   void Function(String title, String detail)? onAlert;
   final classAlertedMacs = <String>{};
 
-  bool _classGateOn(ClassAlert a) => switch (a) {
-        ClassAlert.trackers => detectorSigMask & sigTracker != 0,
-        ClassAlert.glasses => detectorSigMask & sigGlasses != 0,
-        ClassAlert.lawEnforcement => detectorSigMask & sigAxon != 0,
-        ClassAlert.cameras => flockEnabled,
-        ClassAlert.drones => droneEnabled,
-      };
-
-  void setClassAlert(ClassAlert a, bool on) {
+  void setClassAlert(SignatureClass a, bool on) {
     on ? classAlerts.add(a) : classAlerts.remove(a);
     notifyListeners();
     _savePrefs();
@@ -313,9 +303,9 @@ class NotificationService extends ChangeNotifier {
       _fireNotification(
         id: _notifId(NotifChannel.foxhunt),
         channel: NotifChannel.foxhunt,
-        title: 'Foxhunt: very close',
-        subtitle: 'Signal crossed -50 dBm (was $previousRssi dBm)',
-        body: '$rssi dBm · ${mac.toUpperCase()}',
+        title: 'Foxhunt Target Very Close',
+        subtitle: 'Signal crossed -50 dBm',
+        body: 'Signal is now $rssi dBm, up from $previousRssi dBm. MAC ${mac.toUpperCase()}.',
         groupKey: NotifChannel.foxhunt,
       );
     } else if (rssi > -65 && previousRssi <= -65) {
@@ -323,9 +313,9 @@ class NotificationService extends ChangeNotifier {
       _fireNotification(
         id: _notifId(NotifChannel.foxhunt),
         channel: NotifChannel.foxhunt,
-        title: 'Foxhunt: getting warm',
-        subtitle: 'Signal crossed -65 dBm (was $previousRssi dBm)',
-        body: '$rssi dBm · ${mac.toUpperCase()}',
+        title: 'Foxhunt Target Getting Closer',
+        subtitle: 'Signal crossed -65 dBm',
+        body: 'Signal is now $rssi dBm, up from $previousRssi dBm. MAC ${mac.toUpperCase()}.',
         groupKey: NotifChannel.foxhunt,
       );
     }
@@ -334,7 +324,7 @@ class NotificationService extends ChangeNotifier {
   bool _isEngineEnabled(Engine engine) {
     return switch (engine) {
       Engine.flockBle || Engine.flockWifi => flockEnabled,
-      Engine.detector => detectorEnabled,
+      Engine.detector => true,
       Engine.skySpy => droneEnabled,
       Engine.foxhunter => foxhuntEnabled,
       Engine.wardrive => false, // wardrive uses milestone alerts instead
@@ -390,7 +380,7 @@ class NotificationService extends ChangeNotifier {
     final uavId = det.odid?.uavId;
     final (title, channel) = switch (det.engine) {
       Engine.flockBle || Engine.flockWifi => ('Flock camera', NotifChannel.flock),
-      Engine.detector => (detectorTitle(det), NotifChannel.detector),
+      Engine.detector => (_detectorHeadline(det), NotifChannel.detector),
       Engine.skySpy => (uavId != null && uavId.isNotEmpty ? 'Drone: $uavId' : 'Drone', NotifChannel.drone),
       Engine.foxhunter => ('Foxhunt target', NotifChannel.foxhunt),
       _ => (null, null),
@@ -399,21 +389,35 @@ class NotificationService extends ChangeNotifier {
     return (title, '${det.engine.label} · ${methodLabel(det.method)}', _detectionBody(det, title), channel);
   }
 
+  static String _detectorHeadline(Detection det) {
+    final why = det.detector?.filterDescription?.trim() ?? '';
+    if (why.isNotEmpty || det.method == 'probe_ssid') return detectorTitle(det);
+    return switch (det.method) {
+      'tracker' => 'Find My Tracker',
+      'flipper' => 'Flipper Zero',
+      'deauth_storm' => 'Deauth Attack',
+      'pwnagotchi' => 'Pwnagotchi',
+      'glasses' => 'Meta Smart Glasses',
+      'axon' => 'Axon Device',
+      'ble_watchlist' || 'wifi_watchlist' => 'Watchlist Hit',
+      _ => detectorTitle(det),
+    };
+  }
+
   static String _detectionBody(Detection det, String title) => [
-        '${det.rssi} dBm',
-        if (det.channel > 0) 'ch ${det.channel}',
-        if (det.deviceName.isNotEmpty && det.deviceName != title) det.deviceName,
-        if (det.ssid.isNotEmpty) '"${det.ssid}"',
-        det.macAddress.toUpperCase(),
-        if (det.sourceNodeId.isNotEmpty) 'node ${det.sourceNodeId}',
-      ].join(' · ');
+        'Signal ${det.rssi} dBm${det.channel > 0 ? ' on channel ${det.channel}' : ''}.',
+        if (det.deviceName.isNotEmpty && det.deviceName != title) 'Name ${det.deviceName}.',
+        if (det.ssid.isNotEmpty) 'Network "${det.ssid}".',
+        'MAC ${det.macAddress.toUpperCase()}.',
+        if (det.sourceNodeId.isNotEmpty) 'Seen by node ${det.sourceNodeId}.',
+      ].join(' ');
 
   void _fireMilestoneNotification(int count) {
     _fireNotification(
       id: _notifId(NotifChannel.wardrive),
       channel: NotifChannel.wardrive,
       title: 'Wardrive Milestone',
-      body: '$count unique networks captured!',
+      body: '$count unique networks captured so far.',
       groupKey: NotifChannel.wardrive,
     );
   }
@@ -510,9 +514,19 @@ class NotificationService extends ChangeNotifier {
     maxPerMinute = p.getInt('notif_max_per_min') ?? 10;
     soundEnabled = p.getBool('notif_sound') ?? true;
     vibrationEnabled = p.getBool('notif_vibration') ?? true;
+    final ac = p.getStringList('notif_alert_classes');
     final ca = p.getStringList('notif_class_alerts');
-    if (ca != null) {
-      classAlerts = {for (final n in ca) ...ClassAlert.values.where((a) => a.name == n)};
+    if (ac != null) {
+      classAlerts = {for (final n in ac) ...alertableClasses.where((c) => c.name == n)};
+    } else if (ca != null) {
+      const legacy = {
+        'cameras': [SignatureClass.surveillance, SignatureClass.camera],
+        'lawEnforcement': [SignatureClass.lawEnforcement],
+        'drones': [SignatureClass.drone],
+        'glasses': [SignatureClass.glasses],
+        'trackers': [SignatureClass.finder],
+      };
+      classAlerts = {for (final n in ca) ...?legacy[n]};
     }
     notifyListeners();
   }
@@ -529,7 +543,7 @@ class NotificationService extends ChangeNotifier {
     p.setInt('notif_max_per_min', maxPerMinute);
     p.setBool('notif_sound', soundEnabled);
     p.setBool('notif_vibration', vibrationEnabled);
-    p.setStringList('notif_class_alerts', [for (final a in classAlerts) a.name]);
+    p.setStringList('notif_alert_classes', [for (final a in classAlerts) a.name]);
   }
 
   void setFlockEnabled(bool v) {
@@ -598,6 +612,5 @@ final notificationServiceProvider =
   final svc = NotificationService();
   final la = ref.read(liveActivityServiceProvider);
   svc.onAlert = la.showAlert;
-  ref.listen<int>(detectorSigMaskProvider, (_, m) => svc.detectorSigMask = m, fireImmediately: true);
   return svc;
 });

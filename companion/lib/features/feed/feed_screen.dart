@@ -312,9 +312,15 @@ class _FeedScreenState extends ConsumerState<FeedScreen> {
               FeedStatsHeader(detections: filtered),
             Expanded(
               child: feedItems.isEmpty
-                  ? Center(child: Text(
-                      state.isConnected ? 'NO DETECTIONS' : 'NOT CONNECTED',
-                      style: Theme.of(context).textTheme.bodySmall?.copyWith(letterSpacing: 2),
+                  ? Center(child: Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 32),
+                      child: Text(
+                        state.isConnected
+                            ? 'No detections yet. They show up here as your board finds them.'
+                            : 'Not connected. Connect your OUI-SPY board from Home to see live detections.',
+                        textAlign: TextAlign.center,
+                        style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: AppTheme.of(context).textDim),
+                      ),
                     ))
                   : ListView.builder(
                       itemCount: feedItems.length,
