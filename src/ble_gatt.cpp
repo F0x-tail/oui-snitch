@@ -2504,7 +2504,9 @@ static size_t packDetection(const DetectionEvent* evt, uint8_t* buf) {
         case ENGINE_DETECTOR:
             buf[19] = evt->ext.detector.is_full_mac;
             memcpy(buf + 20, evt->ext.detector.filter_desc, 32);
-            len = 52;
+            // Appended, so a client that stops at 52 is unaffected.
+            buf[52] = evt->ext.detector.confidence;
+            len = 53;
             break;
         case ENGINE_WARDRIVE:
             memcpy(buf + 19, evt->ext.wardrive.ssid, 33);

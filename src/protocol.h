@@ -152,15 +152,20 @@ enum EngineState : uint8_t {
 #define METHOD_DET_CAMERA      9
 #define METHOD_DET_EVILTWIN    10
 #define METHOD_DET_PINEAPPLE   11
+#define METHOD_DET_MESH        12
 
-#define SIG_TRACKER    0x01
-#define SIG_FLIPPER    0x02
-#define SIG_DEAUTH     0x04
-#define SIG_PROBE      0x08
-#define SIG_PWNAGOTCHI 0x10
-#define SIG_GLASSES    0x20
-#define SIG_AXON       0x40
-#define SIG_CAMERA     0x80
+// Signature bits are grouped by category rather than one per device, so the
+// eight bits cover far more than eight devices. SIG_HACKTOOLS folds together
+// the wireless-audit hardware (Flipper, Pwnagotchi) that used to hold two bits,
+// which frees one for SIG_MESH.
+#define SIG_TRACKER    0x01   // Find My, SmartTag, Tile, Google FMD
+#define SIG_HACKTOOLS  0x02   // Flipper Zero, Pwnagotchi
+#define SIG_DEAUTH     0x04   // deauth / disassoc floods
+#define SIG_PROBE      0x08   // directed probes, evil twin, KARMA
+#define SIG_MESH       0x10   // Meshtastic, MeshCore
+#define SIG_GLASSES    0x20   // Meta / Ray-Ban, Oakley
+#define SIG_AXON       0x40   // law-enforcement duty equipment
+#define SIG_CAMERA     0x80   // consumer and IP surveillance cameras
 #define SIG_ALL        0xFF
 
 // Detection confidence, reported in DetectionEvent.ext.detector.confidence.

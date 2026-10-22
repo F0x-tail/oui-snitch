@@ -353,7 +353,7 @@ static void detectorCheckSignatures(NimBLEAdvertisedDevice* dev, const uint8_t* 
             }
         }
     }
-    if (sigMask & SIG_FLIPPER) {
+    if (sigMask & SIG_HACKTOOLS) {
         bool flip = dev->isAdvertisingService(NimBLEUUID((uint16_t)0x3081)) ||
                     dev->isAdvertisingService(NimBLEUUID((uint16_t)0x3082)) ||
                     dev->isAdvertisingService(NimBLEUUID((uint16_t)0x3083));
@@ -440,6 +440,39 @@ static void detectorCheckSignatures(NimBLEAdvertisedDevice* dev, const uint8_t* 
             pushDetection(&evt);
             Serial.printf("[DETECTOR] SIG %02x:%02x:%02x:%02x:%02x:%02x RSSI:%d [%s LE]\n",
                           mac[0], mac[1], mac[2], mac[3], mac[4], mac[5], rssi, vendor);
+        }
+    }
+    if (sigMask & SIG_MESH) {
+        // Meshtastic advertises its own 128-bit service UUID, which identifies
+        // it outright. MeshCore rides the generic Nordic UART service, which
+        // thousands of unrelated devices also use, so it is matched by name and
+        // reported a tier lower.
+        static const char* MESHTASTIC_SVC = "6ba1b218-15a8-461f-9fa8-5dcae273eafd";
+        bool meshtasticSvc = dev->isAdvertisingService(NimBLEUUID(MESHTASTIC_SVC));
+        const char* meshKind = nullptr;
+        uint8_t meshTier = DET_CONF_NONE;
+        if (meshtasticSvc) { meshKind = "Meshtastic"; meshTier = DET_CONF_VERIFIED; }
+        if (!meshKind && dev->haveName()) {
+            std::string nm = dev->getName();
+            if (strcasestr(nm.c_str(), "meshtastic")) {
+                meshKind = "Meshtastic"; meshTier = DET_CONF_HIGH;
+            } else if (strcasestr(nm.c_str(), "meshcore")) {
+                meshKind = "MeshCore";   meshTier = DET_CONF_HIGH;
+            }
+        }
+        if (meshKind && !sigDedup.check(mac)) {
+            DetectionEvent evt = {};
+            evt.engine_id = ENGINE_DETECTOR;
+            memcpy(evt.mac, mac, 6);
+            evt.rssi = rssi;
+            evt.timestamp_ms = millis();
+            evt.method = METHOD_DET_MESH;
+            evt.ext.detector.confidence = meshTier;
+            snprintf(evt.ext.detector.filter_desc,
+                     sizeof(evt.ext.detector.filter_desc), "%s mesh node", meshKind);
+            pushDetection(&evt);
+            Serial.printf("[DETECTOR] SIG %02x:%02x:%02x:%02x:%02x:%02x RSSI:%d [%s]\n",
+                          mac[0], mac[1], mac[2], mac[3], mac[4], mac[5], rssi, meshKind);
         }
     }
     if (sigMask & SIG_CAMERA) {
@@ -636,7 +669,7 @@ static bool IRAM_ATTR detectorSigFrameISR(const uint8_t* p, int len, int rssi, u
     }
 
     static const uint8_t pwnMac[6] = {0xde, 0xad, 0xbe, 0xef, 0xde, 0xad};
-    if ((sigMask & SIG_PWNAGOTCHI) && fctl == 0x80 && memcmp(&p[10], pwnMac, 6) == 0) {
+    if ((sigMask & SIG_HACKTOOLS) && fctl == 0x80 && memcmp(&p[10], pwnMac, 6) == 0) {
         unsigned long now = millis();
         if (now - lastPwnAlert > 15000) {
             lastPwnAlert = now;
@@ -894,7 +927,7 @@ void detectorSetFilters(const uint8_t* data, size_t len) {
 }
 
 void detectorSetSigMask(uint8_t mask) {
-    const uint8_t wifiBits = SIG_DEAUTH | SIG_PROBE | SIG_PWNAGOTCHI | SIG_AXON | SIG_CAMERA;
+    const uint8_t wifiBits = SIG_DEAUTH | SIG_PROBE | SIG_HACKTOOLS | SIG_AXON | SIG_CAMERA;
     bool prevWifi = (sigMask & wifiBits) != 0;
     sigMask = mask;
     bool newWifi = (sigMask & wifiBits) != 0;
@@ -908,7 +941,7 @@ uint8_t detectorGetSigMask(void) { return sigMask; }
 
 bool detectorUsesWifi(void) {
     return (detectorRadioMask & 0x01) != 0 &&
-           (sigMask & (SIG_DEAUTH | SIG_PROBE | SIG_PWNAGOTCHI | SIG_AXON | SIG_CAMERA)) != 0;
+           (sigMask & (SIG_DEAUTH | SIG_PROBE | SIG_HACKTOOLS | SIG_AXON | SIG_CAMERA)) != 0;
 }
 
 static void detectorInit(void) {
@@ -928,7 +961,7 @@ static void detectorStart(void) {
     bool wardriveOwns = (engineGetState(ENGINE_WARDRIVE) != ESTATE_DISABLED);
     bool wantBle  = (detectorRadioMask & 0x02) != 0;
     bool wantWifi = (detectorRadioMask & 0x01) != 0 &&
-                    (sigMask & (SIG_DEAUTH | SIG_PROBE | SIG_PWNAGOTCHI | SIG_AXON | SIG_CAMERA)) != 0;
+                    (sigMask & (SIG_DEAUTH | SIG_PROBE | SIG_HACKTOOLS | SIG_AXON | SIG_CAMERA)) != 0;
 
     if (!wardriveOwns && wantBle) {
         bleScan = NimBLEDevice::getScan();
@@ -1008,7 +1041,7 @@ void detectorHostSuspend(bool suspend) {
             bleCoexRegister(&scanCb, true);
         }
         if ((detectorRadioMask & 0x01) &&
-            (sigMask & (SIG_DEAUTH | SIG_PROBE | SIG_PWNAGOTCHI | SIG_AXON | SIG_CAMERA))) {
+            (sigMask & (SIG_DEAUTH | SIG_PROBE | SIG_HACKTOOLS | SIG_AXON | SIG_CAMERA))) {
             if (!meshIsEnabled()) WiFi.mode(WIFI_STA);
             wifiSnifferApplyPs();
             wifiCoexRegister(wifiSnifferCb, WIFI_PROMIS_FILTER_MASK_MGMT);
