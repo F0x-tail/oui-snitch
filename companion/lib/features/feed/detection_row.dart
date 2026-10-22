@@ -13,6 +13,7 @@ import 'package:oui_spy/core/oui/oui_lookup_service.dart';
 import 'package:oui_spy/core/radio_classifier.dart';
 import 'package:oui_spy/core/services/faa_service.dart';
 import 'package:oui_spy/core/wardrive_state.dart';
+import 'package:oui_spy/features/feed/wigle_panel.dart';
 import 'package:oui_spy/theme/app_theme.dart';
 
 class DetectionRow extends ConsumerWidget {
@@ -597,6 +598,7 @@ class _DetailSummary extends ConsumerWidget {
       child: Column(
         children: [
           ...rows,
+          if (WiglePanel.appliesTo(detection)) WiglePanel(detection: detection),
           Padding(
             padding: const EdgeInsets.only(top: 6),
             child: Text(
@@ -823,6 +825,10 @@ String methodLabel(String method) => switch (method) {
   'pwnagotchi' => 'PWNAGOTCHI',
   'glasses' => 'META GLASSES',
   'axon' => 'AXON',
+  'camera' => 'CAMERA',
+  'evil_twin' => 'EVIL TWIN',
+  'pineapple' => 'KARMA AP',
+  'mesh' => 'MESH NODE',
   'ble_watchlist' => 'WATCHLIST',
   'wifi_watchlist' => 'WATCHLIST',
   'ble_proximity' => 'PROXIMITY',

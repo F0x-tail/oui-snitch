@@ -23,6 +23,7 @@ import 'package:oui_spy/features/feed/detection_row.dart' show showDetectionDeta
 import 'package:oui_spy/core/models/detection.dart' show FlockExtension, FlockConfidence, FlockConfidenceX, FlockExtensionSignals;
 import 'package:oui_spy/core/debug_log.dart';
 import 'package:oui_spy/core/ota/ota_service.dart';
+import 'package:oui_spy/core/wigle/wigle_lookup_service.dart';
 import 'package:oui_spy/core/oui/oui_lookup_service.dart';
 import 'package:oui_spy/core/classify/signature_engine.dart';
 import 'package:oui_spy/core/detector_signatures.dart';
@@ -60,6 +61,7 @@ part 'config_ignore_tab.dart';
 part 'config_detection_settings.dart';
 part 'config_detections_tab.dart';
 part 'config_ota.dart';
+part 'config_wigle.dart';
 part 'config_misc.dart';
 
 String boardDisplayName(String? board) => switch (board) {
@@ -528,6 +530,16 @@ class _DeviceConfigScreenState extends ConsumerState<DeviceConfigScreen> {
           onTap: () => context.push('/export'),
           trailing: Icon(Icons.chevron_right, size: 18, color: t.textDim),
         ),
+        ConfigActionRow(
+          icon: Icons.query_stats,
+          label: 'Analysis',
+          subtitle: 'Search the local archive and view capture stats',
+          onTap: () => context.push('/analysis'),
+          trailing: Icon(Icons.chevron_right, size: 18, color: t.textDim),
+        ),
+        const SizedBox(height: 16),
+        const ConfigSectionHeader(label: 'WIGLE'),
+        const _WigleCredentialsSection(),
         const SizedBox(height: 16),
         const ConfigSectionHeader(label: 'OUI DATABASE'),
         const _OuiDatabaseSection(),

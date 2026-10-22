@@ -8,6 +8,7 @@ import 'package:oui_spy/features/engines/detector_screen.dart';
 import 'package:oui_spy/features/engines/foxhunter_screen.dart';
 import 'package:oui_spy/features/engines/skyspy_screen.dart';
 import 'package:oui_spy/features/engines/unipwn_screen.dart';
+import 'package:oui_spy/features/analysis/analysis_screen.dart';
 import 'package:oui_spy/features/export/export_screen.dart';
 import 'package:oui_spy/features/home/home_screen.dart';
 import 'package:oui_spy/features/onboarding/scan_screen.dart';
@@ -80,6 +81,10 @@ final routerProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: '/export',
         builder: (context, state) => const ExportScreen(),
+      ),
+      GoRoute(
+        path: '/analysis',
+        builder: (context, state) => const AnalysisScreen(),
       ),
       GoRoute(
         path: '/engine/pcap',
