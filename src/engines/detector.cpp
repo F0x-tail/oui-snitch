@@ -94,59 +94,118 @@ static const UuidFilter* matchUuidFilter(NimBLEAdvertisedDevice* dev) {
     return nullptr;
 }
 
-struct FindMyTrack {
-    uint8_t  mac[6];
-    uint32_t firstMs;
-    uint32_t lastMs;
-    uint16_t hits;
-    bool     alerted;
+// ---------------------------------------------------------------------------
+// Tracker follow-detection.
+//
+// Presence is not following. A tag seen for a few seconds is simply nearby --
+// a shop shelf, a passer-by, your own keys. What matters is a tag that stays
+// with you: present for a long stretch, or leaving and returning repeatedly.
+// Each tag is tracked and escalated through three tiers, alerting once per tier
+// so a tag that becomes suspicious upgrades rather than repeating:
+//
+//   SUSPECTED  seen briefly              -- "nearby", informational
+//   HIGH       with you for TRK_FOLLOW_MS -- "following"
+//   VERIFIED   gone and returned over TRK_WINDOWS_VERIFIED separate windows
+//
+// Limitation: these tags rotate their MAC (Apple's roughly every 15 minutes
+// when away from its owner), so a single MAC cannot be followed indefinitely.
+// The thresholds are therefore set inside a typical rotation window, and the
+// window counter is what catches a tag that keeps coming back.
+enum TrackerFamily : uint8_t {
+    TRK_FAM_APPLE = 0,   // Apple Find My
+    TRK_FAM_SAMSUNG,     // Samsung SmartTag
+    TRK_FAM_TILE,        // Tile
+    TRK_FAM_GOOGLE,      // Google Find My Device network
 };
-static FindMyTrack fmTracks[16];
-static const uint32_t FM_PERSIST_MS = 3000;
-static const uint16_t FM_MIN_HITS   = 3;
-static const uint32_t FM_STALE_MS   = 120000;
+static const char* const TRK_FAMILY_NAME[] = {"Find My", "SmartTag", "Tile", "Google FMD"};
 
-static void findMyObserve(const uint8_t* mac, int rssi) {
+struct TrackerTrack {
+    uint8_t  mac[6];
+    uint32_t firstMs;      // first sighting in this track
+    uint32_t lastMs;       // most recent sighting
+    uint16_t hits;
+    uint8_t  windows;      // separate appearances (absence > TRK_WINDOW_GAP_MS)
+    uint8_t  family;
+    uint8_t  alerted;      // highest DET_CONF_* already reported
+};
+static TrackerTrack trkTracks[24];
+static const uint16_t TRK_MIN_HITS         = 3;
+static const uint32_t TRK_NEAR_MS          = 3000;    // brief presence
+static const uint32_t TRK_FOLLOW_MS        = 300000;  // 5 min with you
+static const uint32_t TRK_WINDOW_GAP_MS    = 60000;   // absence that ends a window
+static const uint8_t  TRK_WINDOWS_VERIFIED = 3;       // left and came back this often
+static const uint32_t TRK_SPAN_VERIFIED_MS = 600000;  // ...across at least 10 min
+static const uint32_t TRK_STALE_MS         = 1800000; // forget after 30 min unseen
+
+static void trackerObserve(const uint8_t* mac, int rssi, TrackerFamily fam) {
     uint32_t now = millis();
     int slot = -1, freeSlot = -1, oldest = -1;
     uint32_t oldestMs = 0xFFFFFFFF;
-    for (int i = 0; i < 16; i++) {
-        if (fmTracks[i].hits == 0) { if (freeSlot < 0) freeSlot = i; continue; }
-        if (now - fmTracks[i].lastMs > FM_STALE_MS) {
-            fmTracks[i].hits = 0;
+    const int n = (int)(sizeof(trkTracks) / sizeof(trkTracks[0]));
+    for (int i = 0; i < n; i++) {
+        if (trkTracks[i].hits == 0) { if (freeSlot < 0) freeSlot = i; continue; }
+        if (now - trkTracks[i].lastMs > TRK_STALE_MS) {
+            trkTracks[i].hits = 0;
             if (freeSlot < 0) freeSlot = i;
             continue;
         }
-        if (memcmp(fmTracks[i].mac, mac, 6) == 0) { slot = i; break; }
-        if (fmTracks[i].lastMs < oldestMs) { oldestMs = fmTracks[i].lastMs; oldest = i; }
+        if (memcmp(trkTracks[i].mac, mac, 6) == 0) { slot = i; break; }
+        if (trkTracks[i].lastMs < oldestMs) { oldestMs = trkTracks[i].lastMs; oldest = i; }
     }
     if (slot < 0) {
         slot = (freeSlot >= 0) ? freeSlot : oldest;
         if (slot < 0) return;
-        memcpy(fmTracks[slot].mac, mac, 6);
-        fmTracks[slot].firstMs = now;
-        fmTracks[slot].hits = 0;
-        fmTracks[slot].alerted = false;
+        memcpy(trkTracks[slot].mac, mac, 6);
+        trkTracks[slot].firstMs = now;
+        trkTracks[slot].hits    = 0;
+        trkTracks[slot].windows = 1;
+        trkTracks[slot].alerted = DET_CONF_NONE;
+    } else if (now - trkTracks[slot].lastMs > TRK_WINDOW_GAP_MS) {
+        // Was away and is back: a new appearance window.
+        if (trkTracks[slot].windows < 0xFF) trkTracks[slot].windows++;
     }
-    fmTracks[slot].lastMs = now;
-    if (fmTracks[slot].hits < 0xFFFF) fmTracks[slot].hits++;
+    trkTracks[slot].family = (uint8_t)fam;
+    trkTracks[slot].lastMs = now;
+    if (trkTracks[slot].hits < 0xFFFF) trkTracks[slot].hits++;
+    if (trkTracks[slot].hits < TRK_MIN_HITS) return;
 
-    if (!fmTracks[slot].alerted && fmTracks[slot].hits >= FM_MIN_HITS &&
-        (now - fmTracks[slot].firstMs) >= FM_PERSIST_MS) {
-        fmTracks[slot].alerted = true;
-        uint32_t secs = (now - fmTracks[slot].firstMs) / 1000;
-        DetectionEvent evt = {};
-        evt.engine_id = ENGINE_DETECTOR;
-        memcpy(evt.mac, mac, 6);
-        evt.rssi = rssi;
-        evt.timestamp_ms = now;
-        evt.method = METHOD_DET_TRACKER;
-        snprintf(evt.ext.detector.filter_desc, sizeof(evt.ext.detector.filter_desc),
-                 "Find My tracker following %lus", (unsigned long)secs);
-        pushDetection(&evt);
-        Serial.printf("[DETECTOR] STALKER Find My %02x:%02x:%02x:%02x:%02x:%02x following %lus\n",
-                      mac[0], mac[1], mac[2], mac[3], mac[4], mac[5], (unsigned long)secs);
+    uint32_t span = now - trkTracks[slot].firstMs;
+    uint8_t  tier = DET_CONF_NONE;
+    if (trkTracks[slot].windows >= TRK_WINDOWS_VERIFIED && span >= TRK_SPAN_VERIFIED_MS) {
+        tier = DET_CONF_VERIFIED;
+    } else if (span >= TRK_FOLLOW_MS) {
+        tier = DET_CONF_HIGH;
+    } else if (span >= TRK_NEAR_MS) {
+        tier = DET_CONF_SUSPECTED;
     }
+    if (tier == DET_CONF_NONE || tier <= trkTracks[slot].alerted) return;
+    trkTracks[slot].alerted = tier;
+
+    const char* famName = TRK_FAMILY_NAME[fam <= TRK_FAM_GOOGLE ? fam : 0];
+    DetectionEvent evt = {};
+    evt.engine_id = ENGINE_DETECTOR;
+    memcpy(evt.mac, mac, 6);
+    evt.rssi = rssi;
+    evt.timestamp_ms = now;
+    evt.method = METHOD_DET_TRACKER;
+    evt.ext.detector.confidence = tier;
+    if (tier == DET_CONF_VERIFIED) {
+        snprintf(evt.ext.detector.filter_desc, sizeof(evt.ext.detector.filter_desc),
+                 "%s returned %ux/%lum", famName, trkTracks[slot].windows,
+                 (unsigned long)(span / 60000));
+    } else if (tier == DET_CONF_HIGH) {
+        snprintf(evt.ext.detector.filter_desc, sizeof(evt.ext.detector.filter_desc),
+                 "%s following %lum", famName, (unsigned long)(span / 60000));
+    } else {
+        snprintf(evt.ext.detector.filter_desc, sizeof(evt.ext.detector.filter_desc),
+                 "%s nearby", famName);
+    }
+    pushDetection(&evt);
+    Serial.printf("[DETECTOR] TRACKER %02x:%02x:%02x:%02x:%02x:%02x %s %s (%lus, %u windows)\n",
+                  mac[0], mac[1], mac[2], mac[3], mac[4], mac[5], famName,
+                  tier == DET_CONF_VERIFIED ? "RETURNING" :
+                  tier == DET_CONF_HIGH ? "FOLLOWING" : "nearby",
+                  (unsigned long)(span / 1000), trkTracks[slot].windows);
 }
 
 static void detectorCheckSignatures(NimBLEAdvertisedDevice* dev, const uint8_t* mac, int rssi) {
@@ -185,8 +244,30 @@ static void detectorCheckSignatures(NimBLEAdvertisedDevice* dev, const uint8_t* 
 #endif
         if (md.size() >= 24 && (uint8_t)md[0] == 0x4C && (uint8_t)md[1] == 0x00 &&
             (uint8_t)md[2] == 0x12 && (uint8_t)md[3] == 0x19) {
-            if (sigMask & SIG_TRACKER) findMyObserve(mac, rssi);
+            if (sigMask & SIG_TRACKER) trackerObserve(mac, rssi, TRK_FAM_APPLE);
             return;
+        }
+    }
+    if (sigMask & SIG_TRACKER) {
+        // Samsung SmartTag / SmartTag+ and Tile both advertise a fixed 16-bit
+        // service UUID, so the UUID alone identifies the family.
+        if (dev->isAdvertisingService(NimBLEUUID((uint16_t)0xFD5A))) {
+            trackerObserve(mac, rssi, TRK_FAM_SAMSUNG);
+            return;
+        }
+        if (dev->isAdvertisingService(NimBLEUUID((uint16_t)0xFEED))) {
+            trackerObserve(mac, rssi, TRK_FAM_TILE);
+            return;
+        }
+        // Google's Find My Device network rides the Eddystone UUID (0xFEAA), so
+        // the UUID on its own would also match ordinary Eddystone beacons. The
+        // FMDN frame is distinguished by its 0x40 frame type.
+        if (dev->isAdvertisingService(NimBLEUUID((uint16_t)0xFEAA))) {
+            std::string sd = dev->getServiceData(NimBLEUUID((uint16_t)0xFEAA));
+            if (sd.size() >= 1 && (uint8_t)sd[0] == 0x40) {
+                trackerObserve(mac, rssi, TRK_FAM_GOOGLE);
+                return;
+            }
         }
     }
     if (sigMask & SIG_FLIPPER) {
