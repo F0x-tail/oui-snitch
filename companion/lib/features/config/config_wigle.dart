@@ -1,7 +1,8 @@
 part of 'device_config.dart';
 
-/// WiGLE API credentials. The user's own key — nothing ships with the app, and
-/// WiGLE's free budget is small enough that lookups stay user-triggered.
+/// Status for the BSSID lookup feature. Credentials are not entered here —
+/// WigleProvider owns the login, under Wardrive settings, and lookups reuse
+/// that same account.
 class _WigleCredentialsSection extends ConsumerStatefulWidget {
   const _WigleCredentialsSection();
 
@@ -12,102 +13,53 @@ class _WigleCredentialsSection extends ConsumerStatefulWidget {
 
 class _WigleCredentialsSectionState
     extends ConsumerState<_WigleCredentialsSection> {
-  final _nameCtl = TextEditingController();
-  final _tokenCtl = TextEditingController();
-  bool _editing = false;
-
   @override
-  void dispose() {
-    _nameCtl.dispose();
-    _tokenCtl.dispose();
-    super.dispose();
+  void initState() {
+    super.initState();
+    // The user may have signed in since this service last read storage.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      ref.read(wigleLookupProvider).refreshCredentials();
+    });
   }
 
   @override
   Widget build(BuildContext context) {
     final t = AppTheme.of(context);
-    final svc = ref.watch(wigleLookupProvider);
+    final lookup = ref.watch(wigleLookupProvider);
+    final account = ref.watch(wigleProvider);
 
-    if (!_editing) {
-      return Column(
-        children: [
-          ConfigActionRow(
-            icon: Icons.travel_explore,
-            label: svc.hasCredentials ? 'WiGLE account linked' : 'Add WiGLE API key',
-            subtitle: svc.hasCredentials
-                ? '${svc.budgetLabel} · ${svc.cachedCount} cached'
-                : 'Optional. Enables access-point lookups on rogue-AP hits.',
-            onTap: () => setState(() => _editing = true),
-            trailing: Icon(Icons.chevron_right, size: 18, color: t.textDim),
+    return Column(
+      children: [
+        ConfigActionRow(
+          icon: Icons.travel_explore,
+          label: 'Access-point lookup',
+          subtitle: account.isLoggedIn
+              ? '${lookup.budgetLabel} · ${lookup.cachedCount} cached'
+              : 'Sign in to WiGLE under Wardrive settings to enable',
+          onTap: () => ref.read(wigleLookupProvider).refreshCredentials(),
+          trailing: Icon(
+            account.isLoggedIn ? Icons.check_circle : Icons.remove_circle_outline,
+            size: 18,
+            color: account.isLoggedIn ? AppTheme.success : t.textDim,
           ),
-          if (svc.cachedCount > 0)
-            ConfigActionRow(
-              icon: Icons.delete_sweep,
-              label: 'Clear lookup cache',
-              subtitle: 'Forget ${svc.cachedCount} stored WiGLE answers',
-              onTap: () => ref.read(wigleLookupProvider).clearCache(),
-            ),
-        ],
-      );
-    }
-
-    return Container(
-      margin: const EdgeInsets.symmetric(vertical: 8),
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: t.surface,
-        borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: t.border),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            'From wigle.net → Account → Show My Token. Use the API Name and '
-            'API Token, not your login password.',
+        ),
+        if (lookup.cachedCount > 0)
+          ConfigActionRow(
+            icon: Icons.delete_sweep,
+            label: 'Clear lookup cache',
+            subtitle: 'Forget ${lookup.cachedCount} stored WiGLE answers',
+            onTap: () => ref.read(wigleLookupProvider).clearCache(),
+          ),
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 4, 16, 0),
+          child: Text(
+            'Lookups ask whether an access point is recorded where you are '
+            'seeing it, to corroborate a suspected evil twin. Always manual — '
+            'the free WiGLE budget is only a handful of queries a day.',
             style: TextStyle(color: t.textDim, fontSize: 11, height: 1.4),
           ),
-          const SizedBox(height: 10),
-          TextField(
-            controller: _nameCtl,
-            style: TextStyle(color: t.textPrimary, fontSize: 13),
-            decoration: const InputDecoration(
-              labelText: 'API Name',
-              isDense: true,
-            ),
-          ),
-          const SizedBox(height: 8),
-          TextField(
-            controller: _tokenCtl,
-            obscureText: true,
-            style: TextStyle(color: t.textPrimary, fontSize: 13),
-            decoration: const InputDecoration(
-              labelText: 'API Token',
-              isDense: true,
-            ),
-          ),
-          const SizedBox(height: 12),
-          Row(
-            children: [
-              TextButton(
-                onPressed: () => setState(() => _editing = false),
-                child: const Text('CANCEL'),
-              ),
-              const Spacer(),
-              ElevatedButton(
-                onPressed: () async {
-                  await ref
-                      .read(wigleLookupProvider)
-                      .setCredentials(_nameCtl.text, _tokenCtl.text);
-                  if (!context.mounted) return;
-                  setState(() => _editing = false);
-                },
-                child: const Text('SAVE'),
-              ),
-            ],
-          ),
-        ],
-      ),
+        ),
+      ],
     );
   }
 }

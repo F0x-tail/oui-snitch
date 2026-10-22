@@ -97,7 +97,7 @@ class _WiglePanelState extends ConsumerState<WiglePanel> {
           const SizedBox(height: 8),
           if (!svc.hasCredentials)
             Text(
-              'Add your WiGLE API credentials in Config to enable lookups.',
+              'Sign in to WiGLE under Config → Wardrive to enable lookups.',
               style: TextStyle(color: t.textDim, fontSize: 11, height: 1.4),
             )
           else if (_result != null) ...[

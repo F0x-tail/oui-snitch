@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:math' as math;
 
 import 'package:dio/dio.dart';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -116,6 +117,10 @@ class WigleLookupService extends ChangeNotifier {
     _load();
   }
 
+  /// Shared with WigleProvider, which owns the login. Lookups reuse whatever
+  /// account the user already signed in with for uploads — one set of
+  /// credentials, one place to enter them.
+  static const _storage = FlutterSecureStorage();
   static const _kApiName = 'wigle_api_name';
   static const _kApiToken = 'wigle_api_token';
   static const _kCache = 'wigle_cache_v1';
@@ -163,8 +168,7 @@ class WigleLookupService extends ChangeNotifier {
 
   Future<void> _load() async {
     final p = await SharedPreferences.getInstance();
-    _apiName = p.getString(_kApiName) ?? '';
-    _apiToken = p.getString(_kApiToken) ?? '';
+    await _readCredentials();
     _usedToday = p.getInt(_kUsedToday) ?? 0;
     _usedDate = p.getString(_kUsedDate) ?? '';
     _observedCeiling = p.getInt(_kObservedCeiling);
@@ -190,12 +194,21 @@ class WigleLookupService extends ChangeNotifier {
     notifyListeners();
   }
 
-  Future<void> setCredentials(String name, String token) async {
-    _apiName = name.trim();
-    _apiToken = token.trim();
-    final p = await SharedPreferences.getInstance();
-    await p.setString(_kApiName, _apiName);
-    await p.setString(_kApiToken, _apiToken);
+  Future<void> _readCredentials() async {
+    try {
+      _apiName = await _storage.read(key: _kApiName) ?? '';
+      _apiToken = await _storage.read(key: _kApiToken) ?? '';
+    } catch (_) {
+      // Secure storage can be unavailable on a locked device; treat it as
+      // "not signed in" rather than failing the screen.
+      _apiName = '';
+      _apiToken = '';
+    }
+  }
+
+  /// Re-read credentials after the user signs in through the WiGLE settings.
+  Future<void> refreshCredentials() async {
+    await _readCredentials();
     notifyListeners();
   }
 
