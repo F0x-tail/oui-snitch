@@ -493,8 +493,10 @@ static void detectorCheckSignatures(NimBLEAdvertisedDevice* dev, const uint8_t* 
             evt.timestamp_ms = millis();
             evt.method = METHOD_DET_CAMERA;
             evt.ext.detector.confidence = (uint8_t)conf;
+            // Vendor first: the brand is what identifies the device at a
+            // glance, so it leads the notification title.
             snprintf(evt.ext.detector.filter_desc,
-                     sizeof(evt.ext.detector.filter_desc), "Camera (%s)",
+                     sizeof(evt.ext.detector.filter_desc), "%s camera",
                      camVendor ? camVendor : camName);
             pushDetection(&evt);
             Serial.printf("[DETECTOR] SIG %02x:%02x:%02x:%02x:%02x:%02x RSSI:%d [Camera %s %s]\n",
@@ -728,8 +730,8 @@ static bool IRAM_ATTR detectorSigFrameISR(const uint8_t* p, int len, int rssi, u
             evt.method = METHOD_DET_CAMERA;
             // OUI alone: a vendor block covers more than that vendor's cameras.
             evt.ext.detector.confidence = DET_CONF_SUSPECTED;
-            strncpy(evt.ext.detector.filter_desc, camVendor,
-                    sizeof(evt.ext.detector.filter_desc) - 1);
+            snprintf(evt.ext.detector.filter_desc,
+                     sizeof(evt.ext.detector.filter_desc), "%s camera", camVendor);
             pushDetectionFromISR(&evt);
             return true;
         }

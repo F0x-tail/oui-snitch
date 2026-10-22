@@ -14,8 +14,8 @@ class _WatchItem {
 
 const _watchGroups = <(String, List<_WatchItem>)>[
   ('SURVEILLANCE', [
-    _WatchItem('Surveillance cameras', 'Flock, Arlo and other camera networks', Icons.videocam,
-        classes: {SignatureClass.surveillance, SignatureClass.camera}, flock: true),
+    _WatchItem('Surveillance cameras', 'Ring, Wyze, Nest, Arlo, Hikvision, Flock and other cameras', Icons.videocam,
+        bits: sigCamera, classes: {SignatureClass.surveillance, SignatureClass.camera}, flock: true),
     _WatchItem('Police & public safety', 'Axon body cams and Tasers, police and fleet vehicle routers', Icons.local_police,
         bits: sigAxon, classes: {SignatureClass.lawEnforcement}),
     _WatchItem('Drones', 'Drones and drone controllers, including Remote ID', Icons.flight,
@@ -29,10 +29,13 @@ const _watchGroups = <(String, List<_WatchItem>)>[
   ]),
   ('HACKING & ATTACKS', [
     _WatchItem('Hacking tools', 'Flipper Zero, Pwnagotchi and other pentest gear', Icons.bug_report,
-        bits: sigFlipper | sigPwnagotchi, classes: {SignatureClass.hacking}),
+        bits: sigHacktools, classes: {SignatureClass.hacking}),
     _WatchItem('Wi-Fi deauth attacks', 'Someone knocking devices off Wi-Fi', Icons.wifi_off, bits: sigDeauth),
-    _WatchItem('Probe requests', 'Phones calling out for saved Wi-Fi names. Noisy in busy areas', Icons.wifi_find,
+    _WatchItem('Probes & rogue APs', 'Phones calling out for saved Wi-Fi names, plus evil-twin and KARMA access points. Noisy in busy areas', Icons.wifi_find,
         bits: sigProbe),
+  ]),
+  ('MESH RADIOS', [
+    _WatchItem('Mesh nodes', 'Meshtastic and MeshCore radios', Icons.hub, bits: sigMesh),
   ]),
 ];
 
@@ -127,7 +130,7 @@ class _DetectionSettingsTabState extends ConsumerState<_DetectionSettingsTab> {
 
     void setOn(_WatchItem w, bool v) {
       final sig = ref.read(detectorSigMaskProvider.notifier);
-      for (final b in [sigTracker, sigFlipper, sigDeauth, sigProbe, sigPwnagotchi, sigGlasses, sigAxon]) {
+      for (final b in [sigTracker, sigHacktools, sigDeauth, sigProbe, sigMesh, sigGlasses, sigAxon, sigCamera]) {
         if (w.bits & b != 0) sig.setBit(b, v);
       }
       for (final c in w.classes) {

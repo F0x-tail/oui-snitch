@@ -73,6 +73,16 @@ class NotificationSettingsBody extends ConsumerWidget {
         const SizedBox(height: 16),
         const ConfigSectionHeader(label: 'BEHAVIOR'),
         ConfigSliderRow(
+          icon: Icons.filter_alt,
+          label: 'Alert filter',
+          valueLabel: _confidenceLabel(notif.minConfidence),
+          min: 0,
+          max: 3,
+          divisions: 3,
+          value: notif.minConfidence.toDouble(),
+          onChanged: (v) => notif.setMinConfidence(v.round()),
+        ),
+        ConfigSliderRow(
           icon: Icons.timer,
           label: 'Cooldown per device',
           valueLabel: _formatCooldown(notif.cooldownSeconds),
@@ -113,6 +123,19 @@ class NotificationSettingsBody extends ConsumerWidget {
         ),
       ],
     );
+  }
+
+  static String _confidenceLabel(int c) {
+    switch (c) {
+      case 0:
+        return 'Everything';
+      case 1:
+        return 'Suspected +';
+      case 2:
+        return 'High +';
+      default:
+        return 'Verified only';
+    }
   }
 
   static String _formatCooldown(int seconds) {

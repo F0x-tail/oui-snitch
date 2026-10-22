@@ -6,6 +6,7 @@ import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:oui_spy/core/debug_log.dart';
+import 'package:oui_spy/core/detector_signatures.dart';
 import 'package:oui_spy/core/models/detection.dart';
 import 'package:oui_spy/core/models/engine.dart';
 import 'package:oui_spy/core/classify/device_registry.dart';
@@ -21,6 +22,10 @@ class NotifChannel {
 
   static const flock = 'flock_alerts';
   static const detector = 'detector_alerts';
+
+  /// Suspected-tier detections. A separate channel because on Android 8+
+  /// importance belongs to the channel, not the individual notification.
+  static const detectorQuiet = 'detector_alerts_quiet';
   static const drone = 'drone_alerts';
   static const foxhunt = 'foxhunt_alerts';
   static const wardrive = 'wardrive_status';
@@ -45,6 +50,12 @@ class NotificationService extends ChangeNotifier {
   bool foxhuntEnabled = false; // foxhunt is high-frequency, off by default
   bool wardriveStatusEnabled = true;
   Set<SignatureClass> classAlerts = {...defaultAlertClasses};
+
+  /// Alert filter: the lowest confidence a detector hit must carry to notify.
+  /// 0 lets everything through; raising it silences the weaker matches, such as
+  /// a vendor OUI seen on its own, without turning the signature off.
+  int minConfidence = detConfNone;
+
   final _classAlerted = <String, DateTime>{};
   final _classPending = <String, ClassifiedDevice>{};
   Timer? _classRetry;
@@ -163,6 +174,12 @@ class NotificationService extends ChangeNotifier {
         importance: Importance.high,
       ),
       AndroidNotificationChannel(
+        NotifChannel.detectorQuiet,
+        'Suspected Detections',
+        description: 'Low-confidence detections, shown without sound',
+        importance: Importance.low,
+      ),
+      AndroidNotificationChannel(
         NotifChannel.drone,
         'Drone Alerts',
         description: 'Alerts when FAA Remote ID drones are detected',
@@ -193,6 +210,13 @@ class NotificationService extends ChangeNotifier {
 
     final enabled = _isEngineEnabled(det.engine);
     if (!enabled) return;
+
+    // Alert filter. Only detector hits carry a confidence; anything that
+    // reports none (0) is left alone so other engines are unaffected.
+    final conf = det.detector?.confidence ?? 0;
+    if (minConfidence > detConfNone && conf > detConfNone && conf < minConfidence) {
+      return;
+    }
 
     if (_isRateLimited()) return;
     if (_isCoolingDown(det.macAddress, det.engine)) return;
@@ -262,6 +286,16 @@ class NotificationService extends ChangeNotifier {
 
   void setClassAlert(SignatureClass a, bool on) {
     on ? classAlerts.add(a) : classAlerts.remove(a);
+    notifyListeners();
+    _savePrefs();
+  }
+
+  /// Alert filter: notify only on detector hits at or above this confidence.
+  void setMinConfidence(int c) {
+    if (c < detConfNone) c = detConfNone;
+    if (c > detConfVerified) c = detConfVerified;
+    if (c == minConfidence) return;
+    minConfidence = c;
     notifyListeners();
     _savePrefs();
   }
@@ -386,6 +420,18 @@ class NotificationService extends ChangeNotifier {
       _ => (null, null),
     };
     if (title == null || channel == null) return null;
+
+    // Detector hits lead with the confidence tier and route Suspected to the
+    // quiet channel. Other engines carry no confidence, so they are untouched.
+    final conf = det.detector?.confidence ?? detConfNone;
+    if (det.engine == Engine.detector && conf > detConfNone) {
+      return (
+        '$title · ${detConfLabel(conf)}',
+        '${det.engine.label} · ${methodLabel(det.method)}',
+        _detectionBody(det, title),
+        conf == detConfSuspected ? NotifChannel.detectorQuiet : channel,
+      );
+    }
     return (title, '${det.engine.label} · ${methodLabel(det.method)}', _detectionBody(det, title), channel);
   }
 
@@ -405,12 +451,21 @@ class NotificationService extends ChangeNotifier {
   }
 
   static String _detectionBody(Detection det, String title) => [
-        'Signal ${det.rssi} dBm${det.channel > 0 ? ' on channel ${det.channel}' : ''}.',
-        if (det.deviceName.isNotEmpty && det.deviceName != title) 'Name ${det.deviceName}.',
-        if (det.ssid.isNotEmpty) 'Network "${det.ssid}".',
-        'MAC ${det.macAddress.toUpperCase()}.',
-        if (det.sourceNodeId.isNotEmpty) 'Seen by node ${det.sourceNodeId}.',
+        if (det.deviceName.isNotEmpty && det.deviceName != title) '${det.deviceName},',
+        '${_proximity(det.rssi)} (${det.rssi} dBm)',
+        if (det.channel > 0) 'on channel ${det.channel}',
+        if (det.ssid.isNotEmpty) '· "${det.ssid}"',
+        if (det.sourceNodeId.isNotEmpty) '· node ${det.sourceNodeId}',
       ].join(' ');
+
+  /// Rough distance band. RSSI is a poor absolute measure but the bands are
+  /// stable enough to say whether something is on top of you or across a lot.
+  static String _proximity(int rssi) {
+    if (rssi >= -55) return 'very close';
+    if (rssi >= -70) return 'nearby';
+    if (rssi >= -85) return 'in range';
+    return 'far';
+  }
 
   void _fireMilestoneNotification(int count) {
     _fireNotification(
@@ -433,22 +488,23 @@ class NotificationService extends ChangeNotifier {
     if (channel != NotifChannel.wardrive) {
       onAlert?.call(title, subtitle == null ? body : '$subtitle · $body');
     }
+    final quiet = channel == NotifChannel.detectorQuiet;
     final androidDetails = AndroidNotificationDetails(
       channel,
       channel,
       groupKey: groupKey,
       subText: subtitle,
       styleInformation: BigTextStyleInformation(body),
-      playSound: soundEnabled,
-      enableVibration: vibrationEnabled,
-      priority: Priority.high,
-      importance: Importance.high,
+      playSound: soundEnabled && !quiet,
+      enableVibration: vibrationEnabled && !quiet,
+      priority: quiet ? Priority.low : Priority.high,
+      importance: quiet ? Importance.low : Importance.high,
     );
 
     final darwinDetails = DarwinNotificationDetails(
       presentAlert: true,
       presentBadge: true,
-      presentSound: soundEnabled,
+      presentSound: soundEnabled && !quiet,
       subtitle: subtitle,
       threadIdentifier: groupKey,
     );
@@ -512,6 +568,7 @@ class NotificationService extends ChangeNotifier {
     milestoneAlertsEnabled = p.getBool('notif_milestones') ?? true;
     cooldownSeconds = p.getInt('notif_cooldown') ?? 300;
     maxPerMinute = p.getInt('notif_max_per_min') ?? 10;
+    minConfidence = p.getInt('notif_min_confidence') ?? detConfNone;
     soundEnabled = p.getBool('notif_sound') ?? true;
     vibrationEnabled = p.getBool('notif_vibration') ?? true;
     final ac = p.getStringList('notif_alert_classes');
@@ -541,6 +598,7 @@ class NotificationService extends ChangeNotifier {
     p.setBool('notif_milestones', milestoneAlertsEnabled);
     p.setInt('notif_cooldown', cooldownSeconds);
     p.setInt('notif_max_per_min', maxPerMinute);
+    p.setInt('notif_min_confidence', minConfidence);
     p.setBool('notif_sound', soundEnabled);
     p.setBool('notif_vibration', vibrationEnabled);
     p.setStringList('notif_alert_classes', [for (final a in classAlerts) a.name]);
