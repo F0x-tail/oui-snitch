@@ -150,6 +150,8 @@ enum EngineState : uint8_t {
 #define METHOD_DET_GLASSES     7
 #define METHOD_DET_AXON        8
 #define METHOD_DET_CAMERA      9
+#define METHOD_DET_EVILTWIN    10
+#define METHOD_DET_PINEAPPLE   11
 
 #define SIG_TRACKER    0x01
 #define SIG_FLIPPER    0x02

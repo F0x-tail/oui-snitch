@@ -59,6 +59,52 @@ static DedupRingISR<16, 8000> axonDedupISR;
 
 static DedupRingISR<16, 8000> cameraDedupISR;
 
+// ---------------------------------------------------------------------------
+// Rogue-AP behaviour, watched across beacons rather than matched per frame.
+//
+//   Evil twin  one SSID beaconing from a second BSSID whose OUI differs. A
+//              second radio for the same network name is either a legitimate
+//              extender (same vendor OUI, so not flagged) or an impersonator.
+//   KARMA      one BSSID beaconing many different SSIDs, the signature of a
+//              Pineapple-style AP answering whatever clients ask for.
+//
+// Fixed tables, no allocation: this runs in the promiscuous callback.
+struct SsidOwner {
+    uint32_t ssidHash;
+    uint8_t  bssid[6];
+    uint32_t lastMs;
+    bool     alerted;
+};
+struct BssidNames {
+    uint8_t  bssid[6];
+    uint32_t hashes[8];
+    uint8_t  n;
+    uint32_t lastMs;
+    bool     alerted;
+};
+static SsidOwner  ssidOwners[24];
+static BssidNames bssidNames[8];
+static const uint32_t AP_STALE_MS      = 300000;  // forget after 5 min
+static const uint8_t  KARMA_SSID_COUNT = 5;       // distinct SSIDs from one BSSID
+
+static inline uint32_t IRAM_ATTR ssidHash32(const uint8_t* s, int n) {
+    uint32_t h = 2166136261u;                     // FNV-1a
+    for (int i = 0; i < n; i++) { h ^= s[i]; h *= 16777619u; }
+    return h ? h : 1u;                            // 0 marks an empty slot
+}
+
+// Pull the SSID element out of a beacon/probe-response body. Returns length.
+static inline int IRAM_ATTR beaconSsid(const uint8_t* p, int len, const uint8_t** out) {
+    int off = 36;                                 // after the fixed parameters
+    while (off + 2 <= len) {
+        uint8_t id = p[off], elen = p[off + 1];
+        if (off + 2 + elen > len) break;
+        if (id == 0) { *out = &p[off + 2]; return elen; }
+        off += 2 + elen;
+    }
+    return -1;
+}
+
 static const uint8_t AXON_OUI[3] = {0x00, 0x25, 0xdf};
 
 // Law-enforcement / public-safety vendors, from the IEEE MA-L registry.
@@ -455,6 +501,95 @@ class DetectorCallback : public NimBLEAdvertisedDeviceCallbacks {
 
 static DetectorCallback scanCb;
 
+// Watches beacons for the two rogue-AP behaviours above. Returns true when it
+// raised a detection.
+static bool IRAM_ATTR apObserveISR(const uint8_t* p, int len, int rssi, uint8_t channel) {
+    const uint8_t* ssid = nullptr;
+    int slen = beaconSsid(p, len, &ssid);
+    if (slen <= 0 || slen > 32) return false;     // hidden or malformed
+    const uint8_t* bssid = &p[16];                // addr3
+    uint32_t h = ssidHash32(ssid, slen);
+    uint32_t now = millis();
+
+    // --- evil twin: same SSID, different BSSID, different vendor ---
+    int freeSlot = -1;
+    for (int i = 0; i < (int)(sizeof(ssidOwners) / sizeof(ssidOwners[0])); i++) {
+        SsidOwner& o = ssidOwners[i];
+        if (o.ssidHash == 0 || now - o.lastMs > AP_STALE_MS) {
+            if (o.ssidHash != 0) o.ssidHash = 0;
+            if (freeSlot < 0) freeSlot = i;
+            continue;
+        }
+        if (o.ssidHash != h) continue;
+        if (memcmp(o.bssid, bssid, 6) == 0) { o.lastMs = now; return false; }
+        // Same name from another radio. A legitimate extender normally shares
+        // the vendor OUI, so only a differing OUI is treated as impersonation.
+        if (memcmp(o.bssid, bssid, 3) != 0 && !o.alerted) {
+            o.alerted = true;
+            DetectionEvent evt = {};
+            evt.engine_id = ENGINE_DETECTOR;
+            memcpy(evt.mac, bssid, 6);
+            evt.rssi = rssi;
+            evt.channel = channel;
+            evt.timestamp_ms = now;
+            evt.method = METHOD_DET_EVILTWIN;
+            evt.ext.detector.confidence = DET_CONF_HIGH;
+            strncpy(evt.ext.detector.filter_desc, "Evil twin (SSID from 2nd BSSID)",
+                    sizeof(evt.ext.detector.filter_desc) - 1);
+            pushDetectionFromISR(&evt);
+            return true;
+        }
+        return false;
+    }
+    if (freeSlot >= 0) {
+        SsidOwner& o = ssidOwners[freeSlot];
+        o.ssidHash = h;
+        memcpy(o.bssid, bssid, 6);
+        o.lastMs = now;
+        o.alerted = false;
+    }
+
+    // --- KARMA: one BSSID handing out many different SSIDs ---
+    int bFree = -1;
+    for (int i = 0; i < (int)(sizeof(bssidNames) / sizeof(bssidNames[0])); i++) {
+        BssidNames& b = bssidNames[i];
+        if (b.n == 0 || now - b.lastMs > AP_STALE_MS) {
+            if (b.n != 0) b.n = 0;
+            if (bFree < 0) bFree = i;
+            continue;
+        }
+        if (memcmp(b.bssid, bssid, 6) != 0) continue;
+        b.lastMs = now;
+        for (int k = 0; k < b.n; k++) if (b.hashes[k] == h) return false;
+        if (b.n < 8) b.hashes[b.n++] = h;
+        if (b.n >= KARMA_SSID_COUNT && !b.alerted) {
+            b.alerted = true;
+            DetectionEvent evt = {};
+            evt.engine_id = ENGINE_DETECTOR;
+            memcpy(evt.mac, bssid, 6);
+            evt.rssi = rssi;
+            evt.channel = channel;
+            evt.timestamp_ms = now;
+            evt.method = METHOD_DET_PINEAPPLE;
+            evt.ext.detector.confidence = DET_CONF_HIGH;
+            strncpy(evt.ext.detector.filter_desc, "KARMA AP (many SSIDs, 1 BSSID)",
+                    sizeof(evt.ext.detector.filter_desc) - 1);
+            pushDetectionFromISR(&evt);
+            return true;
+        }
+        return false;
+    }
+    if (bFree >= 0) {
+        BssidNames& b = bssidNames[bFree];
+        memcpy(b.bssid, bssid, 6);
+        b.hashes[0] = h;
+        b.n = 1;
+        b.lastMs = now;
+        b.alerted = false;
+    }
+    return false;
+}
+
 static bool IRAM_ATTR detectorSigFrameISR(const uint8_t* p, int len, int rssi, uint8_t channel) {
     uint8_t fctl = p[0];
     if ((sigMask & SIG_DEAUTH) && (fctl == 0xC0 || fctl == 0xA0)) {
@@ -540,6 +675,11 @@ static bool IRAM_ATTR detectorSigFrameISR(const uint8_t* p, int len, int rssi, u
             }
             return true;
         }
+    }
+
+    // Beacons also feed the rogue-AP behaviour watch (evil twin / KARMA).
+    if ((sigMask & SIG_PROBE) && fctl == 0x80 && len >= 38) {
+        if (apObserveISR(p, len, rssi, channel)) return true;
     }
 
     if (sigMask & SIG_CAMERA) {
