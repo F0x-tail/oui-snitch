@@ -149,6 +149,7 @@ enum EngineState : uint8_t {
 #define METHOD_DET_PWNAGOTCHI  6
 #define METHOD_DET_GLASSES     7
 #define METHOD_DET_AXON        8
+#define METHOD_DET_CAMERA      9
 
 #define SIG_TRACKER    0x01
 #define SIG_FLIPPER    0x02
@@ -157,7 +158,15 @@ enum EngineState : uint8_t {
 #define SIG_PWNAGOTCHI 0x10
 #define SIG_GLASSES    0x20
 #define SIG_AXON       0x40
-#define SIG_ALL        0x7F
+#define SIG_CAMERA     0x80
+#define SIG_ALL        0xFF
+
+// Detection confidence, reported in DetectionEvent.ext.detector.confidence.
+// Lets the app alert only at or above a user-chosen tier instead of every hit.
+#define DET_CONF_NONE      0
+#define DET_CONF_SUSPECTED 1   // one weak signal (e.g. a vendor OUI on its own)
+#define DET_CONF_HIGH      2   // one strong, specific signal
+#define DET_CONF_VERIFIED  3   // corroborated by two independent signals
 
 typedef struct __attribute__((packed)) {
     uint8_t  engine_id;          // EngineId
@@ -227,6 +236,7 @@ typedef struct __attribute__((packed)) {
         struct {
             char    filter_desc[32];
             uint8_t is_full_mac;
+            uint8_t confidence;     // DET_CONF_*; 0 when the signature has no tier
         } detector;
 
         // Foxhunter (RSSI sent separately via dedicated characteristic)

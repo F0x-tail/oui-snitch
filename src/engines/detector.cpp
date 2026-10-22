@@ -8,6 +8,11 @@
 #include <NimBLEDevice.h>
 #include <WiFi.h>
 #include <esp_wifi.h>
+#include "camera_match.h"
+
+// Extended camera OUI entries (reserved for observed Wi-Fi module OUIs) stay off
+// unless explicitly enabled; see camera_oui.h.
+volatile bool g_cameraExtendedOui = false;
 
 struct TargetFilter {
     uint8_t macBytes[6];
@@ -51,6 +56,8 @@ static DedupRingISR<32, 3000> wifiDedupISR;
 static DedupRing<32, 10000> sigDedup;
 static DedupRingISR<32, 8000> probeDedup;
 static DedupRingISR<16, 8000> axonDedupISR;
+
+static DedupRingISR<16, 8000> cameraDedupISR;
 
 static const uint8_t AXON_OUI[3] = {0x00, 0x25, 0xdf};
 
@@ -264,6 +271,33 @@ static void detectorCheckSignatures(NimBLEAdvertisedDevice* dev, const uint8_t* 
                           mac[0], mac[1], mac[2], mac[3], mac[4], mac[5], rssi);
         }
     }
+    if (sigMask & SIG_CAMERA) {
+        const char* camVendor = cameraMatchOui(mac);
+        const char* camName   = nullptr;
+        if (dev->haveName()) {
+            std::string nm = dev->getName();
+            // cameraMatchName returns a pointer into the static pattern table,
+            // so it stays valid after nm goes out of scope.
+            camName = cameraMatchName(nm.c_str());
+        }
+        CameraConf conf = cameraScore(camVendor, camName);
+        if (conf != CAMERA_CONF_NONE && !sigDedup.check(mac)) {
+            DetectionEvent evt = {};
+            evt.engine_id = ENGINE_DETECTOR;
+            memcpy(evt.mac, mac, 6);
+            evt.rssi = rssi;
+            evt.timestamp_ms = millis();
+            evt.method = METHOD_DET_CAMERA;
+            evt.ext.detector.confidence = (uint8_t)conf;
+            snprintf(evt.ext.detector.filter_desc,
+                     sizeof(evt.ext.detector.filter_desc), "Camera (%s)",
+                     camVendor ? camVendor : camName);
+            pushDetection(&evt);
+            Serial.printf("[DETECTOR] SIG %02x:%02x:%02x:%02x:%02x:%02x RSSI:%d [Camera %s %s]\n",
+                          mac[0], mac[1], mac[2], mac[3], mac[4], mac[5], rssi,
+                          camVendor ? camVendor : "name-match", cameraConfName(conf));
+        }
+    }
 }
 
 class DetectorCallback : public NimBLEAdvertisedDeviceCallbacks {
@@ -375,6 +409,26 @@ static bool IRAM_ATTR detectorSigFrameISR(const uint8_t* p, int len, int rssi, u
                         sizeof(evt.ext.detector.filter_desc) - 1);
                 pushDetectionFromISR(&evt);
             }
+            return true;
+        }
+    }
+
+    if (sigMask & SIG_CAMERA) {
+        const uint8_t* src = &p[10];
+        const char* camVendor = cameraMatchOuiISR(src);
+        if (camVendor && !cameraDedupISR.check(src)) {
+            DetectionEvent evt = {};
+            evt.engine_id = ENGINE_DETECTOR;
+            memcpy(evt.mac, src, 6);
+            evt.rssi = rssi;
+            evt.channel = channel;
+            evt.timestamp_ms = millis();
+            evt.method = METHOD_DET_CAMERA;
+            // OUI alone: a vendor block covers more than that vendor's cameras.
+            evt.ext.detector.confidence = DET_CONF_SUSPECTED;
+            strncpy(evt.ext.detector.filter_desc, camVendor,
+                    sizeof(evt.ext.detector.filter_desc) - 1);
+            pushDetectionFromISR(&evt);
             return true;
         }
     }
@@ -571,7 +625,7 @@ void detectorSetFilters(const uint8_t* data, size_t len) {
 }
 
 void detectorSetSigMask(uint8_t mask) {
-    const uint8_t wifiBits = SIG_DEAUTH | SIG_PROBE | SIG_PWNAGOTCHI | SIG_AXON;
+    const uint8_t wifiBits = SIG_DEAUTH | SIG_PROBE | SIG_PWNAGOTCHI | SIG_AXON | SIG_CAMERA;
     bool prevWifi = (sigMask & wifiBits) != 0;
     sigMask = mask;
     bool newWifi = (sigMask & wifiBits) != 0;
@@ -585,12 +639,16 @@ uint8_t detectorGetSigMask(void) { return sigMask; }
 
 bool detectorUsesWifi(void) {
     return (detectorRadioMask & 0x01) != 0 &&
-           (sigMask & (SIG_DEAUTH | SIG_PROBE | SIG_PWNAGOTCHI | SIG_AXON)) != 0;
+           (sigMask & (SIG_DEAUTH | SIG_PROBE | SIG_PWNAGOTCHI | SIG_AXON | SIG_CAMERA)) != 0;
 }
 
 static void detectorInit(void) {
     dedup.reset();
     wifiDedupISR.reset();
+    cameraDedupISR.reset();
+    // Build the camera OUI buckets here: the ISR lookup never builds them, it
+    // just misses until they are ready.
+    cameraOuiInitBuckets();
     Serial.printf("[DETECTOR] Initialized (preserved filters=%d)\n", filterCount);
 }
 
@@ -601,7 +659,7 @@ static void detectorStart(void) {
     bool wardriveOwns = (engineGetState(ENGINE_WARDRIVE) != ESTATE_DISABLED);
     bool wantBle  = (detectorRadioMask & 0x02) != 0;
     bool wantWifi = (detectorRadioMask & 0x01) != 0 &&
-                    (sigMask & (SIG_DEAUTH | SIG_PROBE | SIG_PWNAGOTCHI | SIG_AXON)) != 0;
+                    (sigMask & (SIG_DEAUTH | SIG_PROBE | SIG_PWNAGOTCHI | SIG_AXON | SIG_CAMERA)) != 0;
 
     if (!wardriveOwns && wantBle) {
         bleScan = NimBLEDevice::getScan();
@@ -681,7 +739,7 @@ void detectorHostSuspend(bool suspend) {
             bleCoexRegister(&scanCb, true);
         }
         if ((detectorRadioMask & 0x01) &&
-            (sigMask & (SIG_DEAUTH | SIG_PROBE | SIG_PWNAGOTCHI | SIG_AXON))) {
+            (sigMask & (SIG_DEAUTH | SIG_PROBE | SIG_PWNAGOTCHI | SIG_AXON | SIG_CAMERA))) {
             if (!meshIsEnabled()) WiFi.mode(WIFI_STA);
             wifiSnifferApplyPs();
             wifiCoexRegister(wifiSnifferCb, WIFI_PROMIS_FILTER_MASK_MGMT);
