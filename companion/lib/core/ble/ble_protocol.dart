@@ -448,7 +448,11 @@ class BleProtocol {
           'pwnagotchi',
           'glasses',
           'axon',
-        ][method.clamp(0, 8)],
+          'camera',
+          'evil_twin',
+          'pineapple',
+          'mesh',
+        ][method.clamp(0, 12)],
       Engine.foxhunter => const ['ble_proximity', 'wifi_proximity'][method.clamp(0, 1)],
       Engine.uniPwn => 'unitree_ble',
       Engine.wardrive => const ['wifi_ap', 'ble_adv'][method.clamp(0, 1)],
@@ -526,7 +530,10 @@ class BleProtocol {
     if (ext.length > 1) {
       desc = _extractString(ext, 1, 32);
     }
-    return DetectorExtension(isFullMac: isFullMac, filterDescription: desc);
+    // Appended after the description; firmware that predates it sends 33 bytes.
+    final confidence = ext.length > 33 ? ext[33] : 0;
+    return DetectorExtension(
+        isFullMac: isFullMac, filterDescription: desc, confidence: confidence);
   }
 
   static WardriveExtension _decodeWardriveExtension(Uint8List ext) {

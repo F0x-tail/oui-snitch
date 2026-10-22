@@ -174,6 +174,8 @@ class DetectorExtension with _$DetectorExtension {
   const factory DetectorExtension({
     String? filterDescription,
     @Default(false) bool isFullMac,
+    // DET_CONF_* from the firmware: 0 none, 1 suspected, 2 high, 3 verified.
+    @Default(0) int confidence,
   }) = _DetectorExtension;
 
   factory DetectorExtension.fromJson(Map<String, dynamic> json) =>
