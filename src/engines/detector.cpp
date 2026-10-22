@@ -61,6 +61,43 @@ static DedupRingISR<16, 8000> cameraDedupISR;
 
 static const uint8_t AXON_OUI[3] = {0x00, 0x25, 0xdf};
 
+// Law-enforcement / public-safety vendors, from the IEEE MA-L registry.
+// Axon only ships duty equipment, so its OUI is meaningful on its own. The
+// others are not: a Motorola Solutions block covers police radios but also a
+// great deal else, so a bare OUI from these is reported as SUSPECTED and only
+// an Axon-specific manufacturer ID or service UUID raises the tier.
+struct LeVendorOui { uint8_t b[3]; const char* vendor; };
+static const LeVendorOui LE_VENDOR_OUIS[] = {
+    {{0x00,0x00,0xc3}, "Harris"},
+    {{0x00,0x04,0x7d}, "Motorola"},
+    {{0x00,0x06,0xec}, "Harris"},
+    {{0x00,0x0d,0x4f}, "Kenwood"},
+    {{0x00,0x0d,0xca}, "Tait"},
+    {{0x00,0x17,0xf3}, "Harris"},
+    {{0x00,0x18,0x85}, "Motorola"},
+    {{0x00,0x1d,0x96}, "WatchGuard"},
+    {{0x00,0x1f,0x92}, "Motorola"},
+    {{0x00,0x23,0xbd}, "Digital Ally"},
+    {{0x00,0x25,0xdf}, "Axon"},
+    {{0x10,0x74,0x6f}, "Motorola"},
+    {{0x4c,0xcc,0x34}, "Motorola"},
+    {{0x64,0x69,0xbc}, "Hytera"},
+    {{0x9c,0x06,0x6e}, "Hytera"},
+    {{0x9c,0x86,0x2b}, "Motorola"},
+    {{0xb8,0xe2,0x8c}, "Motorola"},
+    {{0xe0,0xda,0xdc}, "Kenwood"},
+};
+static const int LE_VENDOR_OUI_COUNT =
+    sizeof(LE_VENDOR_OUIS) / sizeof(LE_VENDOR_OUIS[0]);
+
+static const char* leVendorLookup(const uint8_t* mac) {
+    if (mac[0] & 0x02) return nullptr;      // locally administered / random
+    for (int i = 0; i < LE_VENDOR_OUI_COUNT; i++) {
+        if (memcmp(mac, LE_VENDOR_OUIS[i].b, 3) == 0) return LE_VENDOR_OUIS[i].vendor;
+    }
+    return nullptr;
+}
+
 static volatile unsigned long deauthWindowStart = 0;
 static volatile uint16_t deauthCount = 0;
 static volatile unsigned long lastDeauthAlert = 0;
@@ -338,18 +375,25 @@ static void detectorCheckSignatures(NimBLEAdvertisedDevice* dev, const uint8_t* 
                        dev->isAdvertisingService(NimBLEUUID((uint16_t)0xFE6B)) ||
                        dev->isAdvertisingService(NimBLEUUID((uint16_t)0xFE6C));
         bool axonMac = (memcmp(mac, AXON_OUI, 3) == 0);
-        if ((axonMac || axonMfg || axonSvc) && !sigDedup.check(mac)) {
+        const char* leVendor = leVendorLookup(mac);
+        uint8_t tier = DET_CONF_NONE;
+        if ((axonMfg || axonSvc) && axonMac)   tier = DET_CONF_VERIFIED;
+        else if (axonMfg || axonSvc || axonMac) tier = DET_CONF_HIGH;
+        else if (leVendor)                      tier = DET_CONF_SUSPECTED;
+        if (tier != DET_CONF_NONE && !sigDedup.check(mac)) {
+            const char* vendor = axonMac ? "Axon" : (leVendor ? leVendor : "Axon");
             DetectionEvent evt = {};
             evt.engine_id = ENGINE_DETECTOR;
             memcpy(evt.mac, mac, 6);
             evt.rssi = rssi;
             evt.timestamp_ms = millis();
             evt.method = METHOD_DET_AXON;
-            strncpy(evt.ext.detector.filter_desc, "Axon (Law Enforcement)",
-                    sizeof(evt.ext.detector.filter_desc) - 1);
+            evt.ext.detector.confidence = tier;
+            snprintf(evt.ext.detector.filter_desc,
+                     sizeof(evt.ext.detector.filter_desc), "%s (Law Enforcement)", vendor);
             pushDetection(&evt);
-            Serial.printf("[DETECTOR] SIG %02x:%02x:%02x:%02x:%02x:%02x RSSI:%d [Axon LE]\n",
-                          mac[0], mac[1], mac[2], mac[3], mac[4], mac[5], rssi);
+            Serial.printf("[DETECTOR] SIG %02x:%02x:%02x:%02x:%02x:%02x RSSI:%d [%s LE]\n",
+                          mac[0], mac[1], mac[2], mac[3], mac[4], mac[5], rssi, vendor);
         }
     }
     if (sigMask & SIG_CAMERA) {
@@ -477,7 +521,9 @@ static bool IRAM_ATTR detectorSigFrameISR(const uint8_t* p, int len, int rssi, u
 
     if (sigMask & SIG_AXON) {
         const uint8_t* src = &p[10];
-        if (memcmp(src, AXON_OUI, 3) == 0) {
+        bool axonMac = (memcmp(src, AXON_OUI, 3) == 0);
+        const char* leVendor = axonMac ? "Axon" : leVendorLookup(src);
+        if (leVendor) {
             if (!axonDedupISR.check(src)) {
                 DetectionEvent evt = {};
                 evt.engine_id = ENGINE_DETECTOR;
@@ -486,7 +532,9 @@ static bool IRAM_ATTR detectorSigFrameISR(const uint8_t* p, int len, int rssi, u
                 evt.channel = channel;
                 evt.timestamp_ms = millis();
                 evt.method = METHOD_DET_AXON;
-                strncpy(evt.ext.detector.filter_desc, "Axon (Law Enforcement)",
+                // Axon only ships duty gear; the other vendors make much else.
+                evt.ext.detector.confidence = axonMac ? DET_CONF_HIGH : DET_CONF_SUSPECTED;
+                strncpy(evt.ext.detector.filter_desc, leVendor,
                         sizeof(evt.ext.detector.filter_desc) - 1);
                 pushDetectionFromISR(&evt);
             }
