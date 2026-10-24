@@ -25,6 +25,18 @@ class _ScanTimingSliders extends ConsumerWidget {
 
     return Column(
       children: [
+        ConfigToggleRow(
+          icon: wd.activeProbe ? Icons.wifi_tethering : Icons.wifi_find,
+          label: wd.activeProbe ? 'Active scanning' : 'Passive scanning',
+          subtitle: wd.activeProbe
+              ? 'Sends probe requests to reveal hidden and slow-beaconing APs, '
+                'but makes this device transmit and therefore detectable.'
+              : 'Listens only — undetectable, but misses hidden APs that '
+                'answer only a direct probe.',
+          color: AppTheme.accent,
+          value: wd.activeProbe,
+          onChanged: (v) => ref.read(wardriveProvider).activeProbe = v,
+        ),
         _TimingRow(
           icon: Icons.wifi, label: 'Ch 1/6/11 dwell',
           value: wd.wifiScanInterval,
