@@ -211,6 +211,15 @@ class NotificationService extends ChangeNotifier {
     final enabled = _isEngineEnabled(det.engine);
     if (!enabled) return;
 
+    // Per-method muting. The detector reports 13 distinct methods but the
+    // firmware groups several under one signature bit — probe requests and
+    // evil-twin beacons share SIG_PROBE — so turning the signature off to
+    // silence probe spam would also stop rogue-AP detection. Muting here keeps
+    // detection and logging intact and only suppresses the notification.
+    if (det.engine == Engine.detector && mutedMethods.contains(det.method)) {
+      return;
+    }
+
     // Alert filter. Only detector hits carry a confidence; anything that
     // reports none (0) is left alone so other engines are unaffected.
     final conf = det.detector?.confidence ?? 0;
@@ -227,10 +236,55 @@ class NotificationService extends ChangeNotifier {
     _fireDetectionNotification(det);
   }
 
+  /// Detector methods that are logged but never notify.
+  ///
+  /// `probe_ssid` is muted by default: probe requests are continuous background
+  /// chatter from every phone in range, and alerting on them buries the hits
+  /// that matter. `evil_twin` deliberately is NOT muted — a rogue AP is the
+  /// high-priority half of the same signature bit.
+  static const defaultMutedMethods = <String>{'probe_ssid'};
+  Set<String> mutedMethods = {...defaultMutedMethods};
+
+  bool isMethodMuted(String m) => mutedMethods.contains(m);
+
+  Future<void> setMethodMuted(String m, bool muted) async {
+    if (muted ? !mutedMethods.add(m) : !mutedMethods.remove(m)) return;
+    notifyListeners();
+    final p = await SharedPreferences.getInstance();
+    await p.setStringList('notif_muted_methods', mutedMethods.toList());
+  }
+
+  /// Reads the user's detector signature mask. Wired up by the provider.
+  int Function()? sigMaskGetter;
+
+  /// Detector signature bit that governs a classifier class, where one exists.
+  ///
+  /// The app has two independent alert paths: the firmware's detector
+  /// (`sigMask`, set under Detections > Signature) and this phone-side
+  /// classifier. They used to be unrelated, so turning "Trackers" off still
+  /// produced tracker notifications the moment anything fed the classifier —
+  /// which is what wardriving does. One user-facing switch must govern both.
+  static int? signatureBitFor(SignatureClass c) => switch (c) {
+        SignatureClass.finder => sigTracker,
+        SignatureClass.hacking => sigHacktools,
+        SignatureClass.mesh => sigMesh,
+        SignatureClass.glasses => sigGlasses,
+        SignatureClass.lawEnforcement => sigAxon,
+        SignatureClass.bodyworn => sigAxon,
+        SignatureClass.camera => sigCamera,
+        SignatureClass.surveillance => sigCamera,
+        // No signature bit governs these; classAlerts alone decides.
+        _ => null,
+      };
+
   void onClassified(ClassifiedDevice d) {
     if (!_initialized || !_permissionGranted) return;
     final alert = alertClassOf(d, classAlerts);
     if (alert == null) return;
+    // Honour the signature switch the user actually sees.
+    final bit = signatureBitFor(alert);
+    final mask = sigMaskGetter?.call();
+    if (bit != null && mask != null && (mask & bit) == 0) return;
     final key = d.obs.mac.isNotEmpty ? d.obs.mac : d.obs.key;
     final last = _classAlerted[key];
     final now = DateTime.now();
@@ -569,6 +623,8 @@ class NotificationService extends ChangeNotifier {
     cooldownSeconds = p.getInt('notif_cooldown') ?? 300;
     maxPerMinute = p.getInt('notif_max_per_min') ?? 10;
     minConfidence = p.getInt('notif_min_confidence') ?? detConfNone;
+    final muted = p.getStringList('notif_muted_methods');
+    mutedMethods = muted == null ? {...defaultMutedMethods} : muted.toSet();
     soundEnabled = p.getBool('notif_sound') ?? true;
     vibrationEnabled = p.getBool('notif_vibration') ?? true;
     final ac = p.getStringList('notif_alert_classes');
@@ -670,5 +726,6 @@ final notificationServiceProvider =
   final svc = NotificationService();
   final la = ref.read(liveActivityServiceProvider);
   svc.onAlert = la.showAlert;
+  svc.sigMaskGetter = () => ref.read(detectorSigMaskProvider);
   return svc;
 });

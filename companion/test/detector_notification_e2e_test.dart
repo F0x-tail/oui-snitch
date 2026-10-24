@@ -17,7 +17,10 @@ void main() {
     final (title, subtitle, body, channel) = NotificationService.detectionNotificationText(det)!;
     expect(title, 'Nokia router');
     expect(subtitle, 'Detector · WATCHLIST');
-    expect(body, 'Signal -87 dBm on channel 6. MAC 40:48:6E:8B:D3:1A.');
+    // Body contract changed deliberately: proximity-led, and the MAC is no
+    // longer in the notification (it stays in the detection list and export).
+    expect(body, 'far (-87 dBm) on channel 6');
+    expect(body, isNot(contains('40:48:6E')), reason: 'MAC must not leak into the shade');
     expect(channel, NotifChannel.detector);
   });
 
@@ -31,7 +34,8 @@ void main() {
     final (title, subtitle, body, _) = NotificationService.detectionNotificationText(det)!;
     expect(title, 'Probe request for "Villasenor"');
     expect(subtitle, 'Detector · PROBE');
-    expect(body, 'Signal -89 dBm on channel 6. MAC 5C:FC:E1:00:6A:24.');
+    expect(body, 'far (-89 dBm) on channel 6');
+    expect(body, isNot(contains('5C:FC:E1')), reason: 'MAC must not leak into the shade');
   });
 
   test('pwnagotchi hit carries hit, class, engine and device data', () {
@@ -52,7 +56,8 @@ void main() {
     final (title, subtitle, body, channel) = NotificationService.detectionNotificationText(det)!;
     expect(title, 'Pwnagotchi');
     expect(subtitle, 'Detector · PWNAGOTCHI');
-    expect(body, 'Signal -61 dBm on channel 6. Name pwny. MAC DE:AD:BE:EF:00:01. Seen by node node2.');
+    expect(body, 'pwny, nearby (-61 dBm) on channel 6 · node node2');
+    expect(body, isNot(contains('DE:AD:BE')), reason: 'MAC must not leak into the shade');
     expect(channel, NotifChannel.detector);
   });
 }

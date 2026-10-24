@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:oui_spy/core/notifications/notification_service.dart';
 import 'package:oui_spy/features/config/widgets/config_widgets.dart';
 import 'package:oui_spy/theme/app_theme.dart';
+import 'package:oui_spy/core/detection_icon.dart';
 
 class NotificationSettingsBody extends ConsumerWidget {
   const NotificationSettingsBody({super.key, this.shrinkWrap = false, this.physics});
@@ -71,6 +72,24 @@ class NotificationSettingsBody extends ConsumerWidget {
         ),
 
         const SizedBox(height: 16),
+        const ConfigSectionHeader(label: 'SILENCE THESE'),
+        // Per-method muting. The firmware groups probe requests and evil-twin
+        // beacons under one signature bit, so switching the signature off to
+        // stop probe spam would also stop rogue-AP detection. These mute the
+        // notification only — detection and logging continue.
+        for (final m in _mutableMethods)
+          ConfigToggleRow(
+            icon: detectorMethodIcon(m.$1),
+            label: m.$2,
+            subtitle: notif.isMethodMuted(m.$1)
+                ? 'Logged, never alerts'
+                : 'Alerts normally',
+            color: AppTheme.detector,
+            value: notif.isMethodMuted(m.$1),
+            onChanged: (v) => notif.setMethodMuted(m.$1, v),
+          ),
+
+        const SizedBox(height: 16),
         const ConfigSectionHeader(label: 'BEHAVIOR'),
         ConfigSliderRow(
           icon: Icons.filter_alt,
@@ -125,7 +144,21 @@ class NotificationSettingsBody extends ConsumerWidget {
     );
   }
 
-  static String _confidenceLabel(int c) {
+  static /// Detector methods a user may reasonably want logged but silent.
+///
+/// `probe_ssid` is the noisy one and is muted by default. `evil_twin` sits on
+/// the SAME firmware signature bit, which is why muting has to happen here
+/// rather than by switching the signature off.
+const _mutableMethods = <(String, String)>[
+  ('probe_ssid', 'Probe requests'),
+  ('evil_twin', 'Rogue AP / evil twin'),
+  ('deauth_storm', 'Deauth floods'),
+  ('mesh', 'Mesh nodes'),
+  ('camera', 'Cameras'),
+  ('tracker', 'Trackers'),
+];
+
+String _confidenceLabel(int c) {
     switch (c) {
       case 0:
         return 'Everything';
