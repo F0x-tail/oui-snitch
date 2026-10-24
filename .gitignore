@@ -74,3 +74,4 @@ managed_components/
 sdkconfig.*
 
 logs/
+*.bak
