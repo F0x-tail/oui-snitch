@@ -61,6 +61,25 @@ class OtaService {
   final BleManager _ble;
   final Dio _dio = Dio();
 
+  /// Remote OTA is **disabled**.
+  ///
+  /// Releases are fetched from a third-party GitHub repo over TLS and the
+  /// image is checked with CRC32 only. CRC32 detects corruption, not
+  /// tampering, so there is nothing establishing that a downloaded image came
+  /// from whom it claims. Anyone controlling that repo, or a release in it,
+  /// could push code to the device.
+  ///
+  /// `pushLocalImage` is deliberately NOT gated: a file the user picked is a
+  /// trust decision they made themselves.
+  ///
+  /// TODO: re-enable once images are signed and the signature is verified
+  /// here before `_pushImage`. Tracked in PROJECT_SPEC.md §8.
+  static const bool remoteOtaEnabled = false;
+
+  static const String _disabledMessage =
+      'Online firmware update is disabled in this build: release images are '
+      'not signed. Flash over USB, or pick a local .bin you trust.';
+
   static const String githubOwner = 'lukeswitz';
   static const String githubRepo = 'oui-spy-unified-blue';
   static const String firmwareAssetSuffix = '.bin';
@@ -130,6 +149,7 @@ class OtaService {
       String.fromEnvironment('OTA_API', defaultValue: '');
 
   Future<Map<String, dynamic>?> _getLatestJson() async {
+    if (!remoteOtaEnabled) return null;
     final url = _otaApiOverride.isNotEmpty
         ? _otaApiOverride
         : 'https://api.github.com/repos/$githubOwner/$githubRepo/releases/latest';
@@ -202,6 +222,11 @@ class OtaService {
   }
 
   Future<OtaRelease?> fetchLatestRelease({String board = '', String role = ''}) async {
+    if (!remoteOtaEnabled) {
+      _progress.add(const OtaProgress(
+          phase: OtaPhase.error, error: _disabledMessage));
+      return null;
+    }
     final data = await _getLatestJson();
     if (data == null) {
       _progress.add(const OtaProgress(
@@ -219,6 +244,11 @@ class OtaService {
     bool includeNode = false,
     String nodeBoard = 'xiao_s3',
   }) async {
+    if (!remoteOtaEnabled) {
+      _progress.add(const OtaProgress(
+          phase: OtaPhase.error, error: _disabledMessage));
+      return (primary: null, node: null, error: _disabledMessage);
+    }
     _progress.add(const OtaProgress(
       phase: OtaPhase.checking,
       message: 'Fetching latest release...',
@@ -253,6 +283,11 @@ class OtaService {
   }
 
   Future<OtaRelease?> checkForUpdate(String currentVersion, {String board = '', String role = ''}) async {
+    if (!remoteOtaEnabled) {
+      _progress.add(const OtaProgress(
+          phase: OtaPhase.error, error: _disabledMessage));
+      return null;
+    }
     _progress.add(const OtaProgress(
       phase: OtaPhase.checking,
       message: 'Fetching latest release...',
@@ -292,6 +327,7 @@ class OtaService {
   }
 
   Future<Uint8List> _download(String url) async {
+    if (!remoteOtaEnabled) throw StateError(_disabledMessage);
     _progress.add(const OtaProgress(
       phase: OtaPhase.downloading,
       message: 'Downloading firmware...',
@@ -316,6 +352,11 @@ class OtaService {
 
   /// Run full OTA: download .bin from release, push to firmware via DFU.
   Future<bool> performUpdate(OtaRelease release) async {
+    if (!remoteOtaEnabled) {
+      _progress.add(const OtaProgress(
+          phase: OtaPhase.error, error: _disabledMessage));
+      return false;
+    }
     if (_running) return false;
     _running = true;
     markOtaActive(ttl: const Duration(seconds: 120));
@@ -342,6 +383,11 @@ class OtaService {
   }
 
   Future<bool> performWifiUpdate(OtaRelease release) async {
+    if (!remoteOtaEnabled) {
+      _progress.add(const OtaProgress(
+          phase: OtaPhase.error, error: _disabledMessage));
+      return false;
+    }
     if (_running || otaActive.value) return false;
     _running = true;
     markOtaActive(ttl: const Duration(seconds: 150));
