@@ -55,18 +55,22 @@ enum WardriveTarget {
   };
 
   List<Engine> engines(WardriveRadio radio) => switch (this) {
+    // Flock is Wi-Fi only now. The BLE engine was removed from the firmware:
+    // upstream reports the community BLE method stopped working in spring 2026,
+    // and the Wi-Fi IE fingerprint is the reliable path. Selecting the BLE radio
+    // no longer enables a Flock engine rather than enabling a dead one.
     WardriveTarget.flock => switch (radio) {
       WardriveRadio.wifi => [Engine.flockWifi],
-      WardriveRadio.ble => [Engine.flockBle],
-      WardriveRadio.both => [Engine.flockWifi, Engine.flockBle],
+      WardriveRadio.ble => const <Engine>[],
+      WardriveRadio.both => [Engine.flockWifi],
     },
     WardriveTarget.drone => [Engine.skySpy],
     WardriveTarget.wigle => [Engine.wardrive],
     WardriveTarget.detector => [Engine.detector],
     WardriveTarget.wigleFlock => switch (radio) {
       WardriveRadio.wifi => [Engine.wardrive, Engine.flockWifi],
-      WardriveRadio.ble => [Engine.wardrive, Engine.flockBle],
-      WardriveRadio.both => [Engine.wardrive, Engine.flockBle, Engine.flockWifi],
+      WardriveRadio.ble => [Engine.wardrive],
+      WardriveRadio.both => [Engine.wardrive, Engine.flockWifi],
     },
   };
 
@@ -153,6 +157,12 @@ class WardriveController extends ChangeNotifier {
         if (state == WardriveState.running) _droppedWhileRunning = true;
       }
     });
+    // Always-on recorder. Detections used to reach the database only while a
+    // wardrive session ran (`_onDetection` returns early unless running, and
+    // its subscription is cancelled on stop), so an engine tile on its own
+    // detected and alerted but stored nothing. This records every live
+    // detection, under an ambient session when no wardrive session is active.
+    _ambientDetSub = _ble.detections.listen(_onAmbientDetection);
     _importedDetSub = _ble.importedDetections.listen(_onImportedDetection);
     _awayLiveSub = _ble.awayLiveDetections.listen(_onAwayLiveDetection);
     _spoolImportSub = _ble.spoolImport.listen(_onSpoolProgress);
@@ -175,6 +185,7 @@ class WardriveController extends ChangeNotifier {
     _channelStart = p.getInt('wd_channelStart') ?? 1;
     _channelEnd = p.getInt('wd_channelEnd') ?? 14;
     _wardrive24Mode = p.getInt('wd_wardrive24Mode') ?? 0;
+    _activeProbe = p.getBool('wd_activeProbe') ?? false;
     _wifiBand = WifiBand.values[
         (p.getInt('wd_wifiBand') ?? WifiBand.both.index)
             .clamp(0, WifiBand.values.length - 1)];
@@ -198,6 +209,7 @@ class WardriveController extends ChangeNotifier {
       await p.setInt('wd_wifiDwellPerCh', _wifiDwellPerCh);
       await p.setInt('wd_channelEnd', _channelEnd);
       await p.setInt('wd_wardrive24Mode', _wardrive24Mode);
+      await p.setBool('wd_activeProbe', _activeProbe);
       await p.setBool('wd_dwellFast_v6', true);
     }
     notifyListeners();
@@ -214,6 +226,7 @@ class WardriveController extends ChangeNotifier {
     p.setInt('wd_channelStart', _channelStart);
     p.setInt('wd_channelEnd', _channelEnd);
     p.setInt('wd_wardrive24Mode', _wardrive24Mode);
+    p.setBool('wd_activeProbe', _activeProbe);
     p.setInt('wd_wifiBand', _wifiBand.index);
     p.setInt('wd_radio', radioBitmask);
     p.setStringList('wd_targets', selectedTargets.map((t) => t.name).toList());
@@ -234,6 +247,7 @@ class WardriveController extends ChangeNotifier {
   final NotificationService _notificationService;
   final LiveActivityService _liveActivity;
   StreamSubscription<NodeConnectionState>? _connSub;
+  StreamSubscription<Detection>? _ambientDetSub;
   StreamSubscription<Detection>? _importedDetSub;
   StreamSubscription<Detection>? _awayLiveSub;
   StreamSubscription<SpoolImportProgress>? _spoolImportSub;
@@ -330,6 +344,23 @@ class WardriveController extends ChangeNotifier {
       };
   set wifiBand(WifiBand v) { _wifiBand = v; notifyListeners(); _savePrefs(); _pushWifiBand(); }
 
+  /// Active probing. Passive by default — see [activeProbe].
+  bool _activeProbe = false;
+  bool get activeProbe => _activeProbe;
+  set activeProbe(bool v) {
+    if (_activeProbe == v) return;
+    _activeProbe = v;
+    notifyListeners();
+    _savePrefs();
+    // Pushed unconditionally, not via _pushWardriveConfigLive(): that returns
+    // early unless a wardrive session is running, but this flag is global radio
+    // policy and also gates Flock-WiFi's own probe transmitter. The firmware
+    // forwards config to an engine whether or not it is currently running.
+    if (_ble.isConnected) {
+      _ble.sendEngineConfig(Engine.wardrive, _wardriveConfigPayload);
+    }
+  }
+
   Uint8List get _wardriveConfigPayload => Uint8List.fromList([
         radioBitmask,
         wifiScanInterval & 0xFF, (wifiScanInterval >> 8) & 0xFF,
@@ -339,6 +370,7 @@ class WardriveController extends ChangeNotifier {
         channelStart,
         channelEnd,
         wardrive24Mode,
+        _activeProbe ? 1 : 0,
       ]);
 
   void _pushWardriveConfigLive() {
@@ -675,6 +707,21 @@ class WardriveController extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Start a wardrive session from the home-screen tile.
+  ///
+  /// Selects the WIGLE target so the session logs every network and yields a
+  /// WiGLE CSV — the thing the wardrive tile is for. Other engines keep running
+  /// independently; their detections are recorded ambiently without WiGLE
+  /// output.
+  Future<void> startWardriveTile() async {
+    if (isActive) return;
+    selectedTargets
+      ..clear()
+      ..add(WardriveTarget.wigle);
+    _savePrefs();
+    await startSession();
+  }
+
   Future<void> startSession() async {
     if (isActive) {
       DebugLog.log('WARDRIVE: start ignored — already $state');
@@ -755,11 +802,16 @@ class WardriveController extends ChangeNotifier {
 
   Future<void> stopSession() async {
     DebugLog.log('WARDRIVE: stop requested (state=$state)');
+    // Deliberately NOT idle yet. This used to flip to idle and notify before
+    // asking the board to stop, with the teardown failure only logged — so the
+    // UI said "off" while the board kept scanning, streaming detections and
+    // raising notifications. Only an app restart (reconnect + resync) stopped
+    // it. Stay in 'stopping' until the board confirms.
     radioTransition = 'stopping';
-    state = WardriveState.idle;
     _userStopped = true;
     _droppedWhileRunning = false;
     pendingReconnectPrompt = false;
+    stopIncomplete = false;
     _ble.wardriveSessionActive = false;
     notifyListeners();
 
@@ -770,19 +822,51 @@ class WardriveController extends ChangeNotifier {
     _gpsSub = null;
     _statsTimer = null;
 
+    var stopped = false;
     try {
-      await _teardownEngines().timeout(const Duration(seconds: 4));
+      stopped = await _teardownAndVerify();
+      if (!stopped) {
+        DebugLog.log('WARDRIVE: engines still active after teardown — retrying');
+        stopped = await _teardownAndVerify();
+      }
     } catch (e) {
-      DebugLog.log('WARDRIVE: engine teardown incomplete (link down?): $e');
+      DebugLog.log('WARDRIVE: engine teardown failed: $e');
     } finally {
       WakelockPlus.disable();
       _liveActivity.end();
     }
 
+    state = WardriveState.idle;
+    // Only a warning when the link is up: if the board is unreachable we
+    // cannot confirm, and the engine state is re-pushed on reconnect anyway.
+    stopIncomplete = !stopped && _ble.isConnected;
+    if (stopIncomplete) {
+      DebugLog.log('WARDRIVE: BOARD MAY STILL BE SCANNING — stop not confirmed');
+    }
     radioTransition = null;
     notifyListeners();
 
     await _finalizeSession();
+  }
+
+  /// True when a stop was requested, the link was up, and the board did **not**
+  /// confirm its engines were off. The board may still be scanning.
+  bool stopIncomplete = false;
+
+  /// Tear down, then read the board's own engine mask back to check it took.
+  ///
+  /// `disableEngine` returns silently when the control characteristic is
+  /// missing and swallows its own write errors, so "no exception" is not
+  /// evidence that anything stopped. Only the read-back is.
+  Future<bool> _teardownAndVerify() async {
+    await _teardownEngines().timeout(const Duration(seconds: 4));
+    if (!_ble.isConnected) return false;
+    final mask = await _ble.readActiveEngineMask().timeout(
+          const Duration(seconds: 3),
+          onTimeout: () => -1,
+        );
+    if (mask < 0) return false; // could not read — do not claim success
+    return mask == 0;
   }
 
   Future<void> _teardownEngines() async {
@@ -1358,6 +1442,73 @@ class WardriveController extends ChangeNotifier {
     return (lat: d.latitude, lon: d.longitude, acc: d.accuracy, approx: false);
   }
 
+  String? _ambientSessionId;
+  Future<String>? _ambientSessionFuture;
+
+  /// Session row that holds detections captured outside a wardrive session.
+  ///
+  /// Flagged `isWardrive: false`, so it never appears in the wardrive session
+  /// list and is never offered for WiGLE upload — the data is searchable and
+  /// exportable as plain detections, but produces no WiGLE CSV.
+  Future<String> _ensureAmbientSession() async {
+    final existing = _ambientSessionId;
+    if (existing != null) return existing;
+    return _ambientSessionFuture ??= () async {
+      final id = const Uuid().v4();
+      await _db.insertSession(SessionsCompanion(
+        id: drift.Value(id),
+        name: drift.Value('Detections ${DateTime.now().toIso8601String().substring(0, 16)}'),
+        nodeId: const drift.Value('default'),
+        startedAt: drift.Value(DateTime.now().millisecondsSinceEpoch),
+        isWardrive: const drift.Value(false),
+      ));
+      _ambientSessionId = id;
+      return id;
+    }();
+  }
+
+  /// Persist a live detection when no wardrive session is running.
+  ///
+  /// Deliberately does NOT touch the map list, session stats or CSV: those
+  /// belong to a wardrive session. This is storage only.
+  Future<void> _onAmbientDetection(Detection detection) async {
+    if (state == WardriveState.running) return;   // session path owns it
+    final isBle = detection.isBleDetection;
+    if (_ignoreList.shouldSuppress(
+      mac: detection.macAddress,
+      ssid: detection.ssid.isNotEmpty ? detection.ssid : detection.deviceName,
+      isBle: isBle,
+    )) {
+      return;
+    }
+    if (_geofenceFilter.isExcludedNullable(detection.latitude, detection.longitude)) {
+      return;
+    }
+    try {
+      final sid = await _ensureAmbientSession();
+      final g = _tagGps(detection);
+      await _db.insertDetection(DetectionsCompanion(
+        sessionId: drift.Value(sid),
+        nodeId: const drift.Value('default'),
+        macAddress: drift.Value(detection.macAddress),
+        deviceName: drift.Value(detection.deviceName),
+        engine: drift.Value(detection.engine.name),
+        detectionMethod: drift.Value(detection.method),
+        rssi: drift.Value(detection.rssi),
+        channel: drift.Value(detection.channel),
+        deviceTimestampMs: drift.Value(detection.deviceTimestampMs),
+        appTimestamp: drift.Value(detection.appTimestamp.millisecondsSinceEpoch),
+        latitude: drift.Value(g.lat),
+        longitude: drift.Value(g.lon),
+        accuracy: drift.Value(g.acc),
+        ssid: drift.Value(detection.ssid),
+        filterDescription: drift.Value(detection.detector?.filterDescription ?? ''),
+      ));
+    } catch (e) {
+      DebugLog.log('WARDRIVE: ambient insert failed: $e');
+    }
+  }
+
   Future<void> _onImportedDetection(Detection detection) async {
     _spoolSessionId ??= await (_spoolSessionIdFuture ??= _resolveSpoolSessionId());
     final sid = _spoolSessionId!;
@@ -1771,6 +1922,7 @@ class WardriveController extends ChangeNotifier {
     _detSub?.cancel();
     _gpsSub?.cancel();
     _statsTimer?.cancel();
+    _ambientDetSub?.cancel();
     _importedDetSub?.cancel();
     _awayLiveSub?.cancel();
     _spoolImportSub?.cancel();

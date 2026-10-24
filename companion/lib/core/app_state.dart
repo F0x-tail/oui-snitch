@@ -39,6 +39,9 @@ class AppState extends ChangeNotifier {
 
   // Engine states
   int availableEngines = 0;
+  /// When the engine state below was last confirmed from the board —
+  /// by a push notification or a manual sync. Null = never this session.
+  DateTime? engineStateAt;
   int activeEngines = 0;
   List<EngineState> engineStates = List.filled(Engine.values.length, EngineState.disabled);
 
@@ -481,6 +484,7 @@ class AppState extends ChangeNotifier {
       while (engineStates.length < Engine.values.length) {
         engineStates.add(EngineState.disabled);
       }
+      engineStateAt = DateTime.now();
       notifyListeners();
     }));
 
@@ -572,6 +576,29 @@ class AppState extends ChangeNotifier {
     DebugLog.log('AppState: initialized');
   }
 
+  bool _syncing = false;
+  bool get isSyncing => _syncing;
+
+  /// Ask the board for its current engine state and refresh the UI from it.
+  ///
+  /// The board already pushes state on every change, but a notification can be
+  /// missed (a dropped connection, a reconnect, the app resuming). This forces
+  /// a fresh read so the tiles reflect what is actually running. Updates
+  /// `engineStateAt` via the normal stream path.
+  Future<void> syncEngineState() async {
+    if (_syncing) return;
+    _syncing = true;
+    notifyListeners();
+    try {
+      await _ble.readActiveEngineMask();
+    } catch (e) {
+      DebugLog.log('AppState: engine sync failed: $e');
+    } finally {
+      _syncing = false;
+      notifyListeners();
+    }
+  }
+
   bool isEngineActive(Engine engine) {
     return (activeEngines & engine.bitmask) != 0;
   }
@@ -584,12 +611,18 @@ class AppState extends ChangeNotifier {
 
   int countForEngine(Engine engine) => _uniqueMacsPerEngine[engine]?.length ?? 0;
 
-  List<Detection> detectionsForEngine(Engine engine) {
-    final cutoff = DateTime.now().subtract(const Duration(minutes: 5));
-    return recentDetections
-        .where((d) => d.engine == engine && d.appTimestamp.isAfter(cutoff))
-        .toList();
-  }
+  /// Every held detection for [engine], newest first.
+  ///
+  /// There is deliberately **no time window** here. This used to hide anything
+  /// older than 5 minutes, which made the Detector screen empty itself: the
+  /// dedupe key is `mac|engine`, so a device that rotates its MAC becomes a new
+  /// row and the old one stops being refreshed and vanishes. BLE trackers
+  /// rotate roughly every 15 minutes and phones randomise constantly — exactly
+  /// what this engine is for. A detection log must not silently forget.
+  ///
+  /// Staleness is shown per row as a last-seen age instead of being hidden.
+  List<Detection> detectionsForEngine(Engine engine) =>
+      recentDetections.where((d) => d.engine == engine).toList();
 
   void clearDetectionsForEngine(Engine engine) {
     recentDetections.removeWhere((d) => d.engine == engine);
@@ -601,7 +634,23 @@ class AppState extends ChangeNotifier {
   }
 
 
+  /// Spooled / mesh-relayed detections.
+  ///
+  /// These go through the **same** ignore-list and geofence filters as the live
+  /// path. They used to skip both, so a device the user had explicitly ignored
+  /// reappeared the moment it arrived via the spool or another node, and
+  /// geofenced locations leaked back in the same way.
   void _ingestOfflineDetection(Detection det) {
+    if (_ignoreList.shouldSuppress(
+      mac: det.macAddress,
+      ssid: det.ssid.isNotEmpty ? det.ssid : det.deviceName,
+      isBle: det.isBleDetection,
+    )) {
+      return;
+    }
+    if (_geofenceFilter.isExcludedNullable(det.latitude, det.longitude)) {
+      return;
+    }
     if (det.sourceNodeId.isNotEmpty) _recordSeenNode(det.sourceNodeId);
     (_uniqueMacsPerEngine[det.engine] ??= {}).add(det.macAddress);
     lastDetectionTime[det.engine] = DateTime.now();
@@ -660,14 +709,7 @@ class AppState extends ChangeNotifier {
       _dedupeIndex[key] = 0;
 
       if (recentDetections.length > maxRecentDetections) {
-        int evictIdx = recentDetections.length - 1;
-        // Scan backwards for a wardrive entry to evict first
-        for (int i = recentDetections.length - 1; i >= maxRecentDetections ~/ 2; i--) {
-          if (recentDetections[i].engine == Engine.wardrive) {
-            evictIdx = i;
-            break;
-          }
-        }
+        final evictIdx = chooseEvictionIndex(recentDetections);
         final removed = recentDetections.removeAt(evictIdx);
         final removedKey = '${removed.macAddress}|${removed.engine.name}';
         _dedupeIndex.remove(removedKey);
@@ -679,6 +721,25 @@ class AppState extends ChangeNotifier {
         }
       }
     }
+  }
+
+  /// Which index to drop when the feed is full.
+  ///
+  /// Prefers the **oldest wardrive** entry anywhere in the buffer, and only
+  /// falls back to the oldest entry overall when there is no wardrive entry
+  /// left to sacrifice.
+  ///
+  /// The previous version only scanned back as far as the halfway mark, so
+  /// once wardrive bulk filled the newer half it started evicting classified
+  /// detections — camera, tracker and evil-twin hits — while thousands of
+  /// wardrive rows sat untouched in the front half. That is the reported
+  /// "detections keep disappearing" behaviour.
+  @visibleForTesting
+  static int chooseEvictionIndex(List<Detection> buf) {
+    for (int i = buf.length - 1; i >= 0; i--) {
+      if (buf[i].engine == Engine.wardrive) return i;
+    }
+    return buf.length - 1;
   }
 
   /// Remove a detection from the feed by its ID.

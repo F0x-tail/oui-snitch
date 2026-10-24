@@ -110,6 +110,21 @@ class _EngineCardState extends ConsumerState<EngineCard>
 
     setState(() => _optimisticValue = value);
     _optimisticTimer?.cancel();
+    // Safety net for a command that neither errors nor gets confirmed — a
+    // dropped write, a deny-mask rejection, or a lost confirmation. Without
+    // this the tile would hold the optimistic (wrong) state forever, which is
+    // the silent tile/board mismatch. On expiry, drop the optimistic value so
+    // the tile snaps back to the board's real state, and force a fresh read so
+    // "real state" is current rather than whatever we last heard.
+    _optimisticTimer = Timer(const Duration(seconds: 6), () {
+      if (!mounted) return;
+      if (_optimisticValue != null && _optimisticValue != widget.isActive) {
+        DebugLog.log('ENGINE: ${widget.engine.name} not confirmed in 6s — '
+            'reverting tile to board state');
+        setState(() => _optimisticValue = null);
+        ref.read(appStateProvider).syncEngineState();
+      }
+    });
     setEngineEnabled(ref, widget.engine, value,
             targetNodeId: widget.engine == Engine.foxhunter ? appState.foxhunterTargetNodeId : null)
         .catchError((Object e) {
@@ -200,10 +215,14 @@ class _EngineCardState extends ConsumerState<EngineCard>
     };
   }
 
+  /// True while a toggle has been sent but the board has not confirmed it.
+  bool get _pending =>
+      _optimisticValue != null && _optimisticValue != widget.isActive;
+
   String get _stateLabel {
-    if (_optimisticValue != null && _optimisticValue != widget.isActive) {
-      return _optimisticValue! ? 'START' : 'STOP';
-    }
+    // Unconfirmed: show the intent with an ellipsis so the user can see the
+    // tile is waiting on the board, not reporting a confirmed state.
+    if (_pending) return _optimisticValue! ? 'STARTING…' : 'STOPPING…';
     return switch (widget.engineState) {
       EngineState.disabled => 'OFF',
       EngineState.idle => 'IDLE',

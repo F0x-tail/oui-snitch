@@ -13,7 +13,6 @@ import 'package:oui_spy/core/wdgwars/wdgwars_provider.dart';
 import 'package:oui_spy/features/config/config_menu_state.dart';
 import 'package:oui_spy/features/detections/detections_screen.dart';
 import 'package:oui_spy/features/home/engine_card.dart';
-import 'package:oui_spy/features/wardrive/session_launch.dart';
 import 'package:oui_spy/features/home/status_bar.dart';
 import 'package:oui_spy/theme/app_theme.dart';
 
@@ -403,31 +402,33 @@ class _ConnectedView extends ConsumerWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
+          _SyncBar(state: state),
+          const SizedBox(height: 6),
           _SummaryStrip(state: state),
           SizedBox(height: pad),
 
-          _SectionLabel(label: 'SESSION', color: Engine.wardrive.color),
+          _SectionLabel(label: 'RECORDING', color: Engine.wardrive.color),
           const SizedBox(height: 6),
-          const SessionBar(),
+          // Tiles are the only control now. The wardrive tile starts/stops the
+          // session that produces a WiGLE CSV; the chips + start/stop bar that
+          // used to live here duplicated the tiles and disagreed with them.
+          SizedBox(
+            height: _mediumCardHeight(context),
+            child: _sizedCard(Engine.wardrive, CardSize.medium, state, wd),
+          ),
 
           SizedBox(height: pad),
 
           _SectionLabel(label: 'SAFETY', color: AppTheme.flockBle),
           const SizedBox(height: 6),
+          // Flock BLE is deliberately absent. Upstream flock-you reports that
+          // the community BLE method stopped working in spring 2026; the
+          // Wi-Fi IE fingerprint is the reliable path. The engine still exists
+          // and can be enabled from Config — it may still catch older or
+          // unpatched hardware — it just no longer occupies half of this row.
           SizedBox(
             height: _mediumCardHeight(context),
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                Expanded(
-                  child: _sizedCard(Engine.flockWifi, CardSize.medium, state, wd),
-                ),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: _sizedCard(Engine.flockBle, CardSize.medium, state, wd),
-                ),
-              ],
-            ),
+            child: _sizedCard(Engine.flockWifi, CardSize.medium, state, wd),
           ),
 
           SizedBox(height: pad),
@@ -527,6 +528,124 @@ class _SectionLabel extends StatelessWidget {
             fontSize: 10,
             fontWeight: FontWeight.w700,
             letterSpacing: 2,
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+/// A manual "sync from board" control plus a freshness indicator.
+///
+/// The board pushes engine state on every change, but a notification can be
+/// missed across a reconnect or an app resume, leaving the tiles showing stale
+/// state. This reads the board's real state on demand and shows how long ago
+/// the displayed state was last confirmed.
+/// Connection-health + liveness indicator with a manual re-sync.
+///
+/// Deliberately NOT a "seconds since last engine change" staleness clock: engine
+/// state only changes when the user toggles something, so on a device left
+/// running for hours that age is meaningless and would flap amber for no reason.
+/// The honest signal is the BLE link itself — if it is up, the board pushes any
+/// change, and the app already re-reads state on reconnect and on app resume.
+/// So this shows: link state, and how long the current connection has held
+/// (a growing uptime is the "it has been solid" reassurance). SYNC forces a
+/// re-read for the rare in-connection missed push.
+class _SyncBar extends ConsumerStatefulWidget {
+  const _SyncBar({required this.state});
+  final AppState state;
+
+  @override
+  ConsumerState<_SyncBar> createState() => _SyncBarState();
+}
+
+class _SyncBarState extends ConsumerState<_SyncBar> {
+  Timer? _tick;
+  DateTime? _justSynced;
+
+  @override
+  void initState() {
+    super.initState();
+    // Keep the uptime label moving while the screen is idle. 5 s is plenty —
+    // the label resolves to minutes/hours once a connection is more than a
+    // minute old — and keeps wakeups low on a device left running for hours.
+    // This rebuilds only this small widget, not the whole screen.
+    _tick = Timer.periodic(const Duration(seconds: 5), (_) {
+      if (mounted) setState(() {});
+    });
+  }
+
+  @override
+  void dispose() {
+    _tick?.cancel();
+    super.dispose();
+  }
+
+  AppState get state => widget.state;
+
+  String _uptime(DateTime? since) {
+    if (since == null) return '';
+    final s = DateTime.now().difference(since).inSeconds;
+    if (s < 60) return '${s ~/ 5 * 5}s';     // 5 s granularity under a minute
+    final h = s ~/ 3600, m = (s % 3600) ~/ 60;
+    return h > 0 ? '${h}h ${m}m' : '${m}m';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final t = AppTheme.of(context);
+    final cs = state.connectionState;
+    final justSynced = _justSynced != null &&
+        DateTime.now().difference(_justSynced!).inSeconds < 4;
+
+    // Map the real connection state to one honest status.
+    final (IconData icon, Color color, String text) = switch (cs) {
+      NodeConnectionState.ready => (
+          Icons.check_circle,
+          AppTheme.success,
+          justSynced
+              ? 'Synced ✓'
+              : 'Live · ${_uptime(state.sessionStartTime)}',
+        ),
+      NodeConnectionState.reconnecting => (
+          Icons.sync, AppTheme.warning, 'Reconnecting…'),
+      NodeConnectionState.scanning ||
+      NodeConnectionState.connecting ||
+      NodeConnectionState.negotiating ||
+      NodeConnectionState.syncing => (
+          Icons.bluetooth_searching, AppTheme.warning, 'Connecting…'),
+      NodeConnectionState.disconnected => (
+          Icons.link_off, t.textDim, 'Offline'),
+    };
+
+    final ready = cs == NodeConnectionState.ready;
+    return Row(
+      children: [
+        Icon(icon, size: 14, color: color),
+        const SizedBox(width: 6),
+        Expanded(
+          child: Text('Board: $text',
+              style: TextStyle(color: t.textDim, fontSize: 11)),
+        ),
+        TextButton.icon(
+          onPressed: !ready || state.isSyncing
+              ? null
+              : () async {
+                  await ref.read(appStateProvider).syncEngineState();
+                  if (mounted) setState(() => _justSynced = DateTime.now());
+                },
+          icon: state.isSyncing
+              ? const SizedBox(
+                  width: 13, height: 13,
+                  child: CircularProgressIndicator(strokeWidth: 2))
+              : const Icon(Icons.sync, size: 15),
+          label: Text(state.isSyncing ? 'SYNCING' : 'SYNC',
+              style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w700)),
+          style: TextButton.styleFrom(
+            foregroundColor: AppTheme.accent,
+            padding: const EdgeInsets.symmetric(horizontal: 8),
+            minimumSize: const Size(0, 32),
+            tapTargetSize: MaterialTapTargetSize.shrinkWrap,
           ),
         ),
       ],
