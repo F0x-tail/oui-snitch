@@ -10,6 +10,7 @@
 #include <esp_wifi.h>
 #include "opendroneid.h"
 #include "odid_wifi.h"
+#include "dedup_ring.h"
 
 #define MAX_UAVS 32
 
@@ -190,6 +191,46 @@ static bool odidIsPlausible(const ODID_UAS_Data* u) {
     return false;
 }
 
+// Drone-vendor OUIs — a backstop for a drone that is NOT broadcasting Remote
+// ID, or whose Remote ID was missed (in flight it is often Wi-Fi, easy to miss
+// on the wrong channel). Remote ID stays the authoritative identifier; this
+// only reports the airframe's own MAC, so it is a weaker, unverified signal.
+struct DroneVendorOui { uint8_t b[3]; const char* vendor; };
+static const DroneVendorOui DRONE_VENDOR_OUIS[] = {
+    {{0x38,0x1d,0x14}, "Skydio"},   // Skydio Inc. (IEEE MA-L)
+};
+static const int DRONE_VENDOR_OUI_COUNT =
+    sizeof(DRONE_VENDOR_OUIS) / sizeof(DRONE_VENDOR_OUIS[0]);
+
+static const char* droneVendorLookup(const uint8_t* mac) {
+    if (mac[0] & 0x02) return nullptr;      // locally administered / random
+    for (int i = 0; i < DRONE_VENDOR_OUI_COUNT; i++) {
+        if (memcmp(mac, DRONE_VENDOR_OUIS[i].b, 3) == 0) {
+            return DRONE_VENDOR_OUIS[i].vendor;
+        }
+    }
+    return nullptr;
+}
+
+// Report a vendor-OUI drone at most once per minute per MAC; without Remote ID
+// there is no UAS ID to track it by.
+static DedupRing<16, 60000> droneVendorDedup;
+
+static void pushDroneVendorDetection(const uint8_t* mac, int rssi,
+                                     const char* vendor) {
+    DetectionEvent evt = {};
+    evt.engine_id = ENGINE_SKYSPY;
+    memcpy(evt.mac, mac, 6);
+    evt.rssi = (int8_t)rssi;
+    evt.timestamp_ms = millis();
+    evt.method = METHOD_DRONE_VENDOR;
+    strncpy(evt.ext.odid.self_id, vendor, sizeof(evt.ext.odid.self_id) - 1);
+    pushDetection(&evt);
+    Serial.printf("[SKYSPY] %s drone %02x:%02x:%02x:%02x:%02x:%02x RSSI:%d "
+                  "(vendor OUI, no Remote ID)\n", vendor,
+                  mac[0], mac[1], mac[2], mac[3], mac[4], mac[5], rssi);
+}
+
 class SkySkyBLECallback : public NimBLEAdvertisedDeviceCallbacks {
     void onResult(NimBLEAdvertisedDevice* dev) override {
         g_engRawSeen++;
@@ -202,6 +243,20 @@ class SkySkyBLECallback : public NimBLEAdvertisedDeviceCallbacks {
         int len = dev->getPayloadLength();
         uint8_t* payload = dev->getPayload();
 #endif
+        // Vendor-OUI backstop runs before the Remote ID check, so a drone that
+        // advertises without Remote ID is still reported.
+        {
+            const uint8_t* a = dev->getAddress().getNative();
+            if (a) {
+                uint8_t m[6];
+                bleAddrToMac(a, m);
+                const char* dv = droneVendorLookup(m);
+                if (dv && !droneVendorDedup.check(m)) {
+                    pushDroneVendorDetection(m, dev->getRSSI(), dv);
+                }
+            }
+        }
+
         if (!payload || len < 6 + (int)sizeof(ODID_BasicID_encoded)) return;
 
         // ODID BLE signature: 0x16 0xFA 0xFF 0x0D

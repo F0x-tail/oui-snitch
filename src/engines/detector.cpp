@@ -112,7 +112,10 @@ static const uint8_t AXON_OUI[3] = {0x00, 0x25, 0xdf};
 // others are not: a Motorola Solutions block covers police radios but also a
 // great deal else, so a bare OUI from these is reported as SUSPECTED and only
 // an Axon-specific manufacturer ID or service UUID raises the tier.
-struct LeVendorOui { uint8_t b[3]; const char* vendor; };
+// `kind` is optional: rows that omit it read "Law Enforcement". It exists so a
+// vendor that is not exclusively duty equipment can be described honestly
+// instead of being asserted to be police gear.
+struct LeVendorOui { uint8_t b[3]; const char* vendor; const char* kind; };
 static const LeVendorOui LE_VENDOR_OUIS[] = {
     {{0x00,0x00,0xc3}, "Harris"},
     {{0x00,0x04,0x7d}, "Motorola"},
@@ -126,6 +129,11 @@ static const LeVendorOui LE_VENDOR_OUIS[] = {
     {{0x00,0x23,0xbd}, "Digital Ally"},
     {{0x00,0x25,0xdf}, "Axon"},
     {{0x10,0x74,0x6f}, "Motorola"},
+    // Skydio, deliberately listed in BOTH categories: a DFR airframe is duty
+    // equipment here, and a drone to the Sky Spy engine. Stays SUSPECTED like
+    // the radio vendors, since Skydio also sells to enterprise. Remote ID via
+    // Sky Spy remains the authoritative identifier.
+    {{0x38,0x1d,0x14}, "Skydio", "public-safety drone"},
     {{0x4c,0xcc,0x34}, "Motorola"},
     {{0x64,0x69,0xbc}, "Hytera"},
     {{0x9c,0x06,0x6e}, "Hytera"},
@@ -135,6 +143,14 @@ static const LeVendorOui LE_VENDOR_OUIS[] = {
 };
 static const int LE_VENDOR_OUI_COUNT =
     sizeof(LE_VENDOR_OUIS) / sizeof(LE_VENDOR_OUIS[0]);
+
+static const char* leKindLookup(const uint8_t* mac) {
+    if (mac[0] & 0x02) return nullptr;
+    for (int i = 0; i < LE_VENDOR_OUI_COUNT; i++) {
+        if (memcmp(mac, LE_VENDOR_OUIS[i].b, 3) == 0) return LE_VENDOR_OUIS[i].kind;
+    }
+    return nullptr;
+}
 
 static const char* leVendorLookup(const uint8_t* mac) {
     if (mac[0] & 0x02) return nullptr;      // locally administered / random
@@ -449,6 +465,8 @@ static void detectorCheckSignatures(NimBLEAdvertisedDevice* dev, const uint8_t* 
         else if (leVendor)                      tier = DET_CONF_SUSPECTED;
         if (tier != DET_CONF_NONE && !sigDedup.check(mac)) {
             const char* vendor = axonMac ? "Axon" : (leVendor ? leVendor : "Axon");
+            const char* leKind = axonMac ? nullptr : leKindLookup(mac);
+            if (!leKind || !leKind[0]) leKind = "Law Enforcement";
             DetectionEvent evt = {};
             evt.engine_id = ENGINE_DETECTOR;
             memcpy(evt.mac, mac, 6);
@@ -457,7 +475,7 @@ static void detectorCheckSignatures(NimBLEAdvertisedDevice* dev, const uint8_t* 
             evt.method = METHOD_DET_AXON;
             evt.ext.detector.confidence = tier;
             snprintf(evt.ext.detector.filter_desc,
-                     sizeof(evt.ext.detector.filter_desc), "%s (Law Enforcement)", vendor);
+                     sizeof(evt.ext.detector.filter_desc), "%s (%s)", vendor, leKind);
             pushDetection(&evt);
             Serial.printf("[DETECTOR] SIG %02x:%02x:%02x:%02x:%02x:%02x RSSI:%d [%s LE]\n",
                           mac[0], mac[1], mac[2], mac[3], mac[4], mac[5], rssi, vendor);

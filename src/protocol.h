@@ -139,6 +139,7 @@ enum EngineState : uint8_t {
 #define METHOD_ODID_BLE        0
 #define METHOD_ODID_NAN        1
 #define METHOD_ODID_BEACON     2
+#define METHOD_DRONE_VENDOR    3   // drone-vendor OUI, no Remote ID seen
 
 // Wardrive methods
 #define METHOD_WIFI_AP         0
