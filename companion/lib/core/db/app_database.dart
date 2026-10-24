@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:drift/drift.dart';
 import 'package:drift/native.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:oui_spy/core/db/sqlite_guard.dart';
 import 'package:oui_spy/core/db/tables.dart';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
@@ -589,7 +590,12 @@ LazyDatabase _openConnection() {
   return LazyDatabase(() async {
     final dir = await getApplicationDocumentsDirectory();
     final file = File(p.join(dir.path, 'oui_spy.db'));
-    return NativeDatabase.createInBackground(file);
+    // `sqlite3:` routes through guardedSqlite3 so drift's unconditional
+    // useNativeFunctions() registers nothing. Registering a Dart SQL function
+    // needs executable memory, which GrapheneOS denies when "Dynamic code
+    // loading via memory" is Restricted — SIGABRT on this background isolate
+    // a few seconds into startup. See core/db/sqlite_guard.dart.
+    return NativeDatabase.createInBackground(file, sqlite3: guardedSqlite3);
   });
 }
 
