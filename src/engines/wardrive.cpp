@@ -14,7 +14,6 @@ extern volatile uint32_t g_flockCorroborated;
 #include "dedup_ring.h"
 #include "detector.h"
 #include "flock_wifi.h"
-#include "flock_ble.h"
 #include "foxhunter.h"
 #include <esp_attr.h>
 #include <esp_heap_caps.h>
@@ -642,7 +641,6 @@ static void wardriveStart(void) {
 
     engineSetState(ENGINE_WARDRIVE, ESTATE_SCANNING);
     flockWifiHostSuspend(true);
-    flockBleHostSuspend(true);
     detectorHostSuspend(true);
     Serial.printf("[WARDRIVE] Started (radio=0x%02X ch=%d-%d pri=%dms norm=%dms ble=%d/%d)\n",
         wardriveRadio, channelStart, channelEnd,
@@ -682,7 +680,6 @@ static void wardriveStop(void) {
 
     engineSetState(ENGINE_WARDRIVE, ESTATE_DISABLED);
     flockWifiHostSuspend(false);
-    flockBleHostSuspend(false);
     detectorHostSuspend(false);
     Serial.println("[WARDRIVE] Stopped");
 }

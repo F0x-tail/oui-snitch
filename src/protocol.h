@@ -53,7 +53,12 @@ extern volatile uint32_t g_engRawSeen;
 
 enum EngineId : uint8_t {
     ENGINE_DETECTOR   = 0,  // bitmask 0x01
-    ENGINE_FLOCK_BLE  = 1,  // bitmask 0x02
+    // RESERVED. The Flock BLE engine was removed (upstream reports the
+    // community BLE method stopped working in spring 2026; the Wi-Fi IE
+    // fingerprint is the reliable path). The ID is deliberately kept so engine
+    // IDs and bitmasks do not shift: they are the wire protocol, shared with
+    // the phone app and with mesh nodes that may run other firmware builds.
+    ENGINE_FLOCK_BLE  = 1,  // bitmask 0x02 — reserved, no engine registered
     ENGINE_FLOCK_WIFI = 2,  // bitmask 0x04
     ENGINE_FOXHUNTER  = 3,  // bitmask 0x08
     ENGINE_SKYSPY     = 4,  // bitmask 0x10

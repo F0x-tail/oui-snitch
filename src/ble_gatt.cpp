@@ -1,11 +1,11 @@
 #include "ble_gatt.h"
+#include "engines/tracker_ring.h"
 #include "det_spool.h"
 #include "engine_registry.h"
 #include "ignore_list.h"
 #include "engines/pcap.h"
 #include "engines/detector.h"
 #include "engines/flock_wifi.h"
-#include "engines/flock_ble.h"
 #include "engines/wardrive.h"
 #include "mesh_espnow.h"
 #include "ota_handler.h"
@@ -104,7 +104,6 @@ static void mgrApplyLocalRadio(void) {
     uint8_t r = mgrGetNodeRadio(meshGetLocalNodeId());
     if (r == 0) r = 0x03;
     flockWifiSetRadioGate((r & 0x01) != 0);
-    flockBleSetRadioGate((r & 0x02) != 0);
     wardriveSetRadioMask(r);
 }
 

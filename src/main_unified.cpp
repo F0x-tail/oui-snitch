@@ -18,7 +18,6 @@
 #include "ble_gatt.h"
 #include "mesh_espnow.h"
 #include "wifi_ota_handler.h"
-#include "engines/flock_ble.h"
 #include "engines/detector.h"
 #include "engines/foxhunter.h"
 #include "engines/skyspy.h"
@@ -1475,7 +1474,6 @@ void setup() {
 
     // Register all engines
     engineRegister(ENGINE_DETECTOR, &detectorCallbacks);
-    engineRegister(ENGINE_FLOCK_BLE, &flockBleCallbacks);
     engineRegister(ENGINE_FLOCK_WIFI, &flockWifiCallbacks);
     engineRegister(ENGINE_FOXHUNTER, &foxhunterCallbacks);
     engineRegister(ENGINE_SKYSPY, &skyspyCallbacks);
