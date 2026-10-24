@@ -60,7 +60,14 @@ class WigleApi {
   }
 
   /// Upload a WiGLE CSV file.
-  Future<WigleUploadResult> uploadCsv(File csvFile) async {
+  ///
+  /// [donate] marks the upload as donated to WiGLE's public dataset. WiGLE's
+  /// upload API takes a plain on/off and offers no licensing or
+  /// non-commercial option — commercial restrictions live in WiGLE's own
+  /// EULA, on the side of whoever *consumes* the data, and cannot be set by
+  /// the uploader. So this flag is the only control that exists, and it is
+  /// the user's to set rather than ours to hardcode.
+  Future<WigleUploadResult> uploadCsv(File csvFile, {bool donate = true}) async {
     final bytes = await csvFile.length();
     final formData = FormData.fromMap({
       'file': await MultipartFile.fromFile(
@@ -68,7 +75,7 @@ class WigleApi {
         filename: csvFile.uri.pathSegments.last,
         contentType: DioMediaType('text', 'csv'),
       ),
-      'donate': 'on',
+      'donate': donate ? 'on' : 'off',
     });
 
     final resp = await _guard(() => _dio.post(

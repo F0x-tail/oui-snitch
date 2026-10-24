@@ -1153,10 +1153,42 @@ Future<bool> _confirmWigleUpload(BuildContext context) async {
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
       title: Text('Upload to WiGLE?',
           style: TextStyle(color: t.textPrimary, fontWeight: FontWeight.w700)),
-      content: Text(
-        'This publishes this session — network MACs, SSIDs and GPS coordinates — '
-        'to the public WiGLE.net database. Once uploaded it cannot be retracted.',
-        style: TextStyle(color: t.textDim, fontSize: 13),
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'This publishes this session — network MACs, SSIDs and GPS coordinates — '
+            'to the public WiGLE.net database. Once uploaded it cannot be retracted.',
+            style: TextStyle(color: t.textDim, fontSize: 13),
+          ),
+          const SizedBox(height: 12),
+          // Was a hardcoded 'donate': 'on'. WiGLE's API offers no
+          // non-commercial or licensing option, so this on/off is the only
+          // control that exists — which makes it the user's to set.
+          Consumer(
+            builder: (_, ref, _) {
+              final w = ref.watch(wigleProvider);
+              return CheckboxListTile(
+                contentPadding: EdgeInsets.zero,
+                dense: true,
+                controlAffinity: ListTileControlAffinity.leading,
+                activeColor: AppTheme.accent,
+                value: w.donate,
+                onChanged: (v) => w.setDonate(v ?? false),
+                title: Text('Donate to WiGLE',
+                    style: TextStyle(color: t.textPrimary, fontSize: 13)),
+                subtitle: Text(
+                  w.donate
+                      ? 'Added to WiGLE\'s public dataset. Their EULA governs '
+                        'reuse, including commercial — uploaders cannot restrict it.'
+                      : 'Credited to your account only, not donated.',
+                  style: TextStyle(color: t.textDim, fontSize: 11),
+                ),
+              );
+            },
+          ),
+        ],
       ),
       actions: [
         TextButton(

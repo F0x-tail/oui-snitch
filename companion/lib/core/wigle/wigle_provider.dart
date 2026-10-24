@@ -2,6 +2,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:oui_spy/core/db/app_database.dart';
 import 'package:oui_spy/core/debug_log.dart';
 import 'package:oui_spy/core/wardrive_state.dart';
@@ -18,6 +19,7 @@ class WigleProvider extends ChangeNotifier {
   static const _storage = FlutterSecureStorage();
   static const _keyApiName = 'wigle_api_name';
   static const _keyApiToken = 'wigle_api_token';
+  static const _keyDonate = 'wigle_donate';
 
   WigleApi? _api;
   String _apiName = '';
@@ -28,6 +30,7 @@ class WigleProvider extends ChangeNotifier {
   String? _error;
   final Set<String> _uploadedSessions = {};
   final Map<String, bool> _uploadingMap = {};
+  bool _donate = true;
 
   bool get isLoggedIn => _isLoggedIn;
   bool get isLoading => _isLoading;
@@ -36,10 +39,25 @@ class WigleProvider extends ChangeNotifier {
   String get apiName => _apiName;
   bool get rateLimited => _error == WigleApi.rateLimitMessage;
 
+  /// Whether uploads are donated to WiGLE's public dataset. Defaults to on,
+  /// matching WiGLE's own clients, but it is now a choice rather than a
+  /// hardcoded literal. See [WigleApi.uploadCsv] for why this is the only
+  /// control WiGLE's API exposes.
+  bool get donate => _donate;
+
+  Future<void> setDonate(bool value) async {
+    if (_donate == value) return;
+    _donate = value;
+    notifyListeners();
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool(_keyDonate, value);
+  }
+
   bool isUploaded(String sessionId) => _uploadedSessions.contains(sessionId);
   bool isUploading(String sessionId) => _uploadingMap[sessionId] == true;
 
   Future<void> _loadCredentials() async {
+    _donate = (await SharedPreferences.getInstance()).getBool(_keyDonate) ?? true;
     _apiName = await _storage.read(key: _keyApiName) ?? '';
     _apiToken = await _storage.read(key: _keyApiToken) ?? '';
     if (_apiName.isNotEmpty && _apiToken.isNotEmpty) {
@@ -149,7 +167,7 @@ class WigleProvider extends ChangeNotifier {
         return null;
       }
 
-      final result = await _api!.uploadCsv(file);
+      final result = await _api!.uploadCsv(file, donate: _donate);
 
       _uploadedSessions.add(sessionId);
       _db.insertWigleUpload(WigleUploadsCompanion(
