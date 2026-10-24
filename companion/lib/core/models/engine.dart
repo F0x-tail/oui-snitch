@@ -4,7 +4,14 @@ import 'package:flutter/material.dart';
 enum Engine {
   // Mid-tone hues: vivid on the dark background, still legible on white.
   detector('Detector', 'WiFi + BLE watchlist alerting', Color(0xFF3286E6), 0x01),
-  flockBle('Flock BLE', 'Flock Safety BLE detection', Color(0xFF9A35E6), 0x02),
+  /// RESERVED — engine removed from the firmware (the community BLE method
+  /// stopped working in spring 2026; the Wi-Fi IE fingerprint is the reliable
+  /// path). The entry is kept because `Engine.index` IS the wire protocol
+  /// engine ID and indexes the firmware's state array: deleting it would shift
+  /// every later engine's ID and silently mis-target enable/disable commands,
+  /// including on mesh nodes running other builds. Historical detections stored
+  /// as 'flockBle' also still decode through it.
+  flockBle('Flock BLE', 'Removed — use Flock Wi-Fi', Color(0xFF9A35E6), 0x02),
   flockWifi(
       'Flock WiFi', 'Flock Safety WiFi promiscuous', Color(0xFFE63577), 0x04),
   foxhunter('Foxhunter', 'WiFi + BLE proximity tracker', Color(0xFF1FA866), 0x08),
