@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:oui_spy/features/config/config_menu_state.dart';
@@ -253,7 +254,17 @@ class _AppShellState extends ConsumerState<AppShell> {
   Widget build(BuildContext context) {
     final location = GoRouterState.of(context).uri.path;
     final index = _routes.indexOf(location);
-    return Scaffold(
+    return PopScope(
+      // The shell routes are the back-stack root, so a system back here would
+      // otherwise drop straight out of the app with no warning — easy to do by
+      // accident mid-session and lose a running scan. Intercept it and confirm.
+      canPop: false,
+      onPopInvokedWithResult: (didPop, _) async {
+        if (didPop) return;
+        final leave = await _confirmExit(context);
+        if (leave) await SystemNavigator.pop();
+      },
+      child: Scaffold(
       body: widget.child,
       bottomNavigationBar: Container(
         decoration: BoxDecoration(
@@ -285,6 +296,48 @@ class _AppShellState extends ConsumerState<AppShell> {
           ),
         ],
       )),
+    ),
     );
+  }
+
+  Future<bool> _confirmExit(BuildContext context) async {
+    final t = AppTheme.of(context);
+    final wd = ref.read(wardriveProvider);
+    // The board keeps scanning on its own; what closing the app actually costs
+    // is the phone-side link. A running wardrive session is the case worth a
+    // sharper warning, because its GPS track comes from the phone.
+    final body = wd.isActive
+        ? 'A wardrive session is running. Closing the app ends its GPS track '
+          'and stops recording to it. The board keeps scanning on its own.'
+        : 'The board keeps scanning on its own, but closing the app stops live '
+          'alerts and the live view on your phone.';
+    final leave = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: t.surface,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+        title: Text('Leave OUI-SPY?',
+            style: TextStyle(color: t.textPrimary, fontWeight: FontWeight.w700)),
+        content: Text(
+          body,
+          style: TextStyle(color: t.textDim, fontSize: 13),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: Text('STAY', style: TextStyle(color: t.textDim)),
+          ),
+          FilledButton(
+            style: FilledButton.styleFrom(
+              backgroundColor: AppTheme.error,
+              foregroundColor: Colors.white,
+            ),
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('EXIT'),
+          ),
+        ],
+      ),
+    );
+    return leave ?? false;
   }
 }

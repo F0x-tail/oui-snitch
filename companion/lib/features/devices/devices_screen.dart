@@ -286,31 +286,10 @@ class _DevicesScreenState extends ConsumerState<DevicesScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            CommandSheetTile(
-              icon: Icons.phone_iphone,
-              label: ref.read(phoneBleSourceProvider).active
-                  ? 'STOP SCANNING WITH PHONE'
-                  : 'SCAN WITH THIS PHONE',
-              subtitle: ref.read(phoneBleSourceProvider).active
-                  ? "This phone's Bluetooth is listening too"
-                  : "Also listen with this phone's Bluetooth",
-              color: ref.read(phoneBleSourceProvider).active
-                  ? AppTheme.accent
-                  : null,
-              onTap: () async {
-                Navigator.pop(ctx);
-                final src = ref.read(phoneBleSourceProvider);
-                if (src.active) {
-                  src.setActive(false);
-                  final p = await SharedPreferences.getInstance();
-                  await p.setBool(DeviceRegistry.phoneScanPref, false);
-                  if (_source == 'phone') _source = null;
-                } else {
-                  await _ensurePhoneScan(context);
-                }
-                if (mounted) setState(() {});
-              },
-            ),
+            // The phone-as-sensor action was removed here too, matching the
+            // settings toggle. The phone scanned independently of the board, so
+            // it raised alerts with every board engine off. The board is the
+            // sensor; phone Bluetooth is only used to connect to it.
             CommandSheetTile(
               icon: Icons.delete_sweep,
               label: 'CLEAR LIST',

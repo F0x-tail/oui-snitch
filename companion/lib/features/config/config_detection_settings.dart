@@ -102,13 +102,6 @@ class _DetectionSettingsTab extends ConsumerStatefulWidget {
 }
 
 class _DetectionSettingsTabState extends ConsumerState<_DetectionSettingsTab> {
-  Future<void> _setPhoneScan(bool on) async {
-    ref.read(phoneBleSourceProvider).setActive(on);
-    final p = await SharedPreferences.getInstance();
-    await p.setBool(DeviceRegistry.phoneScanPref, on);
-    if (mounted) setState(() {});
-  }
-
   @override
   Widget build(BuildContext context) {
     final t = AppTheme.of(context);
@@ -116,7 +109,6 @@ class _DetectionSettingsTabState extends ConsumerState<_DetectionSettingsTab> {
     final sigMask = ref.watch(detectorSigMaskProvider);
     final notif = ref.watch(notificationServiceProvider);
     final ignore = ref.watch(ignoreListProvider);
-    final phoneScan = ref.watch(phoneBleSourceProvider).active;
     final targets = watchlist.entries.length;
     final ignoring = ignore.entries.where((e) => e.enabled).length;
     final moreClasses = [for (final (_, cs) in _moreGroups) ...cs];
@@ -190,16 +182,11 @@ class _DetectionSettingsTabState extends ConsumerState<_DetectionSettingsTab> {
           color: AppTheme.accent,
           onTap: () => _pushPage(context, 'Ignore list', const SingleChildScrollView(child: _IgnoreListTab())),
         ),
-        const SizedBox(height: 20),
-        const ConfigSectionHeader(label: 'THIS PHONE'),
-        ConfigToggleRow(
-          icon: Icons.bluetooth_searching,
-          label: 'Also scan with this phone',
-          subtitle: "Uses this phone's Bluetooth to find nearby devices too, in addition to your OUI-SPY board",
-          color: AppTheme.detector,
-          value: phoneScan,
-          onChanged: _setPhoneScan,
-        ),
+        // The "also scan with this phone" toggle was removed deliberately. The
+        // phone-side scanner ran independently of the board, so it kept
+        // producing classifier alerts with every board engine switched off —
+        // which is what made "engines all off but still notifying" possible.
+        // The board is the sensor; the phone is the display.
         const SizedBox(height: 20),
       ],
     );

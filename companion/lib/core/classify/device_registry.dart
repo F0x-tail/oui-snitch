@@ -382,7 +382,17 @@ final phoneBleSourceProvider = Provider<PhoneBleSource>((ref) {
     final p = gps.lastPosition;
     return p == null ? null : GpsSample(0, p.latitude, p.longitude);
   });
-  SharedPreferences.getInstance().then((p) => src.setActive(p.getBool(DeviceRegistry.phoneScanPref) ?? false));
+  // Never auto-resume phone scanning. The settings toggle for it was removed:
+  // the board is the sensor, and a phone scanning on its own kept raising
+  // classifier alerts with every board engine off. Clear any stored preference
+  // so a previously-enabled phone scan does not keep running with no visible
+  // control to stop it.
+  SharedPreferences.getInstance().then((p) async {
+    if (p.getBool(DeviceRegistry.phoneScanPref) ?? false) {
+      await p.setBool(DeviceRegistry.phoneScanPref, false);
+    }
+    src.setActive(false);
+  });
   ref.onDispose(src.dispose);
   return src;
 });
