@@ -19,16 +19,63 @@ static IgnoreSlot g_tmp[IGNORE_MAX_ENTRIES];
 static StaticSemaphore_t g_tmpLockBuf;
 static SemaphoreHandle_t g_tmpLock = xSemaphoreCreateMutexStatic(&g_tmpLockBuf);
 
-void ignoreListInit(void) {
+// NVS persistence. The list used to be WIPED here on every boot (p.clear()),
+// so an ignored device came back after a power cycle — and on a standalone
+// board, with no phone to re-push the list, it stayed back.
+static const char* kIgnNs  = "ouispy-ign";
+static const char* kIgnKey = "slots";
+
+static void ignoreListSave(void) {
+    IgnoreSlot snap[IGNORE_MAX_ENTRIES];
+    uint8_t cnt;
+    portENTER_CRITICAL(&g_mux);
+    cnt = g_count;
+    memcpy(snap, g_entries, sizeof(IgnoreSlot) * cnt);
+    portEXIT_CRITICAL(&g_mux);
+
     Preferences p;
-    if (p.begin("ouispy-ign", false)) {
-        p.clear();
+    if (!p.begin(kIgnNs, false)) return;
+    if (cnt == 0) {
+        p.remove(kIgnKey);
+    } else {
+        p.putBytes(kIgnKey, snap, sizeof(IgnoreSlot) * cnt);
+    }
+    p.end();
+}
+
+void ignoreListInit(void) {
+    IgnoreSlot loaded[IGNORE_MAX_ENTRIES];
+    uint8_t cnt = 0;
+
+    Preferences p;
+    if (p.begin(kIgnNs, true)) {
+        size_t have = p.getBytesLength(kIgnKey);
+        // Only accept a whole number of slots that fits the array; a short or
+        // ragged blob means a format change, so start clean rather than
+        // reinterpret someone else's bytes.
+        if (have > 0 && have % sizeof(IgnoreSlot) == 0 &&
+            have <= sizeof(IgnoreSlot) * IGNORE_MAX_ENTRIES) {
+            if (p.getBytes(kIgnKey, loaded, have) == have) {
+                cnt = (uint8_t)(have / sizeof(IgnoreSlot));
+                // Reject any slot whose declared length is impossible.
+                for (uint8_t i = 0; i < cnt; i++) {
+                    if (loaded[i].len == 0 || loaded[i].len > IGNORE_MAX_VALUE) {
+                        cnt = 0;
+                        break;
+                    }
+                }
+            }
+        }
         p.end();
     }
+
     portENTER_CRITICAL(&g_mux);
-    g_count = 0;
+    if (cnt > 0) memcpy(g_entries, loaded, sizeof(IgnoreSlot) * cnt);
+    g_count = cnt;
     g_version++;
     portEXIT_CRITICAL(&g_mux);
+
+    Serial.printf("[IGNORE] restored %u entries from NVS\n", cnt);
 }
 
 void ignoreListSet(const uint8_t* buf, size_t len) {
@@ -37,6 +84,7 @@ void ignoreListSet(const uint8_t* buf, size_t len) {
         g_count = 0;
         g_version++;
         portEXIT_CRITICAL(&g_mux);
+        ignoreListSave();
         Serial.println("[IGNORE] list cleared");
         return;
     }
@@ -69,6 +117,7 @@ void ignoreListSet(const uint8_t* buf, size_t len) {
     portEXIT_CRITICAL(&g_mux);
     xSemaphoreGive(g_tmpLock);
     if (same) return;
+    ignoreListSave();
     Serial.printf("[IGNORE] list set: %u entries (declared %u, v%lu)\n",
                   cnt, declared, (unsigned long)g_version);
 }
