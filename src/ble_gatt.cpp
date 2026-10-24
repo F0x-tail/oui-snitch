@@ -1567,6 +1567,7 @@ static volatile bool g_spoolFlushPending = false;
 #define SYS_CMD_WIFI_WIPE         0x07
 #define SYS_OP_FLEET_PROGRESS     0x08
 #define SYS_CMD_FLEET_WIFI_OTA    0x0A  // push mgr WiFi creds + node URL to nodes
+#define SYS_CMD_RING_TRACKER      0x0D  // mac[6] + hint[1]: play a tracker's sound
 
 #ifdef OUISPY_ROLE_MANAGER
 static void fleetOtaNotify(uint8_t phase, uint8_t pct, uint8_t done, uint8_t seen) {
@@ -1734,6 +1735,21 @@ class SystemControlCallbacks : public NimBLECharacteristicCallbacks {
             case SYS_CMD_SPOOL_CLEAR:
                 detSpoolClear();
                 break;
+
+            case SYS_CMD_RING_TRACKER: {
+                // mac[6] + optional hint[1]. User-triggered counter-surveillance
+                // (make a hidden tracker beep). No magic gate: not destructive,
+                // and it only works on a tracker already separated from its owner.
+                if (val.length() < 7) {
+                    Serial.println("[SYS] ring: short payload");
+                    break;
+                }
+                uint8_t mac[6];
+                for (int i = 0; i < 6; i++) mac[i] = (uint8_t)val[1 + i];
+                uint8_t hint = val.length() >= 8 ? (uint8_t)val[7] : 0;
+                trackerRingStart(mac, hint);
+                break;
+            }
 
             default:
                 Serial.printf("[SYS] Unknown command: 0x%02X\n", cmd);

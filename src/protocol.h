@@ -366,6 +366,7 @@ bool   melodyLookup(uint8_t engine, uint8_t method, uint8_t* n, uint8_t notes[][
 #define SYS_CMD_FLEET_WIFI_OTA    0x0A
 #define SYS_CMD_FLUSH_SPOOL       0x0B
 #define SYS_CMD_SPOOL_CLEAR       0x0C
+#define SYS_CMD_RING_TRACKER      0x0D  // payload: mac[6] + hint[1]
 
 #define PCAP_MODE_WIFI 0
 #define PCAP_MODE_BLE  1
