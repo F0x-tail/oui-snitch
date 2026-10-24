@@ -161,4 +161,79 @@ static inline bool IRAM_ATTR flockHasLiteonVendorIE(const uint8_t* body, int len
     return false;
 }
 
+// --- flock-you exact IE fingerprint ---------------------------------------
+//
+// The high-confidence Flock signature is the exact ordered list of 802.11
+// information-element tags in the camera's wildcard probe request, with vendor
+// (221) elements expanded to their OUI+payload. This is the published
+// flock-you method (colonelpanichacks/flock-you); it reports no false positives
+// across long drive tests, at the cost of breaking if the camera firmware
+// changes its IEs. The format string below is a data constant from that project
+// (not copied code — the builder here is our own).
+static const char FLOCK_PROBE_IE_SIG_PRIMARY[] =
+    "2,12,127,221:506f9a16030103,45,191,221:0050f208000000";
+
+static inline void flockHexByte(char* o, uint8_t b) {
+    static const char h[] = "0123456789abcdef";
+    o[0] = h[b >> 4];
+    o[1] = h[b & 0x0F];
+}
+
+// Build the tag-list signature from a frame body. Skips the SSID element (tag
+// 0) wherever it appears; vendor elements (221) become "221:" + up to 8 payload
+// bytes in hex; every other element is its decimal tag number; comma-joined.
+// Returns the written length.
+static inline int flockBuildIeSig(const uint8_t* body, int len,
+                                  char* out, int outsz) {
+    int o = 0;
+    bool first = true;
+    while (len >= 2 && o < outsz - 1) {
+        uint8_t id   = body[0];
+        uint8_t elen = body[1];
+        if ((int)elen + 2 > len) break;
+        if (id == 0) { body += elen + 2; len -= elen + 2; continue; }
+        if (!first && o < outsz - 1) out[o++] = ',';
+        first = false;
+        if (id == 221) {
+            const char pre[] = "221:";
+            for (int i = 0; i < 4 && o < outsz - 1; i++) out[o++] = pre[i];
+            int n = elen > 8 ? 8 : elen;
+            for (int i = 0; i < n && o < outsz - 2; i++) {
+                flockHexByte(out + o, body[2 + i]);
+                o += 2;
+            }
+        } else {
+            char tmp[4];
+            int t = 0, v = id;
+            if (v == 0) tmp[t++] = '0';
+            while (v > 0 && t < 3) { tmp[t++] = (char)('0' + v % 10); v /= 10; }
+            while (t > 0 && o < outsz - 1) out[o++] = tmp[--t];
+        }
+        body += elen + 2;
+        len  -= elen + 2;
+    }
+    out[o < outsz ? o : outsz - 1] = '\0';
+    return o;
+}
+
+static inline bool flockStrEq(const char* a, const char* b) {
+    while (*a && *b) { if (*a != *b) return false; a++; b++; }
+    return *a == *b;
+}
+
+// True if the probe body's IE signature exactly matches the Flock primary. Tries
+// the full body and, in case a 4-byte FCS trailer is present, the trimmed body.
+// (Our builder skips SSID tag 0 anywhere, so flock-you's "skip leading empty
+// SSID" second candidate is already covered.)
+static inline bool flockProbeIeSigMatches(const uint8_t* body, int len) {
+    char sig[80];
+    flockBuildIeSig(body, len, sig, sizeof(sig));
+    if (flockStrEq(sig, FLOCK_PROBE_IE_SIG_PRIMARY)) return true;
+    if (len > 4) {
+        flockBuildIeSig(body, len - 4, sig, sizeof(sig));
+        if (flockStrEq(sig, FLOCK_PROBE_IE_SIG_PRIMARY)) return true;
+    }
+    return false;
+}
+
 #endif

@@ -115,6 +115,7 @@ static void IRAM_ATTR wifiSnifferCb(void* buf, wifi_promiscuous_pkt_type_t type)
 
     const uint8_t* addr1 = &p[4];
     const uint8_t* addr2 = &p[10];
+    const uint8_t* addr3 = &p[16];
 
     uint8_t method = 0xFF;
     const uint8_t* matchMac = NULL;
@@ -129,7 +130,10 @@ static void IRAM_ATTR wifiSnifferCb(void* buf, wifi_promiscuous_pkt_type_t type)
             int r = (bodyLen > 0) ? isWildcardProbeIE(body, bodyLen) : -1;
             if (r == -1 && bodyLen > 4) r = isWildcardProbeIE(body, bodyLen - 4);
             if (r == 1) {
-                method = flockHasLiteonVendorIE(body, bodyLen)
+                // flock-you approach: the high-confidence tier is an EXACT match
+                // of the full IE tag-list signature, not merely the presence of
+                // a LiteON vendor IE. Much more precise; see flock_oui.h.
+                method = flockProbeIeSigMatches(body, bodyLen)
                              ? METHOD_WILDCARD_PROBE_IE_SIG
                              : METHOD_WILDCARD_PROBE;
             }
@@ -137,11 +141,16 @@ static void IRAM_ATTR wifiSnifferCb(void* buf, wifi_promiscuous_pkt_type_t type)
     } else if (!(addr1[0] & 0x01) && flockMatchOuiISR(addr1)) {
         method = METHOD_OUI_ADDR1;
         matchMac = addr1;
+    } else if (frameType == 0 && len >= 22 && flockMatchOuiISR(addr3)) {
+        // BSSID OUI in a management frame (flock-you tier 1, addr3).
+        method = METHOD_OUI_ADDR3;
+        matchMac = addr3;
     }
 
     if (method == 0xFF || !matchMac) return;
     // bare OUI is not a flock on its own; upstream requires corroboration
-    if (method == METHOD_OUI_ADDR1 || method == METHOD_OUI_ADDR2) {
+    if (method == METHOD_OUI_ADDR1 || method == METHOD_OUI_ADDR2 ||
+        method == METHOD_OUI_ADDR3) {
         if (!flockAllowOuiOnly) { g_flockOuiSuppressed++; return; }
         g_flockOuiAllowed++;
     } else {
