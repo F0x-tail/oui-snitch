@@ -325,10 +325,31 @@ static void detectorCheckSignatures(NimBLEAdvertisedDevice* dev, const uint8_t* 
                 (uint8_t)md[2], (uint8_t)md[3], (unsigned)md.size(), rssi, sigMask);
         }
 #endif
-        if (md.size() >= 24 && (uint8_t)md[0] == 0x4C && (uint8_t)md[1] == 0x00 &&
-            (uint8_t)md[2] == 0x12 && (uint8_t)md[3] == 0x19) {
-            if (sigMask & SIG_TRACKER) trackerObserve(mac, rssi, TRK_FAM_APPLE);
-            return;
+        // Apple packs Continuity as a chain of TLVs after the company ID:
+        //   4C 00 <type> <len> <payload...> [<type> <len> <payload...> ...]
+        // This used to look only at the FIRST TLV (md[2]/md[3]), so a Find My
+        // "separated" record sitting behind another TLV was missed. Observed in
+        // the field: a 25-byte blob whose first TLV was the 2-byte nearby
+        // record. Walk the chain instead of assuming an offset.
+        //
+        // Only type 0x12 with length 0x19 counts — that is the separated /
+        // offline-finding payload, i.e. a tracker away from its owner. The
+        // 2-byte "nearby" variant means the owner is present, which every
+        // iPhone and AirPods in range emits and is not a stalking signal.
+        if (md.size() >= 4 && (uint8_t)md[0] == 0x4C && (uint8_t)md[1] == 0x00) {
+            size_t i = 2;
+            while (i + 1 < md.size()) {
+                uint8_t ttype = (uint8_t)md[i];
+                uint8_t tlen  = (uint8_t)md[i + 1];
+                if (i + 2 + tlen > md.size()) break;      // truncated / malformed
+                if (ttype == 0x12 && tlen == 0x19) {
+                    if (sigMask & SIG_TRACKER) {
+                        trackerObserve(mac, rssi, TRK_FAM_APPLE);
+                    }
+                    return;
+                }
+                i += 2 + tlen;
+            }
         }
     }
     if (sigMask & SIG_TRACKER) {

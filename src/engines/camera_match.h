@@ -46,6 +46,9 @@ static const char* CAMERA_NAME_PATTERNS[] = {
     "Dahua",
     "IPCAM", "IPC-",               // common generic IP-camera SSID prefixes
     "Doorbell",
+    // Municipal / parking ALPR. Distinctive brand tokens, so no risk of
+    // the false positives that a bare "cam" or "ring" would bring.
+    "Genetec", "AutoVu",
 };
 static const int CAMERA_NAME_PATTERN_COUNT =
     sizeof(CAMERA_NAME_PATTERNS) / sizeof(CAMERA_NAME_PATTERNS[0]);

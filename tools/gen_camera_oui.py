@@ -35,6 +35,10 @@ VENDORS = {
     'Foscam': 'Foscam',
     'eufy': 'eufy',
     'Anker Innovations': 'eufy',
+    # Municipal / parking ALPR (AutoVu). 'Genetec Inc.' is matched in full
+    # on purpose: 'GENETEC Corporation' is an unrelated Japanese firm, and
+    # 'Netgenetech' merely contains the substring.
+    'Genetec Inc.': 'Genetec',
 }
 
 
