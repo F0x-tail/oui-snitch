@@ -294,7 +294,22 @@ static const uint8_t wildcardProbeTemplate[] = {
     0x01, 0x04, 0x82, 0x84, 0x8B, 0x96,
 };
 
+// Active probing. OFF by default: wardrive otherwise transmits two wildcard
+// probe requests on every channel hop, which makes a device whose whole job is
+// quiet observation continuously detectable. Passive still hears every beacon;
+// it just misses APs that only answer a direct probe (hidden SSIDs, and some
+// APs that beacon slowly).
+//
+// The source MAC below is randomised and locally administered, so active mode
+// does not leak this device's real MAC — but it is still a transmission.
+volatile bool g_activeProbeEnabled = false;
+
+void wardriveSetActiveProbe(bool on) { g_activeProbeEnabled = on; }
+bool wardriveGetActiveProbe(void) { return g_activeProbeEnabled; }
+
 static void sendWildcardProbe(void) {
+    if (!activeProbeEnabled()) return;
+
     uint8_t probe[sizeof(wildcardProbeTemplate)];
     for (int n = 0; n < 2; n++) {
         memcpy(probe, wildcardProbeTemplate, sizeof(probe));
@@ -821,6 +836,15 @@ static void wardriveConfig(const uint8_t* payload, uint8_t len) {
 #ifdef OUISPY_DUAL_BAND
     if (len >= 12) wardrive24Mode = payload[11] & 0x01;
 #endif
+    // Byte 12 is parsed regardless of build flags so the wire format does not
+    // depend on OUISPY_DUAL_BAND. Absent byte = passive, matching the default.
+    if (len >= 13) {
+        bool wantActive = (payload[12] & 0x01) != 0;
+        if (wantActive != g_activeProbeEnabled) {
+            g_activeProbeEnabled = wantActive;
+            Serial.printf("[WARDRIVE] probing %s\n", wantActive ? "ACTIVE" : "passive");
+        }
+    }
 
     if (wardriveActive && newRadio != prevRadio) {
         Serial.printf("[WARDRIVE] radio change 0x%02X->0x%02X while running — restart\n",

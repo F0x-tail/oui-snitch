@@ -39,6 +39,21 @@ extern volatile uint32_t g_engRawSeen;
 #define PIN_GPS_TX     43
 #endif
 
+// Global radio policy: may any engine TRANSMIT probe requests?
+//
+// Default false (passive). This is deliberately global rather than per-engine:
+// wardrive.cpp and flock_wifi.cpp each have their own sendWildcardProbe(), and
+// gating only one leaves the device transmitting while the UI claims it is
+// listening only. Any new transmitter must check this too.
+#ifdef __cplusplus
+extern "C" {
+#endif
+extern volatile bool g_activeProbeEnabled;
+#ifdef __cplusplus
+}
+#endif
+static inline bool activeProbeEnabled(void) { return g_activeProbeEnabled; }
+
 // Firmware version
 #ifndef FW_VERSION
 #define FW_VERSION     "0.6.1"

@@ -92,6 +92,10 @@ static uint8_t IRAM_ATTR flockParseAuth(const uint8_t* p, int len) {
 }
 
 static void sendWildcardProbe() {
+    // Passive by default. This engine has its own probe transmitter, separate
+    // from wardrive's — gating only wardrive left the device transmitting
+    // while the UI said "listens only". See g_activeProbeEnabled.
+    if (!activeProbeEnabled()) return;
     uint8_t probe[sizeof(wildcardProbeTpl)];
     memcpy(probe, wildcardProbeTpl, sizeof(probe));
     probe[10] = 0x02 | (esp_random() & 0xFE);
