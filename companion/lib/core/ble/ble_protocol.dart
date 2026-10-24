@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'dart:typed_data';
 
 import 'package:oui_spy/core/models/detection.dart';
@@ -452,7 +453,10 @@ class BleProtocol {
           'odid_ble',
           'odid_nan',
           'odid_beacon',
-        ][method.clamp(0, 2)],
+          // Drone-vendor OUI with no Remote ID seen — a weaker signal than the
+          // three ODID paths above, which carry an actual UAS ID.
+          'drone_vendor',
+        ][method.clamp(0, 3)],
       Engine.detector => const [
           'ble_watchlist',
           'wifi_watchlist',

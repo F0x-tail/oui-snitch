@@ -817,6 +817,18 @@ class BleManager {
     );
   }
 
+  /// Ask the board to ring a tracker so a hidden one can be located.
+  /// User-triggered counter-surveillance; returns false if not connected.
+  Future<bool> ringTracker(String mac, {int hint = 0}) async {
+    if (_systemControl == null) return false;
+    await _systemControl!.write(
+      BleProtocol.ringTrackerCmd(mac, hint: hint),
+      withoutResponse: false,
+    );
+    DebugLog.log('BLE: ring requested for $mac (hint $hint)');
+    return true;
+  }
+
   Future<void> requestSpoolFlush() async {
     if (_systemControl == null || !_offlineScanEnabled) return;
     _importing = true;
