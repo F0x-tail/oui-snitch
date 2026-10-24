@@ -232,6 +232,21 @@ class BleProtocol {
   static Uint8List get flushSpoolCmd => Uint8List.fromList([0x0B]);
   static Uint8List get spoolClearCmd => Uint8List.fromList([0x0C]);
 
+  /// SYS_CMD_RING_TRACKER (0x0D): make a tracker play its sound.
+  /// Payload: 6 MAC bytes + a protocol hint (0 = auto).
+  static Uint8List ringTrackerCmd(String mac, {int hint = 0}) {
+    final hex = mac.replaceAll(RegExp(r'[^0-9a-fA-F]'), '');
+    if (hex.length != 12) {
+      throw ArgumentError('MAC must be 6 bytes, got "$mac"');
+    }
+    final bytes = <int>[0x0D];
+    for (var i = 0; i < 12; i += 2) {
+      bytes.add(int.parse(hex.substring(i, i + 2), radix: 16));
+    }
+    bytes.add(hint & 0xFF);
+    return Uint8List.fromList(bytes);
+  }
+
   static bool isSpoolHeader(List<int> d) => d.length == 9 && d[0] == 0xFF;
   static bool isSpoolDone(List<int> d) => d.length == 1 && d[0] == 0xFE;
 
@@ -560,8 +575,16 @@ class BleProtocol {
     final slice = data.sublist(offset, end);
     final nullIndex = slice.indexOf(0);
     final trimmed = nullIndex >= 0 ? slice.sublist(0, nullIndex) : slice;
-    return String.fromCharCodes(
-        trimmed.where((b) => b >= 0x20 && (b < 0x7f || b > 0x9f)));
+    // UTF-8, not Latin-1. String.fromCharCodes() treats each byte as a code
+    // point, so a UTF-8 SSID such as "Cafe\u0301" arrived mangled, and the old
+    // 0x7f-0x9f byte filter then cut multi-byte sequences in half.
+    //
+    // SSIDs and device names are attacker-controlled bytes, so allowMalformed
+    // is required: invalid UTF-8 must degrade to U+FFFD, never throw.
+    final text = utf8.decode(trimmed, allowMalformed: true);
+    // Strip C0/C1 control characters after decoding, on characters rather than
+    // bytes, so legitimate multi-byte text survives.
+    return text.replaceAll(RegExp(r'[\u0000-\u001f\u007f-\u009f]'), '');
   }
 
   // -- Orchestration --
