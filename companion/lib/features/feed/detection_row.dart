@@ -4,6 +4,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
+import 'package:oui_spy/core/ble/ble_manager.dart';
 import 'package:oui_spy/core/app_state.dart';
 import 'package:oui_spy/core/deflock/deflock_provider.dart';
 import 'package:oui_spy/core/drone_grouping.dart';
@@ -15,6 +16,7 @@ import 'package:oui_spy/core/services/faa_service.dart';
 import 'package:oui_spy/core/wardrive_state.dart';
 import 'package:oui_spy/features/feed/wigle_panel.dart';
 import 'package:oui_spy/theme/app_theme.dart';
+import 'package:oui_spy/core/ignore_list_state.dart';
 
 class DetectionRow extends ConsumerWidget {
   const DetectionRow({super.key, required this.detection});
@@ -328,6 +330,34 @@ void showDetectionDetails(
                   detectionStartFoxhunt(context, ref, detection);
                 },
               ),
+            // Only trackers can be rung, and only when a separated tracker is in
+            // range. The board transmits to do this, so it is strictly
+            // user-initiated.
+            if (connected && detection.method == 'tracker')
+              ListTile(
+                leading: const Icon(Icons.notifications_active,
+                    color: AppTheme.detector),
+                title: const Text('Make it beep',
+                    style: TextStyle(color: AppTheme.detector)),
+                subtitle: Text(
+                    'Ring this tracker to locate it. Works only on a tracker '
+                    'away from its owner, and the device must stay in range.',
+                    style: TextStyle(color: t.textDim, fontSize: 11)),
+                onTap: () async {
+                  Navigator.pop(ctx);
+                  final ok = await ref
+                      .read(bleManagerProvider)
+                      .ringTracker(detection.macAddress);
+                  if (!context.mounted) return;
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text(ok
+                          ? 'Ringing ${detection.macAddress} — listen for the sound'
+                          : 'Not connected to a board'),
+                    ),
+                  );
+                },
+              ),
             if (showMapAction && detection.latitude != null)
               ListTile(
                 leading: const Icon(Icons.map, color: AppTheme.gpsGood),
@@ -342,6 +372,52 @@ void showDetectionDetails(
                   } else {
                     detectionZoomOnMap(context, ref, detection);
                   }
+                },
+              ),
+            // Ignoring a device you have just looked at is the natural moment
+            // to do it; the ignore list was previously only reachable from
+            // Config, which meant retyping a MAC you were already staring at.
+            ListTile(
+              leading: const Icon(Icons.block, color: AppTheme.warning),
+              title: Text('Ignore this device',
+                  style: TextStyle(color: t.textPrimary)),
+              subtitle: Text('Stop logging and alerting on this MAC',
+                  style: TextStyle(color: t.textDim, fontSize: 11)),
+              onTap: () async {
+                Navigator.pop(ctx);
+                final mac = detection.macAddress.toUpperCase();
+                await ref.read(ignoreListProvider).add(IgnoreEntry(
+                      type: IgnoreType.mac,
+                      value: mac,
+                      label: detection.deviceName.isNotEmpty
+                          ? detection.deviceName
+                          : detection.ssid,
+                    ));
+                if (!context.mounted) return;
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(content: Text('Ignoring $mac')),
+                );
+              },
+            ),
+            if (detection.macAddress.length >= 8)
+              ListTile(
+                leading: const Icon(Icons.block_flipped, color: AppTheme.warning),
+                title: Text('Ignore this whole vendor',
+                    style: TextStyle(color: t.textPrimary)),
+                subtitle: Text(
+                    'Every device with OUI ${detection.macAddress.substring(0, 8).toUpperCase()}',
+                    style: TextStyle(color: t.textDim, fontSize: 11)),
+                onTap: () async {
+                  Navigator.pop(ctx);
+                  final oui = detection.macAddress.substring(0, 8).toUpperCase();
+                  await ref.read(ignoreListProvider).add(IgnoreEntry(
+                        type: IgnoreType.oui,
+                        value: oui,
+                      ));
+                  if (!context.mounted) return;
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(content: Text('Ignoring vendor $oui')),
+                  );
                 },
               ),
             ListTile(

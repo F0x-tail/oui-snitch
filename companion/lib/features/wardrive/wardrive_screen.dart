@@ -13,6 +13,7 @@ import 'package:latlong2/latlong.dart';
 import 'package:oui_spy/core/db/app_database.dart' hide Detection;
 import 'package:oui_spy/core/export/wigle_csv_import.dart';
 import 'package:oui_spy/core/app_state.dart';
+import 'package:oui_spy/core/detection_icon.dart';
 import 'package:oui_spy/core/gps/gps_provider.dart';
 import 'package:oui_spy/core/models/detection.dart';
 import 'package:oui_spy/core/models/engine.dart';
@@ -43,6 +44,26 @@ part 'wardrive_controls.dart';
 part 'wardrive_sessions.dart';
 part 'wardrive_overlays.dart';
 part 'wardrive_popups.dart';
+
+/// Engines whose detections may be plotted from `AppState.recentDetections`.
+///
+/// `Engine.wardrive` is included deliberately. The map's wardrive points
+/// otherwise come only from `wd.dedupedDetections`, which is fed by `_detSub` —
+/// and that subscription is cancelled when a session stops. So a wardrive
+/// detection arriving outside a session was invisible on the map even with a
+/// GPS fix, while still appearing in the log: a flood in the feed, an empty
+/// map. Confirmed against a user capture in which all 30 stored detections were
+/// `engine='wardrive'` and all 30 carried coordinates.
+///
+/// The caller de-dupes with `seenKeys`, so including wardrive cannot
+/// double-plot during a live session.
+@visibleForTesting
+bool mapShowsEngine(Engine e) =>
+    e == Engine.skySpy ||
+    e == Engine.flockBle ||
+    e == Engine.flockWifi ||
+    e == Engine.detector ||
+    e == Engine.wardrive;
 
 class WardriveScreen extends ConsumerStatefulWidget {
   const WardriveScreen({super.key});
@@ -1079,12 +1100,7 @@ class _WardriveScreenState extends ConsumerState<WardriveScreen> with WidgetsBin
       for (final d in source) '${d.macAddress}|${d.engine.name}',
     };
     for (final d in appState.recentDetections) {
-      if (d.engine != Engine.skySpy &&
-          d.engine != Engine.flockBle &&
-          d.engine != Engine.flockWifi &&
-          d.engine != Engine.detector) {
-        continue;
-      }
+      if (!mapShowsEngine(d.engine)) continue;
       if (!_hasMapCoord(d.latitude, d.longitude) &&
           droneRidPoint(d) == null) {
         continue;
@@ -1282,7 +1298,6 @@ class _WardriveScreenState extends ConsumerState<WardriveScreen> with WidgetsBin
     final grpSeen = <String, int>{};
     for (final d in priority) {
       final isDrone = d.engine == Engine.skySpy;
-      final isDetector = d.engine == Engine.detector;
       final pinHead = (24.0 * zoomScale).clamp(18.0, 32.0);
       final pk = plotKey(d);
       final gi = grpSeen[pk] ?? 0;
@@ -1429,11 +1444,14 @@ class _WardriveScreenState extends ConsumerState<WardriveScreen> with WidgetsBin
               ),
               alignment: Alignment.center,
               child: Icon(
-                isDetector
-                    ? Icons.radar
-                    : OuiLookupService.isLawEnforcement(d.macAddress)
-                        ? Icons.local_police
-                        : Icons.videocam,
+                // What the device IS, not just which engine saw it. Every
+                // detector hit previously shared one generic radar icon, so a
+                // doorbell camera, a tracker following you and a body camera
+                // looked identical on the map. Law-enforcement OUIs still
+                // override, since that is a stronger signal than the method.
+                OuiLookupService.isLawEnforcement(d.macAddress)
+                    ? Icons.local_police
+                    : detectionMapIcon(d),
                 size: pinHead * 0.58,
                 color: Colors.white,
               ),
