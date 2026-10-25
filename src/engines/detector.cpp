@@ -699,8 +699,15 @@ static bool IRAM_ATTR detectorSigFrameISR(const uint8_t* p, int len, int rssi, u
                     evt.channel = channel;
                     evt.timestamp_ms = millis();
                     evt.method = METHOD_DET_PROBE;
+                    // Probe SSIDs are attacker-controlled; copy only printable
+                    // ASCII into the description that reaches the notification
+                    // title and the database. Non-printable bytes become '.'.
                     uint8_t n = ssidLen < 31 ? ssidLen : 31;
-                    memcpy(evt.ext.detector.filter_desc, &p[26], n);
+                    for (uint8_t k = 0; k < n; k++) {
+                        uint8_t c = p[26 + k];
+                        evt.ext.detector.filter_desc[k] =
+                            (c >= 0x20 && c < 0x7f) ? (char)c : '.';
+                    }
                     evt.ext.detector.filter_desc[n] = 0;
                     pushDetectionFromISR(&evt);
                 }
