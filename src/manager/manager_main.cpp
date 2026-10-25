@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT
 #include <Arduino.h>
 #include <WiFi.h>
 #include <esp_wifi.h>
@@ -283,12 +284,12 @@ void loop() {
         size_t n = meshGetLiveNodes(ln, 8, 30000);
         if (n > 0) {
             stOn = true; stT0 = millis();
-            mgrDebugSetCommanded((1u << ENGINE_WARDRIVE) | (1u << ENGINE_FLOCK_BLE));
+            mgrDebugSetCommanded((1u << ENGINE_WARDRIVE) | (1u << ENGINE_AXON));
             uint8_t cfg[11] = {0}; cfg[9] = 1; cfg[10] = 11;
             meshBroadcastCommand(0x10, ENGINE_WARDRIVE, cfg, sizeof(cfg));
             delay(120);
             meshBroadcastCommand(0x01, ENGINE_WARDRIVE, nullptr, 0);
-            meshBroadcastCommand(0x01, ENGINE_FLOCK_BLE, nullptr, 0);
+            meshBroadcastCommand(0x01, ENGINE_AXON, nullptr, 0);
             Serial.printf("[STOPTEST] ENABLE wardrive+flock_ble (commanded) -> %u nodes; STOP at +22s\n", (unsigned)n);
         }
     }
@@ -330,14 +331,14 @@ void loop() {
     static uint32_t esT = 0;
     static int esCycle = 0;
     static bool esOn = false;
-    const uint8_t ES_MASK = (1u << ENGINE_WARDRIVE) | (1u << ENGINE_FLOCK_BLE) |
+    const uint8_t ES_MASK = (1u << ENGINE_WARDRIVE) | (1u << ENGINE_AXON) |
                             (1u << ENGINE_FLOCK_WIFI) | (1u << ENGINE_SKYSPY) |
                             (1u << ENGINE_DETECTOR);
     auto esEnableAll = []() {
         uint8_t cfg[11] = {0}; cfg[9] = 1; cfg[10] = 11;
         meshBroadcastCommand(0x10, ENGINE_WARDRIVE, cfg, sizeof(cfg));
         meshBroadcastCommand(0x01, ENGINE_WARDRIVE, nullptr, 0);
-        meshBroadcastCommand(0x01, ENGINE_FLOCK_BLE, nullptr, 0);
+        meshBroadcastCommand(0x01, ENGINE_AXON, nullptr, 0);
         meshBroadcastCommand(0x01, ENGINE_FLOCK_WIFI, nullptr, 0);
         meshBroadcastCommand(0x01, ENGINE_SKYSPY, nullptr, 0);
         meshBroadcastCommand(0x01, ENGINE_DETECTOR, nullptr, 0);

@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT
 import 'dart:convert';
 import 'dart:typed_data';
 
@@ -60,7 +61,7 @@ class BleProtocol {
     if (bytes.length > headerLen) {
       final ext = bytes.sublist(headerLen);
       switch (engine) {
-        case Engine.flockBle:
+        case Engine.axon:
         case Engine.flockWifi:
           flock = _decodeFlockExtension(ext);
           if (engine == Engine.flockWifi && ext.length >= 18) {
@@ -441,7 +442,7 @@ class BleProtocol {
           'wildcard_probe',
           'wildcard_probe_ie_sig',
         ][method.clamp(0, 5)],
-      Engine.flockBle => const [
+      Engine.axon => const [
           'oui_match',
           'name_match',
           'mfg_id',

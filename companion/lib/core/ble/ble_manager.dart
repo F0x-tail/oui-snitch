@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
@@ -46,6 +47,21 @@ enum NodeConnectionState {
   reconnecting,
 }
 
+/// Companion-link protocol version this build understands. Must track
+/// OUISPY_BLE_PROTO_VERSION in the firmware's protocol.h.
+const int kSupportedProtoVersion = 1;
+
+/// Whether the board restarted since the app last saw it, from the boot epoch
+/// reported in deviceInfo.
+///
+/// A restart means nothing the app pushed still stands, so it must re-assert
+/// its desired state rather than adopt what it reads back. An empty [reported]
+/// is firmware too old to carry the epoch: it cannot prove it kept running, so
+/// it is treated as restarted — the safe direction, since re-asserting state
+/// the board already has is harmless, while adopting state it has lost is not.
+bool boardRestartedFrom(String reported, String lastSeen) =>
+    reported.isEmpty || reported != lastSeen;
+
 class BleManager {
   BleManager();
 
@@ -59,6 +75,7 @@ class BleManager {
   BluetoothCharacteristic? _alertConfig;
   BluetoothCharacteristic? _ignoreList;
   BluetoothCharacteristic? _melody;
+  BluetoothCharacteristic? _pairing;
   BluetoothCharacteristic? _nodeRadio;
   BluetoothCharacteristic? _foxhunterRssi;
   BluetoothCharacteristic? _unipwnCommand;
@@ -142,6 +159,44 @@ class BleManager {
   String? _primaryDeviceId;
   bool _userInitiatedDisconnect = false;
   bool _isReconnect = false;
+
+  // -- Boot identity (see deviceInfo fields [5]..[7]) --
+  //
+  // After a BLE drop the app cannot otherwise tell "the link blipped, the board
+  // kept scanning" from "the board rebooted and lost everything we pushed".
+  // Reading back the engine mask does not settle it — a rebooted board reports
+  // a plausible-looking mask of zero. The boot epoch does settle it: it is
+  // random per boot, so a change means nothing we pushed still stands.
+  String _bootEpoch = '';
+  String _lastBootEpoch = '';
+  int _bootCount = 0;
+  int _protoVersion = 0;
+
+  /// True when the board has restarted since the previous connection, so the
+  /// app must re-push its desired state instead of adopting what it reads.
+  /// Also true on the first connection of a session, where there is nothing to
+  /// adopt — re-pushing is the safe default either way.
+  bool boardRestarted = true;
+
+  int get bootCount => _bootCount;
+  int get protoVersion => _protoVersion;
+
+  /// Serialises app->board GATT writes. flutter_blue_plus surfaces concurrent
+  /// writes as "GATT operation already in progress"; the reconnect burst
+  /// (engine mask + ignore list + radio roles) is exactly when several fire at
+  /// once, so every write in this class goes through one chain.
+  Future<void> _writeChain = Future<void>.value();
+
+  Future<void> _serialWrite(BluetoothCharacteristic c, List<int> value,
+      {bool withoutResponse = false}) {
+    final next = _writeChain.then((_) async {
+      await c.write(value, withoutResponse: withoutResponse);
+    });
+    // Keep the chain alive even if one write throws, or every later write on
+    // this connection would inherit the failure.
+    _writeChain = next.catchError((Object _) {});
+    return next;
+  }
 
   // -- Public streams --
 
@@ -510,6 +565,46 @@ class BleManager {
   // -- Connection --
 
   /// Connect to a specific device and set up GATT subscriptions.
+  /// Raised when the board refuses the pairing, so the UI can say something
+  /// more useful than a GATT error number.
+  final _pairingFailures = StreamController<String>.broadcast();
+  Stream<String> get pairingFailures => _pairingFailures.stream;
+
+  /// Every characteristic on the board needs an authenticated, encrypted link,
+  /// so pairing has to finish before service discovery — otherwise discovery
+  /// comes back with the characteristics but every read fails.
+  ///
+  /// Android raises the passkey prompt on its own the first time it touches an
+  /// encrypted attribute, but doing it here means the prompt appears while the
+  /// UI is still saying "pairing" rather than part-way through a sync.
+  Future<void> _ensureBonded(BluetoothDevice device) async {
+    if (!Platform.isAndroid) return; // iOS prompts by itself; nothing to drive.
+    try {
+      await device.createBond();
+      DebugLog.log('BLE: bonded');
+    } on FlutterBluePlusException catch (e) {
+      // A board that has been factory reset has forgotten its keys while the
+      // phone still holds a bond for it. That pairing can never succeed, so
+      // drop our side and let the next attempt start clean.
+      DebugLog.log('BLE: bonding failed (${e.description}) — clearing stale bond');
+      try {
+        await device.removeBond();
+      } on FlutterBluePlusException catch (e2) {
+        DebugLog.log('BLE: removeBond also failed: ${e2.description}');
+      }
+      _pairingFailures.add(
+        'Pairing failed. A new board uses the passkey 123456. If you changed '
+        'it under Settings > Node, enter that instead. A board that has been '
+        'factory reset is back to the default.',
+      );
+      // Deliberately not fatal. Firmware from before pairing was introduced
+      // requires no encryption, and bonding against it can fail harmlessly —
+      // refusing to continue would strand anyone who has not reflashed. If the
+      // board really does require pairing, discovery fails next and the user
+      // has already been told why.
+    }
+  }
+
   Future<void> connect(BluetoothDevice device, {required String sessionId}) async {
     if (_connecting) {
       DebugLog.log('BLE: connect in flight — ignoring duplicate ${device.remoteId}');
@@ -570,6 +665,12 @@ class BleManager {
 
     _currentState = NodeConnectionState.negotiating; _connectionState.add(NodeConnectionState.negotiating);
 
+    await _ensureBonded(device);
+    if (_userInitiatedDisconnect || _device != device) {
+      DebugLog.log('BLE: disconnect requested during pairing — aborting');
+      return;
+    }
+
     try {
       _mtu = await device.requestMtu(512);
       DebugLog.log('BLE: MTU negotiated=$_mtu');
@@ -626,6 +727,7 @@ class BleManager {
       if (c.uuid == GattUuids.alertConfig) _alertConfig = c;
       if (c.uuid == GattUuids.ignoreList) _ignoreList = c;
       if (c.uuid == GattUuids.melody) _melody = c;
+      if (c.uuid == GattUuids.pairing) _pairing = c;
       if (c.uuid == GattUuids.nodeRadio) _nodeRadio = c;
       if (c.uuid == GattUuids.foxhunterRssi) _foxhunterRssi = c;
       if (c.uuid == GattUuids.unipwnCommand) _unipwnCommand = c;
@@ -650,7 +752,22 @@ class BleManager {
     _nodeId = parts.length > 1 ? parts[1] : '';
     _board = parts.length > 2 ? parts[2] : '';
     _role = parts.length > 3 ? parts[3] : '';
-    DebugLog.log('BLE: nodeId=$_nodeId board=$_board role=$_role');
+
+    // Fields [5]..[7] are absent on firmware older than this handshake. Treat
+    // that as "cannot prove it kept running" and re-push, which is what the
+    // app did unconditionally before the epoch existed.
+    _bootEpoch = parts.length > 5 ? parts[5] : '';
+    _bootCount = parts.length > 6 ? (int.tryParse(parts[6]) ?? 0) : 0;
+    _protoVersion = parts.length > 7 ? (int.tryParse(parts[7]) ?? 0) : 0;
+    boardRestarted = boardRestartedFrom(_bootEpoch, _lastBootEpoch);
+    if (_protoVersion > kSupportedProtoVersion) {
+      DebugLog.log('BLE: WARNING board protocol v$_protoVersion is newer than '
+          'this app (v$kSupportedProtoVersion) — fields may not decode');
+    }
+    DebugLog.log('BLE: nodeId=$_nodeId board=$_board role=$_role '
+        'proto=$_protoVersion boot=$_bootEpoch#$_bootCount '
+        'restarted=$boardRestarted');
+    _lastBootEpoch = _bootEpoch;
     await _readDeviceConfig();
 
     // Subscribe to detection notifications
@@ -673,13 +790,17 @@ class BleManager {
           (_role.isEmpty &&
               device.platformName.toUpperCase().contains('OUI-SPY-MGR'));
       if (!isMgr && !_offlineScanEnabled && !wardriveSessionActive && !_isReconnect) {
-        await _engineControl!.write(BleProtocol.encodeDisableAll());
+        await _serialWrite(_engineControl!, BleProtocol.encodeDisableAll());
         DebugLog.log('BLE: sent DISABLE_ALL on fresh connect (node)');
         await Future.delayed(const Duration(milliseconds: 300));
-      } else if (!isMgr && (_isReconnect || wardriveSessionActive)) {
-        DebugLog.log('BLE: reconnect/active session — adopting firmware engine state, no DISABLE_ALL');
+      } else if (!isMgr && boardRestarted) {
+        // Reconnect or live session, but this is a different boot: the engines
+        // the app asked for are gone. Nothing to adopt — whoever owns the
+        // desired state re-pushes it (see WardriveController._adoptFirmwareState).
+        DebugLog.log('BLE: board restarted (boot $_bootEpoch #$_bootCount) — '
+            'firmware state discarded, desired state must be re-pushed');
       } else if (!isMgr) {
-        DebugLog.log('BLE: offline-scan on — adopting running scan, no DISABLE_ALL');
+        DebugLog.log('BLE: same boot $_bootEpoch — board kept running, adopting its state');
       } else {
         DebugLog.log('BLE: skipped DISABLE_ALL on connect (manager)');
       }
@@ -779,7 +900,7 @@ class BleManager {
 
     if (_systemControl != null) {
       try {
-        await _systemControl!.write(
+        await _serialWrite(_systemControl!, 
           Uint8List.fromList([0x03]),
           withoutResponse: false,
         );
@@ -792,7 +913,13 @@ class BleManager {
     _awaySettle?.cancel();
     _awaySeen = 0;
     _awayByEngine.clear();
-    if (_offlineScanEnabled) {
+    // A spool flush flips _importing on, which diverts every incoming detection
+    // from the live feed into the import stream for up to 12s. During a wardrive
+    // that would empty the live feed for nothing — wardrive is not spoolable
+    // (no SD on this board), so there is nothing of its to import. Skip the
+    // flush while wardriving; the spoolable engines import on the next connect
+    // when no session is running.
+    if (_offlineScanEnabled && !wardriveSessionActive) {
       await requestSpoolFlush();
     }
   }
@@ -802,8 +929,18 @@ class BleManager {
   /// Reboot device. Magic bytes prevent accidental triggers.
   Future<void> rebootDevice() async {
     if (_systemControl == null) return;
-    await _systemControl!.write(
+    await _serialWrite(_systemControl!, 
       Uint8List.fromList([0x01, 0xC0, 0xDE]),
+      withoutResponse: false,
+    );
+  }
+
+  /// Power off: put the device into deep sleep (it has no self power-cut).
+  /// It stays off until a physical reset / re-power. Magic bytes required.
+  Future<void> powerOffDevice() async {
+    if (_systemControl == null) return;
+    await _serialWrite(_systemControl!, 
+      Uint8List.fromList([0x0E, 0xC0, 0xDE]),
       withoutResponse: false,
     );
   }
@@ -811,7 +948,7 @@ class BleManager {
   /// Factory reset: erase NVS and reboot. Magic bytes required.
   Future<void> factoryReset() async {
     if (_systemControl == null) return;
-    await _systemControl!.write(
+    await _serialWrite(_systemControl!, 
       Uint8List.fromList([0x02, 0xC0, 0xDE]),
       withoutResponse: false,
     );
@@ -821,7 +958,7 @@ class BleManager {
   /// User-triggered counter-surveillance; returns false if not connected.
   Future<bool> ringTracker(String mac, {int hint = 0}) async {
     if (_systemControl == null) return false;
-    await _systemControl!.write(
+    await _serialWrite(_systemControl!, 
       BleProtocol.ringTrackerCmd(mac, hint: hint),
       withoutResponse: false,
     );
@@ -838,13 +975,13 @@ class BleManager {
     _importDeviceNow = 0;
     _importTimer?.cancel();
     _importTimer = Timer(const Duration(seconds: 12), _abortImport);
-    await _systemControl!.write(BleProtocol.flushSpoolCmd, withoutResponse: false);
+    await _serialWrite(_systemControl!, BleProtocol.flushSpoolCmd, withoutResponse: false);
     DebugLog.log('BLE: spool flush requested');
   }
 
   Future<void> confirmSpoolImported() async {
     if (_systemControl == null) return;
-    await _systemControl!.write(BleProtocol.spoolClearCmd, withoutResponse: false);
+    await _serialWrite(_systemControl!, BleProtocol.spoolClearCmd, withoutResponse: false);
     DebugLog.log('BLE: spool clear sent after DB commit');
   }
 
@@ -866,7 +1003,7 @@ class BleManager {
     payload[1 + ssidBytes.length] = passBytes.length;
     payload.setRange(2 + ssidBytes.length,
                      2 + ssidBytes.length + passBytes.length, passBytes);
-    await _wifiConfig!.write(payload, withoutResponse: false);
+    await _serialWrite(_wifiConfig!, payload, withoutResponse: false);
   }
 
   Future<({bool hasCreds, bool connected, bool enabled, String ssid, String ip, int rssi})> readWifiConfig() async {
@@ -896,7 +1033,7 @@ class BleManager {
 
   Future<void> setWifiStaEnabled(bool enabled) async {
     if (_wifiConfig == null) return;
-    await _wifiConfig!.write(
+    await _serialWrite(_wifiConfig!, 
       Uint8List.fromList([0xF1, enabled ? 1 : 0]),
       withoutResponse: false,
     );
@@ -904,7 +1041,7 @@ class BleManager {
 
   Future<void> wipeWifiCreds() async {
     if (_wifiConfig == null) return;
-    await _wifiConfig!.write(
+    await _serialWrite(_wifiConfig!, 
       Uint8List.fromList([0xF2]),
       withoutResponse: false,
     );
@@ -912,7 +1049,46 @@ class BleManager {
 
   Future<void> setIgnoreList(List<int> bytes) async {
     if (_ignoreList == null) return;
-    await _ignoreList!.write(bytes, withoutResponse: false);
+    await _serialWrite(_ignoreList!, bytes, withoutResponse: false);
+  }
+
+  /// Older firmware has no pairing characteristic, so the UI hides the control
+  /// rather than offering something that would silently do nothing.
+  bool get hasPairingSupport => _pairing != null;
+
+  /// The board's current passkey, and whether it is still the shipped default.
+  /// Readable only because we are already paired.
+  Future<({int pin, bool isDefault})?> readPairingPin() async {
+    final c = _pairing;
+    if (c == null) return null;
+    try {
+      final v = await c.read();
+      if (v.length < 5) return null;
+      final pin = v[0] | (v[1] << 8) | (v[2] << 16) | (v[3] << 24);
+      return (pin: pin, isDefault: v[4] != 0);
+    } catch (e) {
+      DebugLog.log('BLE: pairing read failed: $e');
+      return null;
+    }
+  }
+
+  /// Change the board's passkey. Phones already bonded are unaffected; the new
+  /// value applies to the next phone that pairs.
+  Future<bool> writePairingPin(int pin) async {
+    final c = _pairing;
+    if (c == null || pin < 0 || pin > 999999) return false;
+    try {
+      await _serialWrite(c, [
+        pin & 0xFF,
+        (pin >> 8) & 0xFF,
+        (pin >> 16) & 0xFF,
+        (pin >> 24) & 0xFF,
+      ], withoutResponse: false);
+      return true;
+    } catch (e) {
+      DebugLog.log('BLE: pairing write failed: $e');
+      return false;
+    }
   }
 
   bool get hasMelodySupport => _melody != null;
@@ -922,7 +1098,7 @@ class BleManager {
     if (c == null) return;
     try {
       for (final op in ops) {
-        await c.write(op, withoutResponse: false);
+        await _serialWrite(c, op, withoutResponse: false);
       }
     } catch (e) {
       DebugLog.log('BLE: melody write failed: $e');
@@ -939,12 +1115,12 @@ class BleManager {
       final m = e.value & 0x03;
       bytes.add(m == 0 ? 0x03 : m);
     }
-    await _nodeRadio!.write(bytes, withoutResponse: false);
+    await _serialWrite(_nodeRadio!, bytes, withoutResponse: false);
   }
 
   Future<void> setAutoPcap(bool enabled) async {
     if (_engineControl == null) return;
-    await _engineControl!.write(
+    await _serialWrite(_engineControl!, 
       BleProtocol.encodeEngineConfig(
         engine: Engine.pcap,
         payload: Uint8List.fromList([0x10, enabled ? 1 : 0]),
@@ -955,7 +1131,7 @@ class BleManager {
   Future<void> setAutoPcapDuration(int seconds) async {
     if (_engineControl == null) return;
     final s = seconds.clamp(1, 65535);
-    await _engineControl!.write(
+    await _serialWrite(_engineControl!, 
       BleProtocol.encodeEngineConfig(
         engine: Engine.pcap,
         payload: Uint8List.fromList([0x11, s & 0xFF, (s >> 8) & 0xFF]),
@@ -966,7 +1142,7 @@ class BleManager {
   Future<void> setAutoPcapCooldown(int seconds) async {
     if (_engineControl == null) return;
     final s = seconds.clamp(0, 65535);
-    await _engineControl!.write(
+    await _serialWrite(_engineControl!, 
       BleProtocol.encodeEngineConfig(
         engine: Engine.pcap,
         payload: Uint8List.fromList([0x12, s & 0xFF, (s >> 8) & 0xFF]),
@@ -976,7 +1152,7 @@ class BleManager {
 
   Future<void> wifiDisconnect() async {
     if (_systemControl == null) return;
-    await _systemControl!.write(
+    await _serialWrite(_systemControl!, 
       Uint8List.fromList([0x06, 0xC0, 0xDE]),
       withoutResponse: false,
     );
@@ -984,7 +1160,7 @@ class BleManager {
 
   Future<void> wifiWipeCreds() async {
     if (_systemControl == null) return;
-    await _systemControl!.write(
+    await _serialWrite(_systemControl!, 
       Uint8List.fromList([0x07, 0xC0, 0xDE]),
       withoutResponse: false,
     );
@@ -1000,7 +1176,7 @@ class BleManager {
     payload[1] = 0xC0;
     payload[2] = 0xDE;
     payload.setRange(3, 3 + urlBytes.length, urlBytes);
-    await _systemControl!.write(payload, withoutResponse: false);
+    await _serialWrite(_systemControl!, payload, withoutResponse: false);
   }
 
   Future<void> triggerFleetOta(String nodeUrl) async {
@@ -1013,7 +1189,7 @@ class BleManager {
     payload[1] = 0xC0;
     payload[2] = 0xDE;
     payload.setRange(3, 3 + urlBytes.length, urlBytes);
-    await _systemControl!.write(payload, withoutResponse: false);
+    await _serialWrite(_systemControl!, payload, withoutResponse: false);
   }
 
   Future<void> triggerFleetWifiOta(String nodeUrl) async {
@@ -1026,15 +1202,17 @@ class BleManager {
     payload[1] = 0xC0;
     payload[2] = 0xDE;
     payload.setRange(3, 3 + urlBytes.length, urlBytes);
-    await _systemControl!.write(payload, withoutResponse: false);
+    await _serialWrite(_systemControl!, payload, withoutResponse: false);
   }
 
   // -- Engine control --
 
-  Future<void> _engineWriteChain = Future.value();
+  /// Engine writes share the one write chain with everything else — two
+  /// independent chains would not serialise against each other, which is the
+  /// collision this is meant to prevent.
   Future<T> _serializedEngineWrite<T>(Future<T> Function() op) {
-    final next = _engineWriteChain.then((_) => op());
-    _engineWriteChain = next.then((_) {}, onError: (_) {});
+    final next = _writeChain.then((_) => op());
+    _writeChain = next.then((_) {}, onError: (Object _) {});
     return next;
   }
 
@@ -1083,7 +1261,7 @@ class BleManager {
 
   Future<void> sendEngineConfig(Engine engine, Uint8List payload) async {
     if (_engineControl == null) return;
-    await _engineControl!.write(
+    await _serialWrite(_engineControl!, 
       BleProtocol.encodeEngineConfig(engine: engine, payload: payload),
     );
   }
@@ -1091,7 +1269,7 @@ class BleManager {
   /// Push the global WiFi band mask (bit0=2.4GHz, bit1=5GHz) to all WiFi engines.
   Future<void> sendWifiBand(int mask) async {
     if (_engineControl == null) return;
-    await _engineControl!.write(BleProtocol.encodeWifiBand(mask));
+    await _serialWrite(_engineControl!, BleProtocol.encodeWifiBand(mask));
   }
 
   Future<void> syncDetectorWatchlist(List<WatchlistEntry> entries) async {
@@ -1099,7 +1277,7 @@ class BleManager {
       DebugLog.log('BLE: detectorConfig char missing; skip watchlist sync');
       return;
     }
-    await _detectorConfig!.write(Uint8List.fromList([0x00]), withoutResponse: false);
+    await _serialWrite(_detectorConfig!, Uint8List.fromList([0x00]), withoutResponse: false);
     int pushed = 0;
     for (final e in entries) {
       if (e.isName) continue;
@@ -1108,7 +1286,7 @@ class BleManager {
         if (uuid == null) continue;
         final descBytes = utf8.encode(e.description).take(28).toList();
         final pkt = <int>[0x02, uuid & 0xFF, (uuid >> 8) & 0xFF, ...descBytes];
-        await _detectorConfig!.write(Uint8List.fromList(pkt), withoutResponse: false);
+        await _serialWrite(_detectorConfig!, Uint8List.fromList(pkt), withoutResponse: false);
         pushed++;
         continue;
       }
@@ -1117,7 +1295,7 @@ class BleManager {
       final prefixLen = e.isFullMac ? 6 : 3;
       final descBytes = utf8.encode(e.description).take(31).toList();
       final pkt = <int>[0x01, prefixLen, ...mac, ...descBytes];
-      await _detectorConfig!.write(Uint8List.fromList(pkt), withoutResponse: false);
+      await _serialWrite(_detectorConfig!, Uint8List.fromList(pkt), withoutResponse: false);
       pushed++;
     }
     DebugLog.log('BLE: synced $pushed/${entries.length} watchlist entries to detector');
@@ -1128,8 +1306,8 @@ class BleManager {
       DebugLog.log('BLE: detectorConfig char missing; skip sigmask');
       return;
     }
-    await _detectorConfig!
-        .write(Uint8List.fromList([0x03, mask & 0xFF]), withoutResponse: false);
+    await _serialWrite(_detectorConfig!,
+        Uint8List.fromList([0x03, mask & 0xFF]), withoutResponse: false);
     DebugLog.log('BLE: detector sigmask=0x${(mask & 0xFF).toRadixString(16)}');
   }
 
@@ -1153,7 +1331,7 @@ class BleManager {
 
   Future<void> disableAllEngines() async {
     if (_engineControl == null) return;
-    await _engineControl!.write(BleProtocol.encodeDisableAll());
+    await _serialWrite(_engineControl!, BleProtocol.encodeDisableAll());
     DebugLog.log('BLE: sent DISABLE_ALL');
     await _refreshEngineState();
   }
@@ -1241,7 +1419,7 @@ class BleManager {
       accuracy: accuracy,
       satelliteCount: satelliteCount,
     );
-    await _gpsReceive!.write(
+    await _serialWrite(_gpsReceive!, 
       BleProtocol.encodeGps(
         latitude: latitude,
         longitude: longitude,
@@ -1291,7 +1469,7 @@ class BleManager {
     bool allowOuiOnly = false,
   }) async {
     if (_hardwareConfig == null) return;
-    await _hardwareConfig!.write(
+    await _serialWrite(_hardwareConfig!, 
       BleProtocol.encodeHardwareConfig(
         buzzer: buzzer,
         led: led,
@@ -1311,7 +1489,7 @@ class BleManager {
     required int hbActiveMs,
   }) async {
     if (_alertConfig == null) return;
-    await _alertConfig!.write(
+    await _serialWrite(_alertConfig!, 
       BleProtocol.encodeAlertConfig(
         cooldownMs: cooldownMs,
         heartbeatMs: heartbeatMs,
@@ -1331,7 +1509,7 @@ class BleManager {
         ...BleProtocol.targetEnvelope(nodeId),
         ...macBytes,
       ];
-      await _engineControl!.write(
+      await _serialWrite(_engineControl!, 
         BleProtocol.encodeEngineConfig(
           engine: Engine.foxhunter,
           payload: Uint8List.fromList(payload),
@@ -1340,7 +1518,7 @@ class BleManager {
       return;
     }
     if (_foxhunterConfig == null) return;
-    await _foxhunterConfig!.write(
+    await _serialWrite(_foxhunterConfig!, 
       BleProtocol.encodeFoxhunterTarget(mac, channel: channel),
     );
   }
@@ -1353,7 +1531,7 @@ class BleManager {
     String payload = '',
   }) async {
     if (_unipwnCommand == null) return;
-    await _unipwnCommand!.write(
+    await _serialWrite(_unipwnCommand!, 
       BleProtocol.encodeUnipwnCommand(
         targetMac: targetMac,
         commandType: commandType,
@@ -1371,7 +1549,7 @@ class BleManager {
     required List<Uint8List> peerMacs,
   }) async {
     if (_meshConfig == null) return;
-    await _meshConfig!.write(
+    await _serialWrite(_meshConfig!, 
       BleProtocol.encodeMeshConfig(
         enabled: enabled,
         encryption: encryption,
@@ -1470,6 +1648,7 @@ class BleManager {
     _foxhunterRssiStream.close();
     _engineStates.close();
     _meshStatusStream.close();
+    _pairingFailures.close();
     _wifiOtaStream.close();
     _fleetOtaStream.close();
     _pcapStatsStream.close();
@@ -1486,7 +1665,7 @@ class BleManager {
     String? targetNodeId,
   }) async {
     if (_engineControl == null) return;
-    await _engineControl!.write(
+    await _serialWrite(_engineControl!, 
       BleProtocol.encodeEngineConfig(
         engine: Engine.pcap,
         payload: Uint8List.fromList(
@@ -1495,7 +1674,7 @@ class BleManager {
       ),
     );
     await Future.delayed(const Duration(milliseconds: 50));
-    await _engineControl!.write(
+    await _serialWrite(_engineControl!, 
       BleProtocol.encodeEngineControl(
         engine: Engine.pcap, enable: true, targetNodeId: targetNodeId,
       ),
@@ -1512,7 +1691,7 @@ class BleManager {
       ...BleProtocol.targetEnvelope(nodeId),
       m == 0 ? 0x03 : m,
     ];
-    await _engineControl!.write(
+    await _serialWrite(_engineControl!, 
       BleProtocol.encodeEngineConfig(
         engine: Engine.wardrive,
         payload: Uint8List.fromList(payload),
@@ -1522,7 +1701,7 @@ class BleManager {
 
   Future<void> stopPcap({String? targetNodeId}) async {
     if (_engineControl == null) return;
-    await _engineControl!.write(
+    await _serialWrite(_engineControl!, 
       BleProtocol.encodeEngineControl(
         engine: Engine.pcap, enable: false, targetNodeId: targetNodeId,
       ),
@@ -1531,7 +1710,7 @@ class BleManager {
 
   Future<void> clearPcap() async {
     if (_engineControl == null) return;
-    await _engineControl!.write(
+    await _serialWrite(_engineControl!, 
       BleProtocol.encodeEngineConfig(
         engine: Engine.pcap,
         payload: Uint8List.fromList([0x03]), // PCAP_CTRL_CLEAR
@@ -1541,7 +1720,7 @@ class BleManager {
 
   Future<void> pausePcap() async {
     if (_engineControl == null) return;
-    await _engineControl!.write(
+    await _serialWrite(_engineControl!, 
       BleProtocol.encodeEngineConfig(
         engine: Engine.pcap,
         payload: Uint8List.fromList([0x04]), // PCAP_CTRL_PAUSE
@@ -1551,7 +1730,7 @@ class BleManager {
 
   Future<void> resumePcap() async {
     if (_engineControl == null) return;
-    await _engineControl!.write(
+    await _serialWrite(_engineControl!, 
       BleProtocol.encodeEngineConfig(
         engine: Engine.pcap,
         payload: Uint8List.fromList([0x05]), // PCAP_CTRL_RESUME

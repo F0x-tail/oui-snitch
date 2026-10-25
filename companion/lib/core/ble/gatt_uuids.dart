@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT
 import 'package:flutter_blue_plus/flutter_blue_plus.dart';
 
 class GattUuids {
@@ -38,6 +39,7 @@ class GattUuids {
   static final nodeRadio = Guid('00000024-$_base');
 
   static final melody = Guid('00000025-$_base');
+  static final pairing = Guid('00000026-$_base');
 
   /// READ, NOTIFY: chunked session data download
   static final sessionSync = Guid('00000030-$_base');
@@ -63,7 +65,7 @@ class GattUuids {
   static final detectorConfig = Guid('00000100-$_base');
 
   /// READ, WRITE: Flock-BLE OUI list, name patterns, mfg IDs (chunked)
-  static final flockBleConfig = Guid('00000110-$_base');
+  static final axonConfig = Guid('00000110-$_base');
 
   /// READ, WRITE: Flock-WiFi channel, dwell, RSSI, frame toggles, SSID keywords
   static final flockWifiConfig = Guid('00000120-$_base');

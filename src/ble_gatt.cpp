@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT
 #include "ble_gatt.h"
 #include "engines/tracker_ring.h"
 #include "det_spool.h"
@@ -12,8 +13,28 @@
 #include "wifi_ota_handler.h"
 #include <Arduino.h>
 #include <Preferences.h>
+#include <esp_random.h>
+#include "ble_pairing.h"
+
+// Boot identity. Lives here rather than in a role's main file because the
+// deviceInfo characteristic is its only reader, and both the node and manager
+// roles serve that characteristic from their own main.
+uint32_t g_bootEpoch = 0;
+uint32_t g_bootCount = 0;
+
+static void bootIdentityInit(void) {
+    g_bootEpoch = esp_random();
+    Preferences bp;
+    bp.begin("ouispy-boot", false);
+    g_bootCount = bp.getUInt("count", 0) + 1;
+    bp.putUInt("count", g_bootCount);
+    bp.end();
+    Serial.printf("[INIT] boot epoch=%08X count=%u\n",
+                  (unsigned)g_bootEpoch, (unsigned)g_bootCount);
+}
 #include <NimBLEDevice.h>
 #include <nvs_flash.h>
+#include <esp_sleep.h>
 #include <esp_ota_ops.h>
 #include <freertos/FreeRTOS.h>
 #include <freertos/task.h>
@@ -353,7 +374,7 @@ void bleGattNetcountDrive(void) {
     delay(120);
     meshBroadcastCommand(0x01, ENGINE_WARDRIVE, nullptr, 0);
 #ifdef OUISPY_NC_ALLENGINES
-    const uint8_t ncExtra[] = { ENGINE_DETECTOR, ENGINE_FLOCK_BLE, ENGINE_FLOCK_WIFI, ENGINE_SKYSPY };
+    const uint8_t ncExtra[] = { ENGINE_DETECTOR, ENGINE_AXON, ENGINE_FLOCK_WIFI, ENGINE_SKYSPY };
     for (uint8_t i = 0; i < sizeof(ncExtra); i++) {
         mgrCommandedMask |= ENGINE_BITMASK(ncExtra[i]);
         mgrCommandedStates[ncExtra[i]] = (uint8_t)ESTATE_SCANNING;
@@ -540,7 +561,7 @@ static void spoolE2ETask(void* arg) {
     for (int phase = 0; phase < 2; phase++) {
         phoneConnected = (phase == 1);
         engineEnable(ENGINE_FLOCK_WIFI);
-        engineEnable(ENGINE_FLOCK_BLE);
+        engineEnable(ENGINE_AXON);
         engineEnable(ENGINE_SKYSPY);
         engineEnable(ENGINE_DETECTOR);
         vTaskDelay(pdMS_TO_TICKS(300));
@@ -557,12 +578,12 @@ static void spoolE2ETask(void* arg) {
     Serial.println("[REPRO] A/B done");
     vTaskDelay(pdMS_TO_TICKS(500));
     const uint8_t want = (uint8_t)(ENGINE_BITMASK(ENGINE_WARDRIVE) |
-                                   ENGINE_BITMASK(ENGINE_FLOCK_BLE) |
+                                   ENGINE_BITMASK(ENGINE_AXON) |
                                    ENGINE_BITMASK(ENGINE_FLOCK_WIFI) |
                                    ENGINE_BITMASK(ENGINE_SKYSPY) |
                                    ENGINE_BITMASK(ENGINE_DETECTOR));
 
-    const EngineId perEng[] = { ENGINE_WARDRIVE, ENGINE_FLOCK_WIFI, ENGINE_FLOCK_BLE,
+    const EngineId perEng[] = { ENGINE_WARDRIVE, ENGINE_FLOCK_WIFI, ENGINE_AXON,
                                 ENGINE_SKYSPY, ENGINE_DETECTOR, ENGINE_FOXHUNTER };
     const char* perName[] = { "WIGLE", "FLOCK_WIFI", "FLOCK_BLE", "SKYSPY", "DETECTOR", "FOXHUNTER" };
     Serial.println("[SPOOL-E2E] P0: each engine enables/activates/disables standalone");
@@ -581,7 +602,7 @@ static void spoolE2ETask(void* arg) {
 
     Serial.println("[SPOOL-E2E] P1: enable ALL wardrive engines (wigle+flock+drone+detect)");
     engineEnable(ENGINE_WARDRIVE);
-    engineEnable(ENGINE_FLOCK_BLE);
+    engineEnable(ENGINE_AXON);
     engineEnable(ENGINE_FLOCK_WIFI);
     engineEnable(ENGINE_SKYSPY);
     engineEnable(ENGINE_DETECTOR);
@@ -606,7 +627,7 @@ static void spoolE2ETask(void* arg) {
     offlineScanEnabled = true;
     DetectionEvent e; memset(&e, 0, sizeof(e));
     e.source_node_id[0] = '\0';
-    for (int i = 0; i < 20; i++) { e.engine_id = ENGINE_FLOCK_BLE; e.mac[5] = (uint8_t)i;      e.timestamp_ms = 1000 + i; bleGattNotifyDetection(&e); }
+    for (int i = 0; i < 20; i++) { e.engine_id = ENGINE_AXON; e.mac[5] = (uint8_t)i;      e.timestamp_ms = 1000 + i; bleGattNotifyDetection(&e); }
     for (int i = 0; i < 10; i++) { e.engine_id = ENGINE_SKYSPY;    e.mac[5] = (uint8_t)(100 + i); e.timestamp_ms = 2000 + i; bleGattNotifyDetection(&e); }
     for (int i = 0; i < 15; i++) { e.engine_id = ENGINE_WARDRIVE;  e.mac[5] = (uint8_t)(200 + i); e.timestamp_ms = 3000 + i; bleGattNotifyDetection(&e); }
     uint16_t sc = detSpoolCount();
@@ -631,7 +652,7 @@ static void spoolE2ETask(void* arg) {
 
     Serial.println("[SPOOL-E2E] P4: disable ALL -> must STAY disabled (no self re-arm)");
     engineEnable(ENGINE_WARDRIVE);
-    engineEnable(ENGINE_FLOCK_BLE);
+    engineEnable(ENGINE_AXON);
     engineEnable(ENGINE_SKYSPY);
     engineEnable(ENGINE_DETECTOR);
     vTaskDelay(pdMS_TO_TICKS(500));
@@ -662,7 +683,7 @@ void bleGattSpoolE2EStart(void) {
 #ifdef OUISPY_WIGLE_OFFLINE_SELFTEST
 void bleGattWigleOfflineSelfTest(void) {
 #ifdef OUISPY_ROLE_MANAGER
-    const uint8_t kept = (uint8_t)(ENGINE_BITMASK(ENGINE_FLOCK_BLE) |
+    const uint8_t kept = (uint8_t)(ENGINE_BITMASK(ENGINE_AXON) |
                                    ENGINE_BITMASK(ENGINE_SKYSPY) |
                                    ENGINE_BITMASK(ENGINE_DETECTOR));
     mgrCommandedMask = (uint8_t)(ENGINE_BITMASK(ENGINE_WARDRIVE) | kept);
@@ -729,14 +750,14 @@ static void e2eEnableEngine(uint8_t eng) {
     if (eng == ENGINE_WARDRIVE) {
         mgrBroadcastWardriveSliced(mgrWardriveCfg, mgrWardriveCfgLen);
     } else if (eng == ENGINE_DETECTOR || eng == ENGINE_SKYSPY ||
-               eng == ENGINE_FLOCK_WIFI || eng == ENGINE_FLOCK_BLE) {
+               eng == ENGINE_FLOCK_WIFI || eng == ENGINE_AXON) {
         mgrBroadcastNodeRadioConfig(eng);
     }
 }
 
 static void e2eSmokeTask(void* arg) {
     (void)arg;
-    const uint8_t targeted = (uint8_t)(ENGINE_BITMASK(ENGINE_FLOCK_BLE) |
+    const uint8_t targeted = (uint8_t)(ENGINE_BITMASK(ENGINE_AXON) |
                                        ENGINE_BITMASK(ENGINE_FLOCK_WIFI) |
                                        ENGINE_BITMASK(ENGINE_SKYSPY) |
                                        ENGINE_BITMASK(ENGINE_DETECTOR));
@@ -767,7 +788,7 @@ static void e2eSmokeTask(void* arg) {
     phoneConnected = true;
     vTaskDelay(pdMS_TO_TICKS(4000));
     e2eEnableEngine(ENGINE_DETECTOR);
-    e2eEnableEngine(ENGINE_FLOCK_BLE);
+    e2eEnableEngine(ENGINE_AXON);
     e2eEnableEngine(ENGINE_FLOCK_WIFI);
     e2eEnableEngine(ENGINE_SKYSPY);
     e2eEnableEngine(ENGINE_WARDRIVE);
@@ -885,15 +906,82 @@ void bleGattNodeGraceTick(void) {
 void bleGattNodeGraceTick(void) {}
 #endif
 
+// Pairing is on unless a build turns it off. The hardware end-to-end envs are
+// driven by a second board that has no way to learn this board's passkey, so
+// those builds set OUISPY_BLE_SECURE=0; shipping builds never do.
+#ifndef OUISPY_BLE_SECURE
+#define OUISPY_BLE_SECURE 1
+#endif
+
+#if OUISPY_BLE_SECURE
+// Every characteristic needs an authenticated, encrypted link. READ_ENC alone
+// would accept an unauthenticated ("Just Works") pairing, which an active
+// relay can set up; READ_AUTHEN is what forces the passkey.
+#define P_READ     (NIMBLE_PROPERTY::READ | NIMBLE_PROPERTY::READ_ENC | NIMBLE_PROPERTY::READ_AUTHEN)
+#define P_WRITE    (NIMBLE_PROPERTY::WRITE | NIMBLE_PROPERTY::WRITE_ENC | NIMBLE_PROPERTY::WRITE_AUTHEN)
+#define P_WRITE_NR (NIMBLE_PROPERTY::WRITE_NR | NIMBLE_PROPERTY::WRITE_ENC | NIMBLE_PROPERTY::WRITE_AUTHEN)
+#else
+#define P_READ     (NIMBLE_PROPERTY::READ)
+#define P_WRITE    (NIMBLE_PROPERTY::WRITE)
+#define P_WRITE_NR (NIMBLE_PROPERTY::WRITE_NR)
+#endif
+
+// Everything the rest of the firmware keys off "a phone is here" for. Held back
+// until pairing succeeds: encrypting the characteristics achieves nothing if
+// our own state machine treats a bare GATT connection as a trusted one.
+static void phoneLinkAuthorised(void) {
+    phoneConnected = true;
+#ifdef OUISPY_ROLE_MANAGER
+    mgrPhoneGoneMs = 0;
+    mgrTornDown = false;
+    g_meshManagerActive = true;
+#else
+    nodePhoneGoneMs = 0;
+#endif
+}
+
+#if OUISPY_BLE_SECURE
+static NimBLECharacteristic* chrPairing = nullptr;
+
+static void pairingPublish(void) {
+    if (!chrPairing) return;
+    uint8_t v[5];
+    uint32_t pin = blePairingPin();
+    memcpy(v, &pin, 4);
+    v[4] = blePairingIsDefault() ? 1 : 0;
+    chrPairing->setValue(v, sizeof(v));
+}
+
+class PairingCallbacks : public NimBLECharacteristicCallbacks {
+    void onRead(NimBLECharacteristic* c) override {
+        (void)c;
+        pairingPublish();
+    }
+    void onWrite(NimBLECharacteristic* c) override {
+        std::string v = c->getValue();
+        if (v.size() < 4) {
+            Serial.println("[PAIR] rejected passkey write — short payload");
+            return;
+        }
+        uint32_t pin;
+        memcpy(&pin, v.data(), 4);
+        if (!blePairingSetPin(pin)) {
+            Serial.printf("[PAIR] rejected passkey %u — out of range\n", (unsigned)pin);
+            return;
+        }
+        pairingPublish();
+    }
+};
+static PairingCallbacks pairingCb;
+#endif
+
 class ServerCallbacks : public NimBLEServerCallbacks {
     void onConnect(NimBLEServer* server) override {
-        phoneConnected = true;
-#ifdef OUISPY_ROLE_MANAGER
-        mgrPhoneGoneMs = 0;
-        mgrTornDown = false;
-        g_meshManagerActive = true;
-#else
-        nodePhoneGoneMs = 0;
+        // Link up, but unauthenticated. Stopping our own scan and asking for a
+        // faster connection interval are both needed for pairing itself to go
+        // through, so they happen here; trust does not.
+#if !OUISPY_BLE_SECURE
+        phoneLinkAuthorised();
 #endif
         NimBLEScan* scan = NimBLEDevice::getScan();
         if (scan && scan->isScanning()) {
@@ -902,7 +990,11 @@ class ServerCallbacks : public NimBLEServerCallbacks {
 
         uint16_t connHandle = server->getPeerInfo(0).getConnHandle();
         server->updateConnParams(connHandle, 12, 24, 0, 600);
+#if OUISPY_BLE_SECURE
+        Serial.println("[BLE] Peer connected, waiting for pairing");
+#else
         Serial.println("[BLE] Phone connected, requested fast conn params");
+#endif
 #if defined(OUISPY_XIAO_C5) || defined(OUISPY_TDONGLE_C5)
         {
             NimBLEConnInfo ci = server->getPeerInfo(0);
@@ -914,12 +1006,45 @@ class ServerCallbacks : public NimBLEServerCallbacks {
 #endif
     }
 
+#if OUISPY_BLE_SECURE
+    // MeshCore's lesson, in NimBLE terms: the pairing result is the only thing
+    // that may promote a connection to a trusted one.
+    void onAuthenticationComplete(NimBLEConnInfo& connInfo) override {
+        if (connInfo.isEncrypted() && connInfo.isAuthenticated()) {
+            phoneLinkAuthorised();
+            Serial.printf("[BLE] paired%s — phone link authorised\n",
+                          connInfo.isBonded() ? " and bonded" : " (not bonded)");
+            return;
+        }
+        // Someone connected and either skipped pairing or got the passkey
+        // wrong. Drop them and go back to advertising; the banner goes out
+        // again so a user staring at the console can read the number.
+        Serial.println("[BLE] pairing failed — dropping peer");
+        pServer->disconnect(connInfo.getConnHandle());
+        blePairingPrintBanner();
+    }
+
+    uint32_t onPassKeyDisplay() override {
+        uint32_t pin = blePairingPin();
+        Serial.printf("[BLE] passkey requested: %06u\n", (unsigned)pin);
+        return pin;
+    }
+#endif
+
     void onDisconnect(NimBLEServer* server) override {
 #if defined(OUISPY_XIAO_C5) || defined(OUISPY_TDONGLE_C5)
         Serial.printf("[BLET] disconnected t=%ums\n", (unsigned)millis());
 #endif
+        // A peer that never finished pairing was never a phone as far as the
+        // rest of the firmware is concerned, so it must not trigger the
+        // phone-left teardown either.
+        const bool wasAuthorised = phoneConnected;
         phoneConnected = false;
         hwAlertsSuppressed = false;
+        if (!wasAuthorised) {
+            NimBLEDevice::startAdvertising();
+            return;
+        }
 #ifdef OUISPY_ROLE_MANAGER
         mgrPhoneGoneMs = millis();
         if (offlineScanEnabled) {
@@ -992,7 +1117,7 @@ class EngineControlCallbacks : public NimBLECharacteristicCallbacks {
             mgrCommandedStates[cmd.engine_id] = (uint8_t)ESTATE_SCANNING;
             if (cmd.engine_id == ENGINE_PCAP) mgrPcapStartedMs = millis();
             if (cmd.engine_id != ENGINE_PCAP) meshMarkNodesEngine(cmd.engine_id, true);
-            if (cmd.engine_id == ENGINE_FLOCK_WIFI || cmd.engine_id == ENGINE_FLOCK_BLE ||
+            if (cmd.engine_id == ENGINE_FLOCK_WIFI || cmd.engine_id == ENGINE_AXON ||
                 cmd.engine_id == ENGINE_WARDRIVE)
                 mgrApplyLocalRadio();
         } else if (cmd.command == 0x00 && cmd.engine_id < ENGINE_COUNT) {
@@ -1053,7 +1178,7 @@ class EngineControlCallbacks : public NimBLECharacteristicCallbacks {
                     (cmd.engine_id == ENGINE_DETECTOR ||
                      cmd.engine_id == ENGINE_SKYSPY ||
                      cmd.engine_id == ENGINE_FLOCK_WIFI ||
-                     cmd.engine_id == ENGINE_FLOCK_BLE)) {
+                     cmd.engine_id == ENGINE_AXON)) {
                     mgrBroadcastNodeRadioConfig(cmd.engine_id);
                 }
             } else {
@@ -1254,7 +1379,7 @@ void bleGattRebroadcastConfigs(void) {
 
     uint8_t m = mgrCommandedMask;
     if (m & ENGINE_BITMASK(ENGINE_FLOCK_WIFI)) mgrBroadcastNodeRadioConfig(ENGINE_FLOCK_WIFI);
-    if (m & ENGINE_BITMASK(ENGINE_FLOCK_BLE))  mgrBroadcastNodeRadioConfig(ENGINE_FLOCK_BLE);
+    if (m & ENGINE_BITMASK(ENGINE_AXON))  mgrBroadcastNodeRadioConfig(ENGINE_AXON);
     if (m & ENGINE_BITMASK(ENGINE_DETECTOR))   mgrBroadcastNodeRadioConfig(ENGINE_DETECTOR);
     if (m & ENGINE_BITMASK(ENGINE_SKYSPY))     mgrBroadcastNodeRadioConfig(ENGINE_SKYSPY);
     mgrApplyLocalRadio();
@@ -1617,12 +1742,30 @@ class SystemControlCallbacks : public NimBLECharacteristicCallbacks {
                 esp_restart();
                 break;
 
+            case SYS_CMD_POWER_OFF:
+                if (!magicOk) {
+                    Serial.println("[SYS] Power off rejected — missing magic");
+                    return;
+                }
+                // Software "off" for a board with no self power-cut: enter deep
+                // sleep with no wake source configured, so the chip stays in its
+                // ~uA sleep state until the user presses reset or re-powers it.
+                Serial.println("[SYS] POWER OFF — entering deep sleep (reset/re-power to wake)");
+                delay(200);
+                esp_deep_sleep_start();
+                break;
+
             case SYS_CMD_FACTORY_RESET:
                 if (!magicOk) {
                     Serial.println("[SYS] Factory reset rejected — missing magic");
                     return;
                 }
                 Serial.println("[SYS] FACTORY RESET — erasing NVS and rebooting");
+                // Drop the bonds through NimBLE as well. Erasing NVS takes the
+                // keys with it, but the host keeps its copy in RAM until the
+                // reboot, and a phone that reconnects in that window would
+                // otherwise look paired to a board that has forgotten it.
+                blePairingReset();
                 nvs_flash_erase();
                 nvs_flash_init();
                 delay(200);
@@ -2187,7 +2330,11 @@ class PcapControlCallbacks : public NimBLECharacteristicCallbacks {
 
 class DeviceInfoCallbacks : public NimBLECharacteristicCallbacks {
     void onRead(NimBLECharacteristic* chr) override {
-        char info[96];
+        // NUL-delimited fields. Appending stays backward compatible: an older
+        // app reads the fields it knows and ignores the rest.
+        //   [0] fw version  [1] node id  [2] board  [3] role  [4] free heap
+        //   [5] boot epoch (hex)  [6] boot count  [7] protocol version
+        char info[160];
         int len = snprintf(info, sizeof(info), "%s", FW_VERSION);
         len++;
         uint8_t mac[6];
@@ -2205,6 +2352,12 @@ class DeviceInfoCallbacks : public NimBLECharacteristicCallbacks {
         len++;
         len += snprintf(info + len, sizeof(info) - len, "%u",
                         (unsigned)ESP.getFreeHeap());
+        len++;
+        len += snprintf(info + len, sizeof(info) - len, "%08X", (unsigned)g_bootEpoch);
+        len++;
+        len += snprintf(info + len, sizeof(info) - len, "%u", (unsigned)g_bootCount);
+        len++;
+        len += snprintf(info + len, sizeof(info) - len, "%u", OUISPY_BLE_PROTO_VERSION);
         chr->setValue((uint8_t*)info, len + 1);
     }
 };
@@ -2256,6 +2409,17 @@ void bleGattInit(void) {
         NimBLEDevice::init(devName);
         Serial.printf("[BLE] device name: %s\n", devName);
     }
+    bootIdentityInit();
+#if OUISPY_BLE_SECURE
+    // bond | MITM | SC: Secure Connections gives ECDH key agreement, so a
+    // passive sniffer that catches the pairing cannot recover the key, and
+    // MITM forces the passkey, which is what stops an active relay. Bonding
+    // keeps the keys so the passkey is a one-time step per phone.
+    NimBLEDevice::setSecurityAuth(true, true, true);
+    NimBLEDevice::setSecurityIOCap(BLE_HS_IO_DISPLAY_ONLY);
+    NimBLEDevice::setSecurityPasskey(blePairingPin());
+    blePairingPrintBanner();
+#endif
 #ifndef OUISPY_STRESS_NOFIX
     NimBLEDevice::getScan()->setMaxResults(0);
 #endif
@@ -2274,10 +2438,14 @@ void bleGattInit(void) {
     // -- Device Info (READ) --
     chrDeviceInfo = svc->createCharacteristic(
         CHR_DEVICE_INFO,
-        NIMBLE_PROPERTY::READ
+        P_READ
     );
     {
-        char info[96];
+        // NUL-delimited fields. Appending stays backward compatible: an older
+        // app reads the fields it knows and ignores the rest.
+        //   [0] fw version  [1] node id  [2] board  [3] role  [4] free heap
+        //   [5] boot epoch (hex)  [6] boot count  [7] protocol version
+        char info[160];
         int len = snprintf(info, sizeof(info), "%s", FW_VERSION);
         len++;
         uint8_t mac[6];
@@ -2292,6 +2460,15 @@ void bleGattInit(void) {
 #else
         len += snprintf(info + len, sizeof(info) - len, "node");
 #endif
+        len++;
+        len += snprintf(info + len, sizeof(info) - len, "%u",
+                        (unsigned)ESP.getFreeHeap());
+        len++;
+        len += snprintf(info + len, sizeof(info) - len, "%08X", (unsigned)g_bootEpoch);
+        len++;
+        len += snprintf(info + len, sizeof(info) - len, "%u", (unsigned)g_bootCount);
+        len++;
+        len += snprintf(info + len, sizeof(info) - len, "%u", OUISPY_BLE_PROTO_VERSION);
         chrDeviceInfo->setValue((uint8_t*)info, len + 1);
     }
     chrDeviceInfo->setCallbacks(&deviceInfoCb);
@@ -2299,7 +2476,7 @@ void bleGattInit(void) {
     // -- Engine Control (READ, WRITE, NOTIFY) --
     chrEngineControl = svc->createCharacteristic(
         CHR_ENGINE_CONTROL,
-        NIMBLE_PROPERTY::READ | NIMBLE_PROPERTY::WRITE | NIMBLE_PROPERTY::NOTIFY
+        P_READ | P_WRITE | NIMBLE_PROPERTY::NOTIFY
     );
     chrEngineControl->setCallbacks(&engineControlCb);
 
@@ -2312,56 +2489,65 @@ void bleGattInit(void) {
     // -- Device Status (READ, NOTIFY) --
     chrDeviceStatus = svc->createCharacteristic(
         CHR_DEVICE_STATUS,
-        NIMBLE_PROPERTY::READ | NIMBLE_PROPERTY::NOTIFY
+        P_READ | NIMBLE_PROPERTY::NOTIFY
     );
 
     // -- GPS Receive (WRITE, WRITE_NR) --
     chrGpsReceive = svc->createCharacteristic(
         CHR_GPS_RECEIVE,
-        NIMBLE_PROPERTY::READ | NIMBLE_PROPERTY::WRITE | NIMBLE_PROPERTY::WRITE_NR
+        P_READ | P_WRITE | P_WRITE_NR
     );
     chrGpsReceive->setCallbacks(&gpsReceiveCb);
 
     // -- Hardware Config (READ, WRITE) --
     chrHardwareConfig = svc->createCharacteristic(
         CHR_HARDWARE_CONFIG,
-        NIMBLE_PROPERTY::READ | NIMBLE_PROPERTY::WRITE
+        P_READ | P_WRITE
     );
     chrHardwareConfig->setCallbacks(&hwConfigCb);
 
     // -- Alert Config (READ, WRITE) --
     chrAlertConfig = svc->createCharacteristic(
         CHR_ALERT_CONFIG,
-        NIMBLE_PROPERTY::READ | NIMBLE_PROPERTY::WRITE
+        P_READ | P_WRITE
     );
     chrAlertConfig->setCallbacks(&alertConfigCb);
 
     // -- Ignore List (READ, WRITE) — mutes chime/auto-pcap for ignored MAC/OUI/SSID --
     chrIgnoreList = svc->createCharacteristic(
         CHR_IGNORE_LIST,
-        NIMBLE_PROPERTY::READ | NIMBLE_PROPERTY::WRITE
+        P_READ | P_WRITE
     );
     chrIgnoreList->setCallbacks(&ignoreListCb);
 
-    svc->createCharacteristic(CHR_MELODY, NIMBLE_PROPERTY::WRITE)->setCallbacks(&melodyCb);
+    svc->createCharacteristic(CHR_MELODY, P_WRITE)->setCallbacks(&melodyCb);
+
+#if OUISPY_BLE_SECURE
+    // -- Pairing passkey (READ/WRITE) --
+    // Reachable only over a paired link, so a phone can read it back and
+    // change it, but someone who has not already paired cannot.
+    chrPairing = svc->createCharacteristic(CHR_PAIRING, P_READ | P_WRITE);
+    chrPairing->setCallbacks(&pairingCb);
+    pairingPublish();
+#endif
 
     // -- Node Radio Role (WRITE) — per-node WiFi/BLE/Both for wardrive slicing --
     chrNodeRadio = svc->createCharacteristic(
         CHR_NODE_RADIO,
-        NIMBLE_PROPERTY::READ | NIMBLE_PROPERTY::WRITE
+        P_READ | P_WRITE
     );
     chrNodeRadio->setCallbacks(&nodeRadioCb);
 
     // -- Foxhunter Config (WRITE) --
     chrFoxhunterConfig = svc->createCharacteristic(
         CHR_FOXHUNTER_CONFIG,
-        NIMBLE_PROPERTY::WRITE
+        P_WRITE
     );
     chrFoxhunterConfig->setCallbacks(&foxhunterConfigCb);
 
     NimBLECharacteristic* chrDetectorConfig = svc->createCharacteristic(
         CHR_DETECTOR_CONFIG,
-        NIMBLE_PROPERTY::WRITE
+        P_WRITE
     );
     chrDetectorConfig->setCallbacks(&detectorConfigCb);
 
@@ -2374,21 +2560,21 @@ void bleGattInit(void) {
     // -- UniPwn Command (WRITE, NOTIFY) --
     chrUnipwnCommand = svc->createCharacteristic(
         CHR_UNIPWN_COMMAND,
-        NIMBLE_PROPERTY::WRITE | NIMBLE_PROPERTY::NOTIFY
+        P_WRITE | NIMBLE_PROPERTY::NOTIFY
     );
     chrUnipwnCommand->setCallbacks(&unipwnCommandCb);
 
     // -- Mesh Config (READ, WRITE) --
     chrMeshConfig = svc->createCharacteristic(
         CHR_MESH_CONFIG,
-        NIMBLE_PROPERTY::READ | NIMBLE_PROPERTY::WRITE
+        P_READ | P_WRITE
     );
     chrMeshConfig->setCallbacks(&meshConfigCb);
 
     // -- Mesh Status (READ, NOTIFY) --
     chrMeshStatus = svc->createCharacteristic(
         CHR_MESH_STATUS,
-        NIMBLE_PROPERTY::READ | NIMBLE_PROPERTY::NOTIFY
+        P_READ | NIMBLE_PROPERTY::NOTIFY
     );
 
     chrDfuControl = svc->createCharacteristic(
@@ -2398,33 +2584,33 @@ void bleGattInit(void) {
 
     chrDfuData = svc->createCharacteristic(
         CHR_DFU_DATA,
-        NIMBLE_PROPERTY::WRITE | NIMBLE_PROPERTY::WRITE_NR
+        P_WRITE | P_WRITE_NR
     );
     chrDfuData->setCallbacks(&dfuDataCb);
 
     chrSystemControl = svc->createCharacteristic(
         CHR_SYSTEM_CONTROL,
-        NIMBLE_PROPERTY::WRITE | NIMBLE_PROPERTY::NOTIFY
+        P_WRITE | NIMBLE_PROPERTY::NOTIFY
     );
     chrSystemControl->setCallbacks(&systemControlCb);
 
     chrWifiConfig = svc->createCharacteristic(
         CHR_WIFI_CONFIG,
-        NIMBLE_PROPERTY::READ | NIMBLE_PROPERTY::WRITE
+        P_READ | P_WRITE
     );
     chrWifiConfig->setCallbacks(&wifiConfigCb);
 
     // -- PCAP Control (WRITE) --
     chrPcapControl = svc->createCharacteristic(
         CHR_PCAP_CONTROL,
-        NIMBLE_PROPERTY::WRITE
+        P_WRITE
     );
     chrPcapControl->setCallbacks(&pcapControlCb);
 
     // -- PCAP Stats (NOTIFY) --
     chrPcapStats = svc->createCharacteristic(
         CHR_PCAP_STATS,
-        NIMBLE_PROPERTY::READ | NIMBLE_PROPERTY::NOTIFY
+        P_READ | NIMBLE_PROPERTY::NOTIFY
     );
 
     // -- PCAP Data (NOTIFY) — chunked file download --
@@ -2466,7 +2652,7 @@ static size_t packDetection(const DetectionEvent* evt, uint8_t* buf) {
     buf[13] = evt->method;
     memcpy(buf + 14, evt->source_node_id, MESH_NODE_ID_LEN);
     switch ((EngineId)(evt->engine_id & 0x7F)) {
-        case ENGINE_FLOCK_BLE:
+        case ENGINE_AXON:
         case ENGINE_FLOCK_WIFI:
             buf[19] = evt->ext.flock.is_raven;
             memcpy(buf + 20, evt->ext.flock.raven_fw, 16);

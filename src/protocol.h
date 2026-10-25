@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT
 #ifndef PROTOCOL_H
 #define PROTOCOL_H
 
@@ -68,12 +69,16 @@ static inline bool activeProbeEnabled(void) { return g_activeProbeEnabled; }
 
 enum EngineId : uint8_t {
     ENGINE_DETECTOR   = 0,  // bitmask 0x01
-    // RESERVED. The Flock BLE engine was removed (upstream reports the
-    // community BLE method stopped working in spring 2026; the Wi-Fi IE
-    // fingerprint is the reliable path). The ID is deliberately kept so engine
-    // IDs and bitmasks do not shift: they are the wire protocol, shared with
-    // the phone app and with mesh nodes that may run other firmware builds.
-    ENGINE_FLOCK_BLE  = 1,  // bitmask 0x02 — reserved, no engine registered
+    // Slot 1 previously held the Flock BLE engine, removed when the community
+    // BLE method stopped working (the Wi-Fi IE fingerprint is the reliable
+    // path). The ID was held reserved so engine IDs and bitmasks would not
+    // shift — they are the wire protocol, shared with the phone app and with
+    // mesh nodes that may run other firmware builds — and is now reused for a
+    // dedicated duty-equipment engine. Its signature matching is shared with
+    // the detector's SIG_AXON branch via axon_match.h, so there is one
+    // implementation; this engine adds an independent tile, its own radio
+    // slice and a standalone presence buzzer.
+    ENGINE_AXON       = 1,  // bitmask 0x02
     ENGINE_FLOCK_WIFI = 2,  // bitmask 0x04
     ENGINE_FOXHUNTER  = 3,  // bitmask 0x08
     ENGINE_SKYSPY     = 4,  // bitmask 0x10
@@ -364,6 +369,9 @@ bool   melodyLookup(uint8_t engine, uint8_t method, uint8_t* n, uint8_t notes[][
 #define CHR_IGNORE_LIST      "00000023-" UUID_BASE
 #define CHR_NODE_RADIO       "00000024-" UUID_BASE
 #define CHR_MELODY           "00000025-" UUID_BASE
+// Pairing passkey. Read: 4-byte LE passkey + 1 byte "still the default".
+// Write: 4-byte LE passkey. Only reachable over an already-paired link.
+#define CHR_PAIRING          "00000026-" UUID_BASE
 // PCAP engine
 #define CHR_PCAP_CONTROL     "00000160-" UUID_BASE
 #define CHR_PCAP_STATS       "00000161-" UUID_BASE
@@ -382,6 +390,7 @@ bool   melodyLookup(uint8_t engine, uint8_t method, uint8_t* n, uint8_t notes[][
 #define SYS_CMD_FLUSH_SPOOL       0x0B
 #define SYS_CMD_SPOOL_CLEAR       0x0C
 #define SYS_CMD_RING_TRACKER      0x0D  // payload: mac[6] + hint[1]
+#define SYS_CMD_POWER_OFF         0x0E  // deep sleep until physical reset / re-power
 
 #define PCAP_MODE_WIFI 0
 #define PCAP_MODE_BLE  1
@@ -680,6 +689,18 @@ extern volatile MeshStatus meshCurrentStatus;
 // Ring buffer for peer status notifications (forwarded to BLE)
 #define MESH_PEER_STATUS_QUEUE_DEPTH 4
 extern QueueHandle_t peerStatusQueue;  // MeshStatusPacket, depth 4
+
+// Companion-link protocol version, bumped when the wire format changes in a
+// way the app must notice. Reported in deviceInfo so the app can refuse or
+// degrade loudly instead of misparsing a struct after a firmware update.
+#define OUISPY_BLE_PROTO_VERSION 1
+
+// Boot identity. g_bootEpoch is random per boot; g_bootCount is monotonic in
+// NVS. Together they let the app tell "the link blipped" from "the board
+// restarted" on reconnect, instead of guessing at the engine state it reads
+// back. A changed epoch means nothing the app pushed before still stands.
+extern uint32_t g_bootEpoch;
+extern uint32_t g_bootCount;
 
 #if defined(OUISPY_ENGINE_DIAG) || defined(OUISPY_ENGINE_MATRIX)
 extern volatile uint32_t g_diagDetCount[ENGINE_COUNT];

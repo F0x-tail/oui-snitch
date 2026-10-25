@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT
 #include <Arduino.h>
 #include <NimBLEDevice.h>
 #include <Preferences.h>
@@ -19,6 +20,7 @@
 #include "mesh_espnow.h"
 #include "wifi_ota_handler.h"
 #include "engines/detector.h"
+#include "engines/axon.h"
 #include "engines/foxhunter.h"
 #include "engines/skyspy.h"
 #include "engines/flock_wifi.h"
@@ -160,6 +162,7 @@ static void loadHardwareConfig(void) {
     bool flockExt = p.getBool("flock_ext", false);
     bool offlScan = p.getBool("offl_scan", false);
     p.end();
+
     flockSetExtendedOui(flockExt);
     {
         extern bool flockAllowOuiOnly;
@@ -184,7 +187,7 @@ static void loadHardwareConfig(void) {
 static bool isAlertableEngine(uint8_t engine_id) {
     switch ((EngineId)engine_id) {
         case ENGINE_DETECTOR:
-        case ENGINE_FLOCK_BLE:
+        case ENGINE_AXON:
         case ENGINE_FLOCK_WIFI:
         case ENGINE_SKYSPY:
         case ENGINE_UNIPWN:
@@ -300,11 +303,12 @@ static void chimeTaskFn(void* param) {
                 memcpy(notes, melPreview + 1, (size_t)n * 3);
                 portEXIT_CRITICAL(&melPreviewMux);
                 playMidi(n, notes);
-            } else if (req.engine == ENGINE_DETECTOR && req.method == METHOD_DET_AXON) {
+            } else if ((req.engine == ENGINE_DETECTOR || req.engine == ENGINE_AXON) &&
+                       req.method == METHOD_DET_AXON) {
                 if (!axonTracking) {
                     axonTracking = true;
                     Serial.println("[AXON] tracking");
-                    if (!playAssigned(ENGINE_DETECTOR, METHOD_DET_AXON))
+                    if (!playAssigned(req.engine, METHOD_DET_AXON))
                         playNotes(AXON_DETECT, sizeof(AXON_DETECT) / sizeof(AXON_DETECT[0]));
                     axonNextBeat = millis() + AXON_HEARTBEAT_MS;
                 }
@@ -375,9 +379,9 @@ static int notifyDedupCount = 0;
 
 static uint8_t engineClass(uint8_t engine_id) {
     switch ((EngineId)engine_id) {
-        case ENGINE_FLOCK_BLE:
         case ENGINE_FLOCK_WIFI:
             return 1;  // flock class
+        case ENGINE_AXON:
         case ENGINE_DETECTOR:
         case ENGINE_FOXHUNTER:
         case ENGINE_SKYSPY:
@@ -545,8 +549,7 @@ static void detectionNotifyTask(void* param) {
 
     for (;;) {
         if (xQueueReceive(detectionQueue, &evt, portMAX_DELAY) == pdTRUE) {
-            bool evtIsBle = (evt.engine_id == ENGINE_FLOCK_BLE ||
-                             evt.engine_id == ENGINE_UNIPWN ||
+            bool evtIsBle = (evt.engine_id == ENGINE_UNIPWN ||
                              evt.channel == 0);
             const char* evtSsid =
                 (evt.engine_id == ENGINE_WARDRIVE && !evtIsBle)
@@ -566,8 +569,9 @@ static void detectionNotifyTask(void* param) {
                 continue;
             }
 
-            const bool evtIsAxon = evt.engine_id == ENGINE_DETECTOR &&
-                                   evt.method == METHOD_DET_AXON;
+            const bool evtIsAxon = evt.method == METHOD_DET_AXON &&
+                                   (evt.engine_id == ENGINE_DETECTOR ||
+                                    evt.engine_id == ENGINE_AXON);
             if (evtIsAxon) axonPresenceSeen(evt.rssi);
 
             if (evt.engine_id == ENGINE_SKYSPY) {
@@ -821,7 +825,7 @@ volatile uint32_t g_diagDetCount[ENGINE_COUNT] = {0};
 static const char* diagEngName(int id) {
     switch (id) {
         case ENGINE_DETECTOR:   return "DETECTOR";
-        case ENGINE_FLOCK_BLE:  return "FLOCK_BLE";
+        case ENGINE_AXON:  return "AXON";
         case ENGINE_FLOCK_WIFI: return "FLOCK_WIFI";
         case ENGINE_FOXHUNTER:  return "FOXHUNTER";
         case ENGINE_SKYSPY:     return "SKYSPY";
@@ -842,7 +846,7 @@ static void engineDiagTask(void* arg) {
         uint32_t lh = wardriveGetHopCount();
         engineEnable(ENGINE_WARDRIVE);
         engineEnable(ENGINE_FLOCK_WIFI);
-        engineEnable(ENGINE_FLOCK_BLE);
+        engineEnable(ENGINE_AXON);
         engineEnable(ENGINE_SKYSPY);
         engineEnable(ENGINE_DETECTOR);
         Serial.println("\n[MULTI] enabled W+FW+FB+SKY+DET together (direct node, no manager)");
@@ -893,7 +897,7 @@ static void engineDiagTask(void* arg) {
 
     bleGattDebugForcePhone(true);
     const EngineId order[] = {
-        ENGINE_WARDRIVE, ENGINE_DETECTOR, ENGINE_FLOCK_BLE, ENGINE_FLOCK_WIFI,
+        ENGINE_WARDRIVE, ENGINE_DETECTOR, ENGINE_AXON, ENGINE_FLOCK_WIFI,
         ENGINE_SKYSPY, ENGINE_FOXHUNTER, ENGINE_UNIPWN, ENGINE_PCAP,
     };
     const uint32_t kRunMs = 20000;
@@ -929,7 +933,7 @@ static void engineDiagTask(void* arg) {
                     (unsigned long)(hop - lastHop), (unsigned long)(skip - lastSkip),
                     meshInMeshWindow() ? 1 : 0,
                     (unsigned long)g_diagDetCount[ENGINE_DETECTOR],
-                    (unsigned long)g_diagDetCount[ENGINE_FLOCK_BLE],
+                    (unsigned long)g_diagDetCount[ENGINE_AXON],
                     (unsigned long)g_diagDetCount[ENGINE_FLOCK_WIFI],
                     (unsigned long)g_diagDetCount[ENGINE_SKYSPY],
                     (unsigned long)g_diagDetCount[ENGINE_WARDRIVE],
@@ -949,7 +953,7 @@ static void engineDiagTask(void* arg) {
 static const char* selftestEngineName(EngineId id) {
     switch (id) {
         case ENGINE_DETECTOR:   return "DETECTOR";
-        case ENGINE_FLOCK_BLE:  return "FLOCK_BLE";
+        case ENGINE_AXON:  return "AXON";
         case ENGINE_FLOCK_WIFI: return "FLOCK_WIFI";
         case ENGINE_FOXHUNTER:  return "FOXHUNTER";
         case ENGINE_SKYSPY:     return "SKYSPY";
@@ -976,13 +980,13 @@ static void engineSelftestTask(void* arg) {
     Serial.println("[SELFTEST] ===== ENGINE SELF-TEST START (mesh OFF, local) =====");
 #endif
     const EngineId order[] = {
-        ENGINE_DETECTOR, ENGINE_FLOCK_BLE, ENGINE_FLOCK_WIFI, ENGINE_FOXHUNTER,
+        ENGINE_DETECTOR, ENGINE_AXON, ENGINE_FLOCK_WIFI, ENGINE_FOXHUNTER,
         ENGINE_SKYSPY, ENGINE_UNIPWN, ENGINE_WARDRIVE, ENGINE_PCAP
     };
     for (size_t k = 0; k < sizeof(order) / sizeof(order[0]); k++) {
         EngineId id = order[k];
         const char* nm = selftestEngineName(id);
-        bool passive = (id == ENGINE_FLOCK_BLE || id == ENGINE_FLOCK_WIFI);
+        bool passive = (id == ENGINE_AXON || id == ENGINE_FLOCK_WIFI);
         if (passive) engineEnable(ENGINE_WARDRIVE);
 
         Serial.printf("[SELFTEST] --- %s (id=%d): enabling%s ---\n",
@@ -1137,7 +1141,7 @@ static void coexStressTask(void* arg) {
     (void)arg;
     vTaskDelay(pdMS_TO_TICKS(5000));
     Serial.println("[STRESS] ===== A: 5 BLE engines concurrent (no wardrive) =====");
-    coexEn(ENGINE_FLOCK_BLE); coexEn(ENGINE_SKYSPY); coexEn(ENGINE_UNIPWN);
+    coexEn(ENGINE_AXON); coexEn(ENGINE_SKYSPY); coexEn(ENGINE_UNIPWN);
     coexEn(ENGINE_DETECTOR); coexEn(ENGINE_FOXHUNTER);
     uint32_t b = g_engRawSeen;
     for (int i = 0; i < 15; i++) {
@@ -1146,14 +1150,14 @@ static void coexStressTask(void* arg) {
             i + 1, engineGetActiveMask(), (unsigned long)(g_engRawSeen - b),
             (unsigned long)esp_get_free_heap_size());
     }
-    coexDis(ENGINE_FLOCK_BLE); coexDis(ENGINE_SKYSPY); coexDis(ENGINE_UNIPWN);
+    coexDis(ENGINE_AXON); coexDis(ENGINE_SKYSPY); coexDis(ENGINE_UNIPWN);
     coexDis(ENGINE_DETECTOR); coexDis(ENGINE_FOXHUNTER);
     vTaskDelay(pdMS_TO_TICKS(2500));
     Serial.printf("[STRESS] A done mask=0x%02X heap=%lu\n",
         engineGetActiveMask(), (unsigned long)esp_get_free_heap_size());
 
     Serial.println("[STRESS] ===== B: wardrive host + flock + detector + skyspy =====");
-    coexEn(ENGINE_WARDRIVE); coexEn(ENGINE_FLOCK_WIFI); coexEn(ENGINE_FLOCK_BLE);
+    coexEn(ENGINE_WARDRIVE); coexEn(ENGINE_FLOCK_WIFI); coexEn(ENGINE_AXON);
     coexEn(ENGINE_DETECTOR); coexEn(ENGINE_SKYSPY);
     b = g_engRawSeen;
     for (int i = 0; i < 12; i++) {
@@ -1162,7 +1166,7 @@ static void coexStressTask(void* arg) {
             i + 1, engineGetActiveMask(), (unsigned long)(g_engRawSeen - b),
             (unsigned long)esp_get_free_heap_size());
     }
-    coexDis(ENGINE_WARDRIVE); coexDis(ENGINE_FLOCK_WIFI); coexDis(ENGINE_FLOCK_BLE);
+    coexDis(ENGINE_WARDRIVE); coexDis(ENGINE_FLOCK_WIFI); coexDis(ENGINE_AXON);
     coexDis(ENGINE_DETECTOR); coexDis(ENGINE_SKYSPY);
     vTaskDelay(pdMS_TO_TICKS(2500));
     Serial.printf("[STRESS] B done mask=0x%02X heap=%lu\n",
@@ -1170,10 +1174,10 @@ static void coexStressTask(void* arg) {
 
     Serial.println("[STRESS] ===== C: rapid enable/disable churn x25 =====");
     for (int i = 0; i < 25; i++) {
-        coexEn(ENGINE_SKYSPY); coexEn(ENGINE_FLOCK_BLE); coexEn(ENGINE_DETECTOR);
+        coexEn(ENGINE_SKYSPY); coexEn(ENGINE_AXON); coexEn(ENGINE_DETECTOR);
         coexEn(ENGINE_FLOCK_WIFI);
         vTaskDelay(pdMS_TO_TICKS(120));
-        coexDis(ENGINE_SKYSPY); coexDis(ENGINE_FLOCK_BLE); coexDis(ENGINE_DETECTOR);
+        coexDis(ENGINE_SKYSPY); coexDis(ENGINE_AXON); coexDis(ENGINE_DETECTOR);
         coexDis(ENGINE_FLOCK_WIFI);
         vTaskDelay(pdMS_TO_TICKS(120));
     }
@@ -1228,10 +1232,10 @@ static int e2eEnq(uint8_t cmd, EngineId id) {
 static void e2eTestTask(void* arg) {
     (void)arg;
     vTaskDelay(pdMS_TO_TICKS(4000));
-    const EngineId ALL[8] = { ENGINE_DETECTOR, ENGINE_FLOCK_BLE, ENGINE_FLOCK_WIFI,
+    const EngineId ALL[8] = { ENGINE_DETECTOR, ENGINE_AXON, ENGINE_FLOCK_WIFI,
                               ENGINE_FOXHUNTER, ENGINE_SKYSPY, ENGINE_UNIPWN,
                               ENGINE_WARDRIVE, ENGINE_PCAP };
-    const EngineId SCAN[5] = { ENGINE_WARDRIVE, ENGINE_FLOCK_WIFI, ENGINE_FLOCK_BLE,
+    const EngineId SCAN[5] = { ENGINE_WARDRIVE, ENGINE_FLOCK_WIFI, ENGINE_AXON,
                                ENGINE_SKYSPY, ENGINE_DETECTOR };
     for (int cyc = 0; ; cyc++) {
         uint32_t e0 = millis();
@@ -1331,8 +1335,8 @@ static void engineMatrixTask(void* arg) {
     }
 
     static const EngineId comboA[] = {ENGINE_WARDRIVE, ENGINE_SKYSPY};
-    static const EngineId comboB[] = {ENGINE_WARDRIVE, ENGINE_FLOCK_WIFI, ENGINE_FLOCK_BLE};
-    static const EngineId comboC[] = {ENGINE_WARDRIVE, ENGINE_SKYSPY, ENGINE_FLOCK_BLE, ENGINE_DETECTOR};
+    static const EngineId comboB[] = {ENGINE_WARDRIVE, ENGINE_FLOCK_WIFI, ENGINE_AXON};
+    static const EngineId comboC[] = {ENGINE_WARDRIVE, ENGINE_SKYSPY, ENGINE_AXON, ENGINE_DETECTOR};
     const EngineId* combos[3] = {comboA, comboB, comboC};
     const int comboN[3] = {2, 3, 4};
     const char* comboName[3] = {"wd+sky", "wd+flkW+flkB", "wd+sky+flkB+det"};
@@ -1474,6 +1478,7 @@ void setup() {
 
     // Register all engines
     engineRegister(ENGINE_DETECTOR, &detectorCallbacks);
+    engineRegister(ENGINE_AXON, &axonCallbacks);
     engineRegister(ENGINE_FLOCK_WIFI, &flockWifiCallbacks);
     engineRegister(ENGINE_FOXHUNTER, &foxhunterCallbacks);
     engineRegister(ENGINE_SKYSPY, &skyspyCallbacks);

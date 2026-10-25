@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT
 import 'dart:async';
 import 'dart:math';
 
@@ -104,6 +105,8 @@ class _DeviceConfigScreenState extends ConsumerState<DeviceConfigScreen> {
 
   // Device info
   String _fwVersion = '--';
+  int? _pairingPin;
+  bool _pairingIsDefault = false;
   String _nodeId = '--';
   String _heapFree = '--';
 
@@ -229,6 +232,13 @@ class _DeviceConfigScreenState extends ConsumerState<DeviceConfigScreen> {
           }
           DebugLog.log('CONFIG: fw=$_fwVersion node=$_nodeId heap=$_heapFree');
         }
+      }
+
+      final pairing = await ble.readPairingPin();
+      if (!mounted) return;
+      if (pairing != null) {
+        _pairingPin = pairing.pin;
+        _pairingIsDefault = pairing.isDefault;
       }
     } catch (e) {
       DebugLog.log('CONFIG: read error: $e');
@@ -803,7 +813,7 @@ class _DeviceConfigScreenState extends ConsumerState<DeviceConfigScreen> {
         ConfigToggleRow(
           icon: Icons.cloud_off,
           label: 'Keep scanning while disconnected (EXPERIMENTAL)',
-          subtitle: 'EXPERIMENTAL — may be unstable. Node keeps scanning when the app is closed; detections import on reconnect.',
+          subtitle: 'EXPERIMENTAL — may be unstable. Node keeps scanning when the app is closed; detections import on reconnect. Excludes wardrive (not captured offline without an SD card).',
           color: const Color(0xFF4AB8FF),
           value: _offlineScanEnabled,
           onChanged: (v) {
@@ -1288,6 +1298,40 @@ class _DeviceConfigScreenState extends ConsumerState<DeviceConfigScreen> {
         const ConfigSectionHeader(label: 'UPDATES'),
         _OtaSection(currentVersion: _fwVersion),
 
+        if (ref.read(bleManagerProvider).hasPairingSupport) ...[
+          const SizedBox(height: 16),
+          const ConfigSectionHeader(label: 'PAIRING'),
+          if (_pairingIsDefault)
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Icon(Icons.warning_amber,
+                      size: 16, color: AppTheme.warning),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      'This board still uses the default passkey, so anyone '
+                      'in range can pair with it. Change it to lock the board '
+                      'to your phone.',
+                      style: TextStyle(color: AppTheme.warning, fontSize: 12),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ConfigActionRow(
+            icon: Icons.password,
+            label: 'Pairing Passkey',
+            subtitle: _pairingPin == null
+                ? 'Tap to set'
+                : '${_pairingPin!.toString().padLeft(6, '0')}'
+                    '${_pairingIsDefault ? ' · default' : ''}',
+            onTap: _changePasskey,
+          ),
+        ],
+
         const SizedBox(height: 16),
         const ConfigSectionHeader(label: 'DANGER ZONE'),
         ConfigActionRow(
@@ -1295,6 +1339,12 @@ class _DeviceConfigScreenState extends ConsumerState<DeviceConfigScreen> {
           label: 'Reboot Device',
           subtitle: 'Restart firmware without erasing settings',
           onTap: _confirmReboot,
+        ),
+        ConfigActionRow(
+          icon: Icons.power_settings_new,
+          label: 'Power Off',
+          subtitle: 'Deep sleep — stays off until you press reset or re-power',
+          onTap: _confirmPowerOff,
         ),
         ConfigActionRow(
           icon: Icons.restart_alt,
@@ -1305,6 +1355,71 @@ class _DeviceConfigScreenState extends ConsumerState<DeviceConfigScreen> {
         ),
       ],
     );
+  }
+
+  Future<void> _changePasskey() async {
+    final ctrl = TextEditingController(
+        text: _pairingPin?.toString().padLeft(6, '0') ?? '');
+    final entered = await showDialog<String>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Pairing passkey'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              'Six digits. Phones already paired keep working; the new '
+              'passkey applies to the next phone that pairs.',
+              style: TextStyle(fontSize: 12),
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: ctrl,
+              keyboardType: TextInputType.number,
+              maxLength: 6,
+              autofocus: true,
+              decoration: const InputDecoration(counterText: ''),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('CANCEL'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, ctrl.text),
+            child: const Text('SAVE'),
+          ),
+        ],
+      ),
+    );
+    if (entered == null) return;
+    final pin = int.tryParse(entered.trim());
+    if (pin == null || pin < 0 || pin > 999999) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Passkey must be 6 digits or fewer')),
+      );
+      return;
+    }
+    final ok = await ref.read(bleManagerProvider).writePairingPin(pin);
+    if (!mounted) return;
+    if (!ok) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Could not change the passkey')),
+      );
+      return;
+    }
+    // Read back rather than assuming: the board decides what counts as the
+    // default, and duplicating that constant here is how the two drift apart.
+    final now = await ref.read(bleManagerProvider).readPairingPin();
+    if (!mounted) return;
+    setState(() {
+      _pairingPin = now?.pin ?? pin;
+      _pairingIsDefault = now?.isDefault ?? false;
+    });
   }
 
   Future<void> _confirmReboot() async {
@@ -1327,6 +1442,31 @@ class _DeviceConfigScreenState extends ConsumerState<DeviceConfigScreen> {
     );
     if (ok != true) return;
     await ref.read(bleManagerProvider).rebootDevice();
+  }
+
+  Future<void> _confirmPowerOff() async {
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Power off device?'),
+        content: const Text(
+          'The device enters deep sleep and stays off until you press its '
+          'reset button or re-power it. It cannot be woken from the app.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('CANCEL'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('POWER OFF'),
+          ),
+        ],
+      ),
+    );
+    if (ok != true) return;
+    await ref.read(bleManagerProvider).powerOffDevice();
   }
 
   Future<void> _confirmFactoryReset() async {
