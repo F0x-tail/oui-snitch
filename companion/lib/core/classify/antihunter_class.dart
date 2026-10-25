@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT
 import 'package:oui_spy/core/classify/adv_decoder.dart';
 import 'package:oui_spy/core/classify/observation.dart';
 

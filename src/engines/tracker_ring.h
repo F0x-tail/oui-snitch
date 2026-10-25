@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT
 #ifndef TRACKER_RING_H
 #define TRACKER_RING_H
 

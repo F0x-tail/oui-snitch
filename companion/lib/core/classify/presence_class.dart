@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT
 import 'dart:math' as math;
 
 enum PresenceCategory {

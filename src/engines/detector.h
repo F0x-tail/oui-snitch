@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT
 #ifndef ENGINE_DETECTOR_H
 #define ENGINE_DETECTOR_H
 

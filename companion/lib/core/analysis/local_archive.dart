@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT
 import 'package:drift/drift.dart';
 import 'package:oui_spy/core/db/app_database.dart';
 

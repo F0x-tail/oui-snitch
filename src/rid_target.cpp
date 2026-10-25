@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT
 #ifdef OUISPY_RID_TARGET
 #include <Arduino.h>
 #include <WiFi.h>

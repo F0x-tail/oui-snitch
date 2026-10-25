@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT
 /// Phone GPS position with all relevant fields.
 class GpsPosition {
   const GpsPosition({

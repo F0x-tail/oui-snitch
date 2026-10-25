@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT
 #ifdef OUISPY_TEST_CENTRAL
 #include <Arduino.h>
 #include <NimBLEDevice.h>

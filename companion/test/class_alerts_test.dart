@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT
 import 'package:flutter_test/flutter_test.dart';
 import 'package:oui_spy/core/classify/device_registry.dart';
 import 'package:oui_spy/core/classify/observation.dart';

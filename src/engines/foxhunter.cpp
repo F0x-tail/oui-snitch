@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT
 #include "foxhunter.h"
 #include "protocol.h"
 #include "ble_gatt.h"

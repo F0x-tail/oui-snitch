@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT
 part of 'wardrive_screen.dart';
 
 class _IdleControls extends StatelessWidget {

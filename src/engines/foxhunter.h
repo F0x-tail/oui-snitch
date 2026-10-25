@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT
 #ifndef ENGINE_FOXHUNTER_H
 #define ENGINE_FOXHUNTER_H
 #include "engine_registry.h"

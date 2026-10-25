@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT
 #ifndef DONGLE_ST7735_H
 #define DONGLE_ST7735_H
 

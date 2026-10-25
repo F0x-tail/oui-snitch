@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT
 enum RadioKind { wifi, ble }
 
 class MfgRecord {

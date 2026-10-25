@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT
 import 'package:freezed_annotation/freezed_annotation.dart';
 
 part 'session.freezed.dart';

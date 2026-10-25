@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT
 #include <Arduino.h>
 #include <Preferences.h>
 #include "protocol.h"

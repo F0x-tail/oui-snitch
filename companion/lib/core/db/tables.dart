@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT
 import 'package:drift/drift.dart';
 
 class Nodes extends Table {

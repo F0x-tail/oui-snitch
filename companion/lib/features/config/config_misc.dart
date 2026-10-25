@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT
 part of 'device_config.dart';
 
 class _WifiStatusPanel extends ConsumerStatefulWidget {

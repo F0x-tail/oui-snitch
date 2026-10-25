@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT
 #ifndef BLE_GATT_H
 #define BLE_GATT_H
 

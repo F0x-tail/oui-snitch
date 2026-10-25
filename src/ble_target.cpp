@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT
 #ifdef OUISPY_BLE_TARGET
 #include <Arduino.h>
 #include <NimBLEDevice.h>

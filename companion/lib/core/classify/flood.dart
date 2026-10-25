@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT
 import 'dart:collection';
 
 import 'adv_decoder.dart';

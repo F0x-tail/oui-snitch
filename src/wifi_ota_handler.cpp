@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT
 #include "wifi_ota_handler.h"
 #include <Arduino.h>
 #include <Preferences.h>

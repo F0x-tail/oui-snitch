@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 final configMenuWantedProvider = StateProvider<bool>((ref) => false);

@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';

@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT
 #include "skyspy.h"
 #include "protocol.h"
 #include "../mesh_espnow.h"

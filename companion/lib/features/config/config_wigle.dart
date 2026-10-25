@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT
 part of 'device_config.dart';
 
 /// Status for the BSSID lookup feature. Credentials are not entered here —

@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT
 import 'package:dio/dio.dart';
 import 'package:latlong2/latlong.dart';
 

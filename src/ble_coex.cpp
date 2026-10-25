@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT
 #include "ble_coex.h"
 #include "mesh_espnow.h"
 #include <Arduino.h>

@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT
 #include "ota_handler.h"
 #include <Arduino.h>
 #include <esp_ota_ops.h>

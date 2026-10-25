@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT
 #ifndef DEDUP_RING_H
 #define DEDUP_RING_H
 

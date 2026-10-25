@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT
 #ifndef MESH_ESPNOW_H
 #define MESH_ESPNOW_H
 

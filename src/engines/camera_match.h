@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT
 #ifndef CAMERA_MATCH_H
 #define CAMERA_MATCH_H
 

@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT
 #ifndef FLOCK_AUTH_CACHE_H
 #define FLOCK_AUTH_CACHE_H
 

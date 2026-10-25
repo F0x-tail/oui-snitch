@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT
 class FlockOui {
   const FlockOui._();
 

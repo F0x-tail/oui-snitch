@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT
 #include "ignore_list.h"
 #include <Arduino.h>
 #include <Preferences.h>

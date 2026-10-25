@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT
 #ifndef BLE_NIMBLE_COMPAT_H
 #define BLE_NIMBLE_COMPAT_H
 

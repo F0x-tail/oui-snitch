@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT
 import 'package:intl/intl.dart';
 import 'package:oui_spy/core/geofence/geofence_filter.dart';
 import 'package:oui_spy/core/ignore_list_state.dart';
