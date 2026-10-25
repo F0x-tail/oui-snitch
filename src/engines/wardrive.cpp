@@ -188,7 +188,6 @@ static inline DedupRing<WD_DEDUP_SLOTS, 5000>& wardriveDedupRef(void) { return w
 static DedupRingISR<WD_DEDUP_SLOTS, 2000> wifiDedup;
 static DedupRingISR<64, 5000> isrFlockWifiDedup;
 
-static volatile uint8_t wdFlockBleActive = 0;
 static volatile uint8_t wdFlockWifiActive = 0;
 static volatile uint8_t wdFoxhunterActive = 0;
 static volatile uint8_t wdDetectorActive = 0;
@@ -482,76 +481,8 @@ class WardriveAdvCallbacks : public NimBLEAdvertisedDeviceCallbacks {
         uint32_t now = millis();
         std::string name = dev->getName();
 
-        if (wdFlockBleActive && flockShouldConsiderAddr(dev)) {
-            bool isFlock = false;
-            uint8_t flockMethod = 0;
-            bool isRaven = false;
-            const char* ravenFw = "";
-            char tnSerial[20] = {0};
-            uint8_t sigMask = 0;
-
-            if (dev->haveManufacturerData()) {
-                std::string md = dev->getManufacturerData();
-                if (flockMatchMfgPayload((const uint8_t*)md.data(), md.size(),
-                                         tnSerial, sizeof(tnSerial))) {
-                    sigMask |= FLOCK_SIG_MFG;
-                    if (tnSerial[0]) sigMask |= FLOCK_SIG_TN;
-                }
-            }
-            if (flockMatchOui(mac)) sigMask |= FLOCK_SIG_OUI;
-            if (name.length() > 0) {
-                if (flockMatchNameStr(name.c_str()))        sigMask |= FLOCK_SIG_NAME;
-                if (flockMatchBareSerialName(name.c_str())) sigMask |= FLOCK_SIG_SERIAL;
-            }
-            if (flockMatchGattUuid(dev)) sigMask |= FLOCK_SIG_GATT;
-            if (flockMatchNordicDfu(dev, name.c_str())) sigMask |= FLOCK_SIG_DFU;
-
-            if (sigMask & FLOCK_SIG_NAME) {
-                isFlock = true;
-                flockMethod = METHOD_NAME_MATCH;
-            } else if ((sigMask & FLOCK_SIG_VALIDATED) == FLOCK_SIG_VALIDATED) {
-                isFlock = true;
-                flockMethod = METHOD_NAME_MATCH;
-            }
-            if (!isFlock && flockMatchRavenUuid(dev, &ravenFw)) {
-                isFlock = true;
-                flockMethod = METHOD_RAVEN_UUID;
-                isRaven = true;
-                sigMask |= FLOCK_SIG_RAVEN_UUID;
-            }
-            if (!isFlock && (sigMask & FLOCK_SIG_GATT)) {
-                isFlock = true;
-                flockMethod = METHOD_GATT_UUID;
-            }
-            if (!isFlock && (sigMask & FLOCK_SIG_DFU) && g_flockExtendedOui) {
-                isFlock = true;
-                flockMethod = METHOD_NORDIC_DFU;
-            }
-
-            if (isFlock) {
-                DetectionEvent fEvt = {};
-                fEvt.engine_id = ENGINE_FLOCK_BLE;
-                memcpy(fEvt.mac, mac, 6);
-                fEvt.rssi = rssi;
-                fEvt.timestamp_ms = now;
-                fEvt.method = flockMethod;
-                fEvt.ext.flock.is_raven = isRaven ? 1 : 0;
-                if (isRaven) {
-                    strncpy(fEvt.ext.flock.raven_fw, ravenFw,
-                            sizeof(fEvt.ext.flock.raven_fw) - 1);
-                } else if (tnSerial[0]) {
-                    strncpy(fEvt.ext.flock.raven_fw, tnSerial,
-                            sizeof(fEvt.ext.flock.raven_fw) - 1);
-                }
-                if (!name.empty()) {
-                    strncpy(fEvt.ext.flock.name, name.c_str(),
-                            sizeof(fEvt.ext.flock.name) - 1);
-                }
-                fEvt.ext.flock.sig_mask = sigMask;
-                pushDetection(&fEvt);
-            }
-        }
-
+        // Flock BLE detection removed with the Flock BLE engine; its
+        // Wi-Fi IE fingerprint is the reliable path.
         DetectionEvent evt = {};
         evt.engine_id = ENGINE_WARDRIVE;
         memcpy(evt.mac, mac, 6);
@@ -614,7 +545,6 @@ static void wardriveStart(void) {
     wardriveDedupRef().setCooldownMs(relog);
     wifiDedup.setCooldownMs(relog);
     isrFlockWifiDedup.setCooldownMs(relog);
-    wdFlockBleActive = (engineGetState(ENGINE_FLOCK_BLE) != ESTATE_DISABLED) ? 1 : 0;
     wdFlockWifiActive = (engineGetState(ENGINE_FLOCK_WIFI) != ESTATE_DISABLED) ? 1 : 0;
     wdFoxhunterActive = (engineGetState(ENGINE_FOXHUNTER) != ESTATE_DISABLED) ? 1 : 0;
     wdDetectorActive = (engineGetState(ENGINE_DETECTOR) != ESTATE_DISABLED) ? 1 : 0;
@@ -726,7 +656,6 @@ static void wardriveLoop(void) {
     if (!wardriveActive) return;
     unsigned long now = millis();
 
-    wdFlockBleActive   = (engineGetState(ENGINE_FLOCK_BLE)  != ESTATE_DISABLED) ? 1 : 0;
     wdFlockWifiActive  = (engineGetState(ENGINE_FLOCK_WIFI) != ESTATE_DISABLED) ? 1 : 0;
     wdFoxhunterActive  = (engineGetState(ENGINE_FOXHUNTER)  != ESTATE_DISABLED) ? 1 : 0;
     wdDetectorActive   = (engineGetState(ENGINE_DETECTOR)   != ESTATE_DISABLED) ? 1 : 0;
