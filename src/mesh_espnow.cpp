@@ -1,8 +1,10 @@
+// SPDX-License-Identifier: MIT
 #include "mesh_espnow.h"
 #include "engine_registry.h"
 #include "engines/wardrive.h"
 #include "ignore_list.h"
 #include "engines/detector.h"
+#include "engines/axon.h"
 #include "wifi_ota_handler.h"
 #include "radio_coex.h"
 #include "ble_coex.h"
@@ -1306,6 +1308,7 @@ static bool meshNodeHopsWifi(void) {
                           | ENGINE_BITMASK(ENGINE_PCAP);
     if (m & wifiHop) return true;
     if ((m & ENGINE_BITMASK(ENGINE_DETECTOR)) && detectorUsesWifi()) return true;
+    if ((m & ENGINE_BITMASK(ENGINE_AXON)) && axonUsesWifi()) return true;
     if ((m & ENGINE_BITMASK(ENGINE_WARDRIVE)) && (wardriveGetRadio() & 0x01)) return true;
     return false;
 }
@@ -1826,7 +1829,7 @@ void meshBroadcastDetection(const DetectionEvent* evt, bool spooled) {
 
     size_t extSize = 0;
     switch ((EngineId)evt->engine_id) {
-        case ENGINE_FLOCK_BLE:
+        case ENGINE_AXON:
         case ENGINE_FLOCK_WIFI:
             extSize = sizeof(evt->ext.flock);
             break;
