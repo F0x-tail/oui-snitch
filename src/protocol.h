@@ -372,6 +372,16 @@ bool   melodyLookup(uint8_t engine, uint8_t method, uint8_t* n, uint8_t notes[][
 // Pairing passkey. Read: 4-byte LE passkey + 1 byte "still the default".
 // Write: 4-byte LE passkey. Only reachable over an already-paired link.
 #define CHR_PAIRING          "00000026-" UUID_BASE
+// Third-party wardriving-node hub. Write: [cmd][payload]. Read: status.
+#define CHR_ENOW_CORE        "00000027-" UUID_BASE
+#define ENOW_CMD_PASSPHRASE   0x01
+#define ENOW_CMD_START        0x02
+#define ENOW_CMD_STOP         0x03
+#define ENOW_CMD_ALLOW_CLEAR  0x04
+#define ENOW_CMD_ALLOW_ADD    0x05
+#define ENOW_CMD_ALLOW_ENABLE 0x06
+#define ENOW_CMD_ALLOW_PLAIN  0x07
+#define ENOW_CMD_CHAN_SPAN    0x08
 // PCAP engine
 #define CHR_PCAP_CONTROL     "00000160-" UUID_BASE
 #define CHR_PCAP_STATS       "00000161-" UUID_BASE

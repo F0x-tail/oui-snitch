@@ -21,6 +21,7 @@
 #include "wifi_ota_handler.h"
 #include "engines/detector.h"
 #include "engines/axon.h"
+#include "espnow_core.h"
 #include "engines/foxhunter.h"
 #include "engines/skyspy.h"
 #include "engines/flock_wifi.h"
@@ -714,6 +715,7 @@ static void statusHeartbeatTask(void* param) {
         detSpoolFlushIfDirty();
         bleGattSpoolFlushPump();
         bleGattNodeGraceTick();
+        espnowCoreTick();
 
         if (bleGattOfflineScanEnabled() && !meshManagerJoined()) {
             static uint8_t lastMask = 0xFF;
@@ -1479,6 +1481,9 @@ void setup() {
     // Register all engines
     engineRegister(ENGINE_DETECTOR, &detectorCallbacks);
     engineRegister(ENGINE_AXON, &axonCallbacks);
+    // Loads a stored passphrase if there is one. Does not start the hub —
+    // that is an explicit action, because it parks the radio.
+    espnowCoreInit();
     engineRegister(ENGINE_FLOCK_WIFI, &flockWifiCallbacks);
     engineRegister(ENGINE_FOXHUNTER, &foxhunterCallbacks);
     engineRegister(ENGINE_SKYSPY, &skyspyCallbacks);

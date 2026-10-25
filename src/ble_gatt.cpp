@@ -15,6 +15,7 @@
 #include <Preferences.h>
 #include <esp_random.h>
 #include "ble_pairing.h"
+#include "espnow_core.h"
 
 // Boot identity. Lives here rather than in a role's main file because the
 // deviceInfo characteristic is its only reader, and both the node and manager
@@ -974,6 +975,67 @@ class PairingCallbacks : public NimBLECharacteristicCallbacks {
 };
 static PairingCallbacks pairingCb;
 #endif
+
+static NimBLECharacteristic* chrEnowCore = nullptr;
+
+static void enowPublishStatus(void) {
+    if (!chrEnowCore) return;
+    uint8_t v[16] = {0};
+    v[0] = espnowCoreRunning() ? 1 : 0;
+    v[1] = espnowCoreHasPassphrase() ? 1 : 0;
+    v[2] = espnowCoreNodeCount();
+    v[3] = espnowCoreAllowlistEnabled() ? 1 : 0;
+    v[4] = espnowCoreAllowlistCount();
+    uint32_t rx = espnowCoreRecordsRx();
+    uint32_t rj = espnowCoreRejected();
+    memcpy(v + 5, &rx, 4);
+    memcpy(v + 9, &rj, 4);
+    chrEnowCore->setValue(v, sizeof(v));
+}
+
+class EnowCoreCallbacks : public NimBLECharacteristicCallbacks {
+    void onRead(NimBLECharacteristic* c) override { (void)c; enowPublishStatus(); }
+    void onWrite(NimBLECharacteristic* c) override {
+        std::string v = c->getValue();
+        if (v.empty()) return;
+        const uint8_t cmd = (uint8_t)v[0];
+        const uint8_t* p = (const uint8_t*)v.data() + 1;
+        const size_t n = v.size() - 1;
+
+        switch (cmd) {
+            case ENOW_CMD_PASSPHRASE: {
+                if (n == 0 || n > ENOW_PASSPHRASE_MAX) {
+                    Serial.println("[ENOW] passphrase rejected — bad length");
+                    break;
+                }
+                char phrase[ENOW_PASSPHRASE_MAX + 1] = {0};
+                memcpy(phrase, p, n);
+                espnowCoreSetPassphrase(phrase);
+                break;
+            }
+            case ENOW_CMD_START:        espnowCoreStart(); break;
+            case ENOW_CMD_STOP:         espnowCoreStop(); break;
+            case ENOW_CMD_ALLOW_CLEAR:  espnowCoreAllowlistClear(); break;
+            case ENOW_CMD_ALLOW_ADD:
+                if (n >= 6) espnowCoreAllowlistAdd(p);
+                break;
+            case ENOW_CMD_ALLOW_ENABLE:
+                if (n >= 1) espnowCoreSetAllowlistEnabled(p[0] != 0);
+                break;
+            case ENOW_CMD_ALLOW_PLAIN:
+                if (n >= 1) espnowCoreSetAllowPlaintext(p[0] != 0);
+                break;
+            case ENOW_CMD_CHAN_SPAN:
+                if (n >= 2) espnowCoreSetChannelSpan(p[0], p[1]);
+                break;
+            default:
+                Serial.printf("[ENOW] unknown command 0x%02X\n", cmd);
+                break;
+        }
+        enowPublishStatus();
+    }
+};
+static EnowCoreCallbacks enowCoreCb;
 
 class ServerCallbacks : public NimBLEServerCallbacks {
     void onConnect(NimBLEServer* server) override {
@@ -2521,6 +2583,11 @@ void bleGattInit(void) {
     chrIgnoreList->setCallbacks(&ignoreListCb);
 
     svc->createCharacteristic(CHR_MELODY, P_WRITE)->setCallbacks(&melodyCb);
+
+    // -- Third-party node hub (READ/WRITE) --
+    chrEnowCore = svc->createCharacteristic(CHR_ENOW_CORE, P_READ | P_WRITE);
+    chrEnowCore->setCallbacks(&enowCoreCb);
+    enowPublishStatus();
 
 #if OUISPY_BLE_SECURE
     // -- Pairing passkey (READ/WRITE) --
