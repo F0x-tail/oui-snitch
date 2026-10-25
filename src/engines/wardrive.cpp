@@ -335,9 +335,15 @@ static void sendWildcardProbe(void) {
 // to trilaterate a transmitter is sightings from *different places*.
 //
 // So drive the window from the phone's speed and aim for roughly one
-// observation per WD_DEDUP_SPACING_M of travel. Clamped at both ends: the
-// floor stops a fast drive flooding the link, the ceiling keeps a stationary
-// board reporting occasionally rather than going silent.
+// observation per WD_DEDUP_SPACING_M of travel.
+//
+// The configured rediscover interval is the ceiling, not a value to override.
+// It is an explicit user setting, and an earlier version of this recomputed
+// over the top of it every two seconds — so a stationary board silently went
+// to the 30 s cap no matter what the user had asked for, and looked like it
+// had stopped seeing networks. Speed may now only tighten the window below
+// what was configured, which is the case this heuristic exists for; standing
+// still gives back exactly the configured interval.
 #ifndef WD_DEDUP_SPACING_M
 #define WD_DEDUP_SPACING_M 50.0f
 #endif
@@ -361,9 +367,15 @@ static void wardriveUpdateDedupWindow(uint32_t now) {
     if (now - wdDedupLastCalc < WD_DEDUP_RECALC_MS) return;
     wdDedupLastCalc = now;
 
-    // No fix means no idea how far we have moved, so fall back to the fixed
-    // window rather than guessing in either direction.
-    uint32_t want = gpsValid ? wardriveDedupWindowFor(currentGps.speed) : 5000u;
+    const uint32_t configured = engineGetRediscoverMs();
+
+    // No fix means no idea how far we have moved, so leave the user's setting
+    // alone rather than guessing in either direction.
+    uint32_t want = configured;
+    if (gpsValid) {
+        uint32_t bySpeed = wardriveDedupWindowFor(currentGps.speed);
+        if (bySpeed < want) want = bySpeed;
+    }
     if (want == wdDedupWindowMs) return;
     wdDedupWindowMs = want;
     wifiDedup.setCooldownMs(want);
@@ -649,6 +661,8 @@ static void wardriveStart(void) {
     wardriveDedupRef().setCooldownMs(relog);
     wifiDedup.setCooldownMs(relog);
     isrFlockWifiDedup.setCooldownMs(relog);
+    wdDedupWindowMs = relog;
+    wdDedupLastCalc = millis() - WD_DEDUP_RECALC_MS;
     wdFlockWifiActive = (engineGetState(ENGINE_FLOCK_WIFI) != ESTATE_DISABLED) ? 1 : 0;
     wdFoxhunterActive = (engineGetState(ENGINE_FOXHUNTER) != ESTATE_DISABLED) ? 1 : 0;
     wdDetectorActive = (engineGetState(ENGINE_DETECTOR) != ESTATE_DISABLED) ? 1 : 0;
@@ -938,6 +952,10 @@ static void wardriveApplyPrefs(void) {
     wardriveDedupRef().setCooldownMs(relog);
     wifiDedup.setCooldownMs(relog);
     isrFlockWifiDedup.setCooldownMs(relog);
+    // A new setting wins immediately; the speed heuristic re-tightens from it
+    // on its next pass rather than keeping the old window.
+    wdDedupWindowMs = relog;
+    wdDedupLastCalc = millis() - WD_DEDUP_RECALC_MS;
 }
 
 const EngineCallbacks wardriveCallbacks = {
