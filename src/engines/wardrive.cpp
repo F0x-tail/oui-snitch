@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT
 #include "wardrive.h"
 extern bool flockAllowOuiOnly;
 extern volatile uint32_t g_flockOuiSuppressed;
@@ -13,6 +14,7 @@ extern volatile uint32_t g_flockCorroborated;
 #include "flock_auth_cache.h"
 #include "dedup_ring.h"
 #include "detector.h"
+#include "axon.h"
 #include "flock_wifi.h"
 #include "foxhunter.h"
 #include <esp_attr.h>
@@ -191,6 +193,7 @@ static DedupRingISR<64, 5000> isrFlockWifiDedup;
 static volatile uint8_t wdFlockWifiActive = 0;
 static volatile uint8_t wdFoxhunterActive = 0;
 static volatile uint8_t wdDetectorActive = 0;
+static volatile uint8_t wdAxonActive = 0;
 
 #define AKM_OUI_00   0x00
 #define AKM_OUI_0F   0x0F
@@ -323,6 +326,102 @@ static void sendWildcardProbe(void) {
     }
 }
 
+// Dedup spacing.
+//
+// A fixed time window is the wrong unit for a wardrive. Parked, it emits the
+// same BSSID over and over from one spot, which tells WiGLE nothing it does
+// not already know and costs storage and link bandwidth. Driving, it suppresses
+// observations that would have been genuinely useful, because what WiGLE needs
+// to trilaterate a transmitter is sightings from *different places*.
+//
+// So drive the window from the phone's speed and aim for roughly one
+// observation per WD_DEDUP_SPACING_M of travel. Clamped at both ends: the
+// floor stops a fast drive flooding the link, the ceiling keeps a stationary
+// board reporting occasionally rather than going silent.
+#ifndef WD_DEDUP_SPACING_M
+#define WD_DEDUP_SPACING_M 50.0f
+#endif
+#define WD_DEDUP_MIN_MS  2000u
+#define WD_DEDUP_MAX_MS 30000u
+#define WD_DEDUP_RECALC_MS 2000u
+
+static uint32_t wdDedupWindowMs = 5000;
+static uint32_t wdDedupLastCalc = 0;
+
+// Exposed for the unit test; keep free of globals.
+uint32_t wardriveDedupWindowFor(float speedMps) {
+    if (!(speedMps > 0.0f) || !isfinite(speedMps)) return WD_DEDUP_MAX_MS;
+    float ms = (WD_DEDUP_SPACING_M / speedMps) * 1000.0f;
+    if (!(ms > (float)WD_DEDUP_MIN_MS)) return WD_DEDUP_MIN_MS;
+    if (ms > (float)WD_DEDUP_MAX_MS) return WD_DEDUP_MAX_MS;
+    return (uint32_t)ms;
+}
+
+static void wardriveUpdateDedupWindow(uint32_t now) {
+    if (now - wdDedupLastCalc < WD_DEDUP_RECALC_MS) return;
+    wdDedupLastCalc = now;
+
+    // No fix means no idea how far we have moved, so fall back to the fixed
+    // window rather than guessing in either direction.
+    uint32_t want = gpsValid ? wardriveDedupWindowFor(currentGps.speed) : 5000u;
+    if (want == wdDedupWindowMs) return;
+    wdDedupWindowMs = want;
+    wifiDedup.setCooldownMs(want);
+    wardriveDedupRef().setCooldownMs(want);
+}
+
+// Sniffer stall watchdog.
+//
+// A wedged promiscuous callback looks exactly like a working one from the
+// outside: the engine reports active, the channel keeps hopping, and nothing
+// ever arrives. Several engines take the radio in and out of promiscuous mode,
+// so this is a real failure mode here in a way it is not for a single-engine
+// device.
+//
+// g_engRawSeen is bumped on every callback before any filtering, so it moves
+// whenever the radio is alive, even somewhere with no networks worth logging.
+#define WD_STALL_SWEEPS      4   // consecutive silent sweeps before acting
+#define WD_STALL_SWEEPS_HARD 8   // ... before the heavier recovery
+static uint32_t wdStallLastRaw   = 0;
+static uint8_t  wdStallSweeps    = 0;
+static bool     wdStallEverSaw   = false;
+
+static void wardriveStallReset(void) {
+    wdStallLastRaw = g_engRawSeen;
+    wdStallSweeps = 0;
+    wdStallEverSaw = false;
+}
+
+// Called once per completed sweep of the hop schedule.
+static void wardriveStallCheck(void) {
+    uint32_t raw = g_engRawSeen;
+    if (raw != wdStallLastRaw) {
+        wdStallLastRaw = raw;
+        wdStallSweeps = 0;
+        wdStallEverSaw = true;
+        return;
+    }
+    // Never having seen a frame is not evidence of a wedge — it is what an
+    // empty band looks like on first start. Only a radio that went quiet
+    // after working is worth intervening in.
+    if (!wdStallEverSaw) return;
+
+    if (wdStallSweeps < 0xFF) wdStallSweeps++;
+    if (wdStallSweeps == WD_STALL_SWEEPS) {
+        Serial.printf("[WARDRIVE] no frames for %u sweeps — re-asserting sniffer\n",
+                      (unsigned)wdStallSweeps);
+        wifiCoexReassertPromiscuous();
+        esp_wifi_set_channel(currentChannel, WIFI_SECOND_CHAN_NONE);
+    } else if (wdStallSweeps >= WD_STALL_SWEEPS_HARD) {
+        Serial.printf("[WARDRIVE] still no frames after %u sweeps — cycling radio\n",
+                      (unsigned)wdStallSweeps);
+        if (wifiCoexCycleRadio()) {
+            esp_wifi_set_channel(currentChannel, WIFI_SECOND_CHAN_NONE);
+        }
+        wdStallSweeps = 0;  // give whichever recovery ran a chance to take
+    }
+}
+
 static void IRAM_ATTR wardriveWifiCb(void* buf, wifi_promiscuous_pkt_type_t type) {
     g_engRawSeen++;
     if (!wardriveActive) return;
@@ -389,6 +488,9 @@ static void IRAM_ATTR wardriveWifiCb(void* buf, wifi_promiscuous_pkt_type_t type
         }
     }
 
+    if (wdAxonActive) {
+        axonCheckWifiISR(p, len, pkt->rx_ctrl.rssi, pkt->rx_ctrl.channel);
+    }
     if (wdDetectorActive) {
         detectorCheckWifiSignaturesISR(p, len, pkt->rx_ctrl.rssi, pkt->rx_ctrl.channel);
         detectorCheckWifiDeviceISR(addr2, pkt->rx_ctrl.rssi, pkt->rx_ctrl.channel);
@@ -475,6 +577,7 @@ class WardriveAdvCallbacks : public NimBLEAdvertisedDeviceCallbacks {
         uint8_t mac[6];
         bleAddrToMac(dev->getAddress().getNative(), mac);
         if (wdDetectorActive) detectorCheckBleSignatures(dev, mac, dev->getRSSI());
+        if (wdAxonActive) axonCheckBleDevice(dev, mac, dev->getRSSI());
         if (wardriveDedupRef().check(mac)) return;
 
         int rssi = dev->getRSSI();
@@ -537,6 +640,7 @@ static void wardriveInit(void) {
 static void wardriveStart(void) {
     wardriveActive = true;
     lastBleScan = 0;
+    wardriveStallReset();
     wardriveDedupRef().reset();
     wifiDedup.reset();
     isrFlockWifiDedup.reset();
@@ -548,6 +652,7 @@ static void wardriveStart(void) {
     wdFlockWifiActive = (engineGetState(ENGINE_FLOCK_WIFI) != ESTATE_DISABLED) ? 1 : 0;
     wdFoxhunterActive = (engineGetState(ENGINE_FOXHUNTER) != ESTATE_DISABLED) ? 1 : 0;
     wdDetectorActive = (engineGetState(ENGINE_DETECTOR) != ESTATE_DISABLED) ? 1 : 0;
+    wdAxonActive = (engineGetState(ENGINE_AXON) != ESTATE_DISABLED) ? 1 : 0;
     buildHopSchedule();
     lastChannelHop = millis();
 
@@ -659,6 +764,9 @@ static void wardriveLoop(void) {
     wdFlockWifiActive  = (engineGetState(ENGINE_FLOCK_WIFI) != ESTATE_DISABLED) ? 1 : 0;
     wdFoxhunterActive  = (engineGetState(ENGINE_FOXHUNTER)  != ESTATE_DISABLED) ? 1 : 0;
     wdDetectorActive   = (engineGetState(ENGINE_DETECTOR)   != ESTATE_DISABLED) ? 1 : 0;
+    wdAxonActive       = (engineGetState(ENGINE_AXON)       != ESTATE_DISABLED) ? 1 : 0;
+
+    wardriveUpdateDedupWindow(now);
 
     if (wardriveRadio & 0x01) {
         uint16_t maxDwell = currentSlotDwellMs();
@@ -677,7 +785,10 @@ static void wardriveLoop(void) {
 #endif
             g_wdHopCount++;
             hopIdx++;
-            if (hopIdx >= hopScheduleLen) hopIdx = 0;
+            if (hopIdx >= hopScheduleLen) {
+                hopIdx = 0;
+                wardriveStallCheck();
+            }
 #ifdef OUISPY_SWEEPLOG
             if (hopIdx == 0) {
                 static uint32_t g_lastSweepMs = 0;

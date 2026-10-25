@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT
 #include "radio_coex.h"
 #include "engine_registry.h"
 #include "protocol.h"
@@ -148,6 +149,44 @@ void wifiCoexRegister(WifiRxParser parser, uint32_t filterMask) {
         wifiCoexApplyFilter();
     }
     Serial.printf("[COEX] wifi register (count=%d)\n", g_count);
+}
+
+void wifiCoexReassertPromiscuous(void) {
+    wifiCoexApplyFilter();
+    esp_wifi_set_promiscuous(true);
+    esp_wifi_set_promiscuous_rx_cb(wifiCoexDispatch);
+    Serial.println("[COEX] re-asserted promiscuous rx");
+}
+
+int wifiCoexParserCount(void) {
+    portENTER_CRITICAL(&g_mux);
+    int n = g_count;
+    portEXIT_CRITICAL(&g_mux);
+    return n;
+}
+
+bool wifiCoexCycleRadio(void) {
+    if (wifiCoexParserCount() != 1) {
+        Serial.println("[COEX] radio cycle refused — another engine is registered");
+        return false;
+    }
+    if (wifiRadioExternallyOwned()) {
+        Serial.println("[COEX] radio cycle refused — radio is externally owned");
+        return false;
+    }
+    Serial.println("[COEX] cycling wifi radio");
+    esp_wifi_set_promiscuous(false);
+    esp_wifi_stop();
+    vTaskDelay(pdMS_TO_TICKS(200));
+    esp_err_t rc = esp_wifi_start();
+    if (rc != ESP_OK) {
+        Serial.printf("[COEX] wifi restart FAILED 0x%x\n", (int)rc);
+        return false;
+    }
+    vTaskDelay(pdMS_TO_TICKS(200));
+    wifiSnifferApplyPs();
+    wifiCoexReassertPromiscuous();
+    return true;
 }
 
 void wifiCoexUnregister(WifiRxParser parser) {

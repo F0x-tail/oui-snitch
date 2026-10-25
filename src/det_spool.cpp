@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT
 #include "det_spool.h"
 #include <LittleFS.h>
 #include <string.h>
@@ -72,15 +73,63 @@ static int oldestSlot() {
     return oldest;
 }
 
-static void persist() {
+// A full or failing flash partition fails quietly: open() returns false, or
+// write() returns short, and nothing else complains. Leaving s_dirty set on
+// failure is the point — the spool stays in RAM and tries again, instead of
+// the detections being dropped on the floor the way they used to be.
+static uint8_t s_writeFailures = 0;
+static bool    s_storageFailed = false;
+#define SPOOL_MAX_WRITE_FAILURES 3
+
+static bool persistOnce() {
     File f = SPOOL_FS.open(SPOOL_PATH, "w");
-    if (!f) { s_dirty = false; return; }
+    if (!f) return false;
+
     SpoolHeader h = { SPOOL_MAGIC, s_count, s_dropped };
-    f.write((const uint8_t*)&h, sizeof(h));
-    if (s_count > 0) f.write((const uint8_t*)s_slots, (size_t)s_count * sizeof(SpoolSlot));
+    bool ok = f.write((const uint8_t*)&h, sizeof(h)) == sizeof(h);
+    if (ok && s_count > 0) {
+        size_t want = (size_t)s_count * sizeof(SpoolSlot);
+        ok = f.write((const uint8_t*)s_slots, want) == want;
+    }
     f.close();
-    s_dirty = false;
+    return ok;
 }
+
+static void persist() {
+    if (persistOnce()) {
+        if (s_writeFailures) {
+            Serial.printf("[SPOOL] write recovered after %u failure(s)\n",
+                          (unsigned)s_writeFailures);
+        }
+        s_writeFailures = 0;
+        s_storageFailed = false;
+        s_dirty = false;
+        return;
+    }
+
+    // Keep s_dirty so the next tick retries. The data is still in RAM; only
+    // the copy on flash is behind.
+    if (s_writeFailures < 0xFF) s_writeFailures++;
+    Serial.printf("[SPOOL] write failed (%u consecutive)\n",
+                  (unsigned)s_writeFailures);
+
+    if (s_writeFailures >= SPOOL_MAX_WRITE_FAILURES && !s_storageFailed) {
+        // Reopening is the one cheap recovery; a wedged handle or a stale
+        // directory entry clears this way. A full partition will not.
+        SPOOL_FS.remove(SPOOL_PATH);
+        if (persistOnce()) {
+            Serial.println("[SPOOL] recovered by recreating the spool file");
+            s_writeFailures = 0;
+            s_dirty = false;
+            return;
+        }
+        s_storageFailed = true;
+        Serial.println("[SPOOL] storage unusable — offline detections will be "
+                       "held in RAM only and lost on reboot");
+    }
+}
+
+bool detSpoolStorageFailed() { return s_storageFailed; }
 
 void detSpoolInit() {
     if (!s_mutex) s_mutex = xSemaphoreCreateMutex();
