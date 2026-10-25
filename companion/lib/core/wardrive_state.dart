@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT
 import 'dart:async';
 import 'dart:io';
 import 'dart:math' as math;
@@ -97,7 +98,7 @@ enum WardriveRadio {
 
 Set<WardriveTarget> targetsFromEngineMask(int mask) {
   final targets = <WardriveTarget>{};
-  if ((mask & (Engine.flockWifi.bitmask | Engine.flockBle.bitmask)) != 0) {
+  if ((mask & Engine.flockWifi.bitmask) != 0) {
     targets.add(WardriveTarget.flock);
   }
   if ((mask & Engine.skySpy.bitmask) != 0) targets.add(WardriveTarget.drone);
@@ -135,6 +136,46 @@ Future<void> reconcileDanglingWardriveSessions(AppDatabase db) async {
 
 enum WifiBand { band24, band5, both }
 
+/// The engines a board-reported engine mask says are running.
+Set<Engine> enginesFromMask(int mask) {
+  if (mask <= 0) return {};
+  return Engine.values.where((e) => mask & e.bitmask != 0).toSet();
+}
+
+/// Whether a wardrive teardown succeeded, given the mask the board reports
+/// afterwards and the engines that were already running before the session.
+///
+/// Success is "nothing left running but what we were asked to preserve", not
+/// "nothing running at all" — the latter reads a deliberately preserved engine
+/// as a failed teardown.
+bool teardownComplete(int maskAfter, Set<Engine> preserved) {
+  if (maskAfter < 0) return false; // could not read — do not claim success
+  int expected = 0;
+  for (final e in preserved) {
+    expected |= e.bitmask;
+  }
+  return (maskAfter & ~expected) == 0;
+}
+
+/// How old a fix may be before it stops standing in for a missing one. Past
+/// this the device is somewhere else entirely — in a car, minutes are
+/// kilometres — and the coordinate would be fiction.
+const Duration kStaleFixAfter = Duration(minutes: 3);
+
+/// Whether [p] is good enough and recent enough at [now] to stand in for a
+/// detection that arrived without a position of its own.
+///
+/// A wrong coordinate is worse than no coordinate: WiGLE tolerates a missing
+/// position, but a confident one that is minutes stale corrupts their
+/// trilateration for that transmitter and cannot be withdrawn after upload.
+bool fixUsableAsFallback(GpsPosition p, DateTime now) {
+  if (p.quality == GpsQuality.poor || p.quality == GpsQuality.none) {
+    return false;
+  }
+  final age = now.difference(p.timestamp);
+  return !age.isNegative && age <= kStaleFixAfter;
+}
+
 class WardriveController extends ChangeNotifier {
   WardriveController(this._ble, this._gps, this._db, this._ignoreList, this._geofenceFilter, this._notificationService, this._liveActivity) {
     _connSub = _ble.connectionState.listen((connState) {
@@ -145,7 +186,19 @@ class WardriveController extends ChangeNotifier {
             _droppedWhileRunning &&
             !_ble.offlineScanEnabled) {
           _droppedWhileRunning = false;
-          pendingReconnectPrompt = true;
+          // The app owns the intent here, so it re-asserts it rather than
+          // asking the user to guess what the board is doing. The boot epoch
+          // says which case this is; both end in re-pushing the engines this
+          // session wants, so the session simply continues either way.
+          if (_ble.boardRestarted) {
+            DebugLog.log('WARDRIVE: board restarted mid-session '
+                '(boot #${_ble.bootCount}) — re-asserting engines');
+          } else {
+            DebugLog.log('WARDRIVE: link blipped, same boot — session intact, '
+                're-asserting engines to be sure');
+          }
+          _reEnableEngines();
+          _pushWifiBand();
           notifyListeners();
           return;
         }
@@ -289,7 +342,7 @@ class WardriveController extends ChangeNotifier {
 
   bool ownsEngine(Engine e) =>
       isActive &&
-      (activeEngines.contains(e) || (includesFlock && (e == Engine.flockBle || e == Engine.flockWifi)));
+      (activeEngines.contains(e) || (includesFlock && e == Engine.flockWifi));
   String get activeLabel => selectableTargets
       .where(selectedTargets.contains)
       .map((t) => t.label)
@@ -763,6 +816,7 @@ class WardriveController extends ChangeNotifier {
     _cachedDetectorDetections = null;
     routePoints.clear();
     distanceKm = 0;    lastGpsForDistance = null;
+    gpsTagsRejected = 0;
     foxhuntTarget = null;
 
     // Reload geofence exclusion zones at session start
@@ -793,6 +847,12 @@ class WardriveController extends ChangeNotifier {
     final cached = _gps.lastPosition;
     if (cached != null) {
       currentPosition = cached;
+    }
+
+    _preSessionEngines = await _readRunningEngines();
+    if (_preSessionEngines.isNotEmpty) {
+      DebugLog.log('WARDRIVE: engines already running, will be left alone on '
+          'stop: ${_preSessionEngines.map((e) => e.name).join(', ')}');
     }
 
     await _enableEnginesSequentially(_fleetEngines);
@@ -853,12 +913,31 @@ class WardriveController extends ChangeNotifier {
     radioTransition = null;
     notifyListeners();
 
+    _preSessionEngines = {};
     await _finalizeSession();
   }
 
   /// True when a stop was requested, the link was up, and the board did **not**
   /// confirm its engines were off. The board may still be scanning.
   bool stopIncomplete = false;
+
+  /// Engines that were already running when this session started.
+  ///
+  /// A wardrive borrows the radios; it does not own everything it finds
+  /// running. Someone who had the detector on before starting a wardrive
+  /// expects it still to be on afterwards, so teardown leaves these alone.
+  Set<Engine> _preSessionEngines = {};
+
+  /// Which engines the board currently reports as running, or an empty set if
+  /// it cannot be asked. Empty is the safe answer: it means teardown stops
+  /// everything, which is the old behaviour.
+  Future<Set<Engine>> _readRunningEngines() async {
+    if (!_ble.isConnected) return {};
+    final mask = await _ble
+        .readActiveEngineMask()
+        .timeout(const Duration(seconds: 3), onTimeout: () => -1);
+    return enginesFromMask(mask);
+  }
 
   /// Tear down, then read the board's own engine mask back to check it took.
   ///
@@ -872,28 +951,33 @@ class WardriveController extends ChangeNotifier {
           const Duration(seconds: 3),
           onTimeout: () => -1,
         );
-    if (mask < 0) return false; // could not read — do not claim success
-    return mask == 0;
+    return teardownComplete(mask, _preSessionEngines);
   }
 
   Future<void> _teardownEngines() async {
     const wardriveEngines = [
       Engine.wardrive,
       Engine.flockWifi,
-      Engine.flockBle,
+      Engine.axon,
       Engine.skySpy,
       Engine.detector,
       Engine.pcap,
     ];
-    if (_ble.board.toLowerCase().contains('c5')) {
+    final toStop =
+        wardriveEngines.where((e) => !_preSessionEngines.contains(e)).toList();
+
+    // disableAllEngines is a single write and cheaper on the C5, but it is
+    // indiscriminate — only usable when there is nothing to preserve.
+    if (_preSessionEngines.isEmpty &&
+        _ble.board.toLowerCase().contains('c5')) {
       await _ble.disableAllEngines();
-    } else {
-      for (final engine in wardriveEngines) {
-        try {
-          await _ble.disableEngine(engine);
-        } catch (e) {
-          DebugLog.log('WARDRIVE: disable $engine error: $e');
-        }
+      return;
+    }
+    for (final engine in toStop) {
+      try {
+        await _ble.disableEngine(engine);
+      } catch (e) {
+        DebugLog.log('WARDRIVE: disable $engine error: $e');
       }
     }
   }
@@ -1049,6 +1133,7 @@ class WardriveController extends ChangeNotifier {
     _flockMacs.clear();
     routePoints.clear();
     distanceKm = 0;    lastGpsForDistance = null;
+    gpsTagsRejected = 0;
     foxhuntTarget = null;
 
     final lats = <double>[];
@@ -1058,7 +1143,7 @@ class WardriveController extends ChangeNotifier {
       rawDetectionCount++;
       uniqueMacs.add(det.macAddress);
       final isFlock =
-          det.engine == Engine.flockBle || det.engine == Engine.flockWifi;
+          det.engine == Engine.flockWifi;
       if (isFlock) {
         _flockMacs.add(det.macAddress);
         _flockByMac[det.macAddress] = det;
@@ -1334,7 +1419,7 @@ class WardriveController extends ChangeNotifier {
 
     const klass = [
       Engine.flockWifi,
-      Engine.flockBle,
+      Engine.axon,
       Engine.skySpy,
       Engine.detector,
     ];
@@ -1379,7 +1464,7 @@ class WardriveController extends ChangeNotifier {
     const stale = [
       Engine.wardrive,
       Engine.flockWifi,
-      Engine.flockBle,
+      Engine.axon,
       Engine.skySpy,
       Engine.detector,
       Engine.foxhunter,
@@ -1439,11 +1524,19 @@ class WardriveController extends ChangeNotifier {
     return newId;
   }
 
+  /// Detections that arrived without a position and could not borrow the last
+  /// known one, this session. Surfaced so a drive through a tunnel is visible
+  /// rather than silently turning into bad data.
+  int gpsTagsRejected = 0;
+
   ({double? lat, double? lon, double? acc, bool approx}) _tagGps(Detection d) {
     if (offlineGpsTag && d.latitude == null) {
       final p = _gps.lastPosition;
       if (p != null) {
-        return (lat: p.latitude, lon: p.longitude, acc: p.accuracy, approx: true);
+        if (fixUsableAsFallback(p, DateTime.now())) {
+          return (lat: p.latitude, lon: p.longitude, acc: p.accuracy, approx: true);
+        }
+        gpsTagsRejected++;
       }
     }
     return (lat: d.latitude, lon: d.longitude, acc: d.accuracy, approx: false);
@@ -1692,6 +1785,7 @@ class WardriveController extends ChangeNotifier {
     if (engineNames.contains('flockBle') || engineNames.contains('flockWifi')) {
       parts.add('Flock');
     }
+    if (engineNames.contains('axon')) parts.add('Axon');
     if (engineNames.contains('skySpy')) parts.add('Drone');
     if (engineNames.contains('detector')) parts.add('Detect');
     if (engineNames.contains('foxhunter')) parts.add('Foxhunt');
@@ -1767,7 +1861,7 @@ class WardriveController extends ChangeNotifier {
     }
     _notificationService.onWardriveUpdate(uniqueCount: _wifiNetworkMacs.length);
     _updateLiveActivity();
-    final isFlock = detection.engine == Engine.flockBle || detection.engine == Engine.flockWifi;
+    final isFlock = detection.engine == Engine.flockWifi;
     if (isFlock) {
       _flockMacs.add(detection.macAddress);
       _flockByMac[detection.macAddress] = detection;
@@ -1959,14 +2053,27 @@ class WardriveController extends ChangeNotifier {
 
 final wardriveProvider = ChangeNotifierProvider<WardriveController>((ref) {
   ref.keepAlive();
-  final ble = ref.watch(bleManagerProvider);
-  final gps = ref.watch(gpsProvider);
-  final db = ref.watch(databaseProvider);
-  final allowlist = ref.watch(ignoreListProvider);
+  // This is a keepAlive singleton that owns the live wardrive session, so it
+  // must be built exactly once. Every dependency is therefore ref.read, never
+  // ref.watch: ignoreListProvider and notificationServiceProvider are
+  // ChangeNotifierProviders that notifyListeners() frequently (the latter on
+  // every alert), and watching them would tear down and rebuild this
+  // controller mid-session — resetting `state` to idle, flipping the wardrive
+  // tile off, and orphaning the session while a fresh ambient one is spun up.
+  // That rebuild storm (driven by the classifier's tracker alerts) was the
+  // cause of the tile-flicker / feed-emptying / leaked-session behaviour.
+  final ble = ref.read(bleManagerProvider);
+  final gps = ref.read(gpsProvider);
+  final db = ref.read(databaseProvider);
+  final allowlist = ref.read(ignoreListProvider);
   final geofence = ref.read(geofenceFilterProvider);
-  final notif = ref.watch(notificationServiceProvider);
-  final liveActivity = ref.watch(liveActivityServiceProvider);
+  final notif = ref.read(notificationServiceProvider);
+  final liveActivity = ref.read(liveActivityServiceProvider);
   final controller = WardriveController(ble, gps, db, allowlist, geofence, notif, liveActivity);
+  // Let the notification service know when a wardrive is running so it can mute
+  // the phone-side classifier's alerts (wardrive is a recording mode, not an
+  // alerting one — see NotificationService.wardriveActiveGetter).
+  notif.wardriveActiveGetter = () => controller.isActive;
   controller.setWatchlistGetter(() => ref.read(watchlistProvider).enabledEntries);
   controller.isImperial = ref.read(unitSystemProvider) == UnitSystem.imperial;
   ref.listen<UnitSystem>(unitSystemProvider, (_, next) {

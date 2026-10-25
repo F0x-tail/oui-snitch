@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT
 import 'dart:async';
 import 'dart:math';
 import 'dart:typed_data';
@@ -920,11 +921,17 @@ class AppState extends ChangeNotifier {
 }
 
 final appStateProvider = ChangeNotifierProvider<AppState>((ref) {
-  final ble = ref.watch(bleManagerProvider);
-  final gps = ref.watch(gpsProvider);
-  final allowlist = ref.watch(ignoreListProvider);
+  // AppState holds the live in-memory feed (recentDetections), per-engine
+  // counts and engine state, and wires up stream subscriptions in its
+  // constructor. It must be built once: ignoreListProvider and
+  // notificationServiceProvider are ChangeNotifierProviders that notify often
+  // (the latter on every alert), so ref.watch here would rebuild AppState and
+  // wipe the live feed to empty mid-session. ref.read keeps the instance stable.
+  final ble = ref.read(bleManagerProvider);
+  final gps = ref.read(gpsProvider);
+  final allowlist = ref.read(ignoreListProvider);
   final geofence = ref.read(geofenceFilterProvider);
-  final notif = ref.watch(notificationServiceProvider);
-  final liveActivity = ref.watch(liveActivityServiceProvider);
+  final notif = ref.read(notificationServiceProvider);
+  final liveActivity = ref.read(liveActivityServiceProvider);
   return AppState(ble, gps, allowlist, geofence, notif, liveActivity);
 });

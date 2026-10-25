@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT
 import 'dart:async';
 import 'dart:io';
 
@@ -257,6 +258,19 @@ class NotificationService extends ChangeNotifier {
   /// Reads the user's detector signature mask. Wired up by the provider.
   int Function()? sigMaskGetter;
 
+  /// True while a wardrive session is running. Wired up by the provider.
+  ///
+  /// Wardrive is a recording/mapping mode, not an alerting one: it feeds the
+  /// phone-side classifier every advertisement in earshot, so in a busy area
+  /// the classifier would fire a tracker/camera/etc. alert for every unique
+  /// device it sees. That flood is exactly what the user does NOT get in a
+  /// plain detector run (there the board sends only its own classified hits,
+  /// not raw adv). So while a wardrive runs we suppress the classifier's
+  /// notifications — the firmware detector's own alerts (`onDetection`) still
+  /// fire if the detector engine is on, and classification still populates the
+  /// Devices tab; only the notification is withheld.
+  bool Function()? wardriveActiveGetter;
+
   /// Detector signature bit that governs a classifier class, where one exists.
   ///
   /// The app has two independent alert paths: the firmware's detector
@@ -279,6 +293,8 @@ class NotificationService extends ChangeNotifier {
 
   void onClassified(ClassifiedDevice d) {
     if (!_initialized || !_permissionGranted) return;
+    // Stay silent during a wardrive — see [wardriveActiveGetter].
+    if (wardriveActiveGetter?.call() ?? false) return;
     final alert = alertClassOf(d, classAlerts);
     if (alert == null) return;
     // Honour the signature switch the user actually sees.
@@ -411,7 +427,8 @@ class NotificationService extends ChangeNotifier {
 
   bool _isEngineEnabled(Engine engine) {
     return switch (engine) {
-      Engine.flockBle || Engine.flockWifi => flockEnabled,
+      Engine.flockWifi => flockEnabled,
+      Engine.axon => true,
       Engine.detector => true,
       Engine.skySpy => droneEnabled,
       Engine.foxhunter => foxhuntEnabled,
@@ -467,7 +484,8 @@ class NotificationService extends ChangeNotifier {
   static (String, String, String, String)? detectionNotificationText(Detection det) {
     final uavId = det.odid?.uavId;
     final (title, channel) = switch (det.engine) {
-      Engine.flockBle || Engine.flockWifi => ('Flock camera', NotifChannel.flock),
+      Engine.flockWifi => ('Flock camera', NotifChannel.flock),
+      Engine.axon => ('Axon duty equipment', NotifChannel.detector),
       Engine.detector => (_detectorHeadline(det), NotifChannel.detector),
       Engine.skySpy => (uavId != null && uavId.isNotEmpty ? 'Drone: $uavId' : 'Drone', NotifChannel.drone),
       Engine.foxhunter => ('Foxhunt target', NotifChannel.foxhunt),
@@ -727,5 +745,8 @@ final notificationServiceProvider =
   final la = ref.read(liveActivityServiceProvider);
   svc.onAlert = la.showAlert;
   svc.sigMaskGetter = () => ref.read(detectorSigMaskProvider);
+  // [wardriveActiveGetter] is wired from the wardrive side (wardriveProvider),
+  // which already depends on this service — referencing wardriveProvider here
+  // would form a provider type-inference cycle.
   return svc;
 });
