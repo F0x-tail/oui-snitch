@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT
 part of 'device_config.dart';
 
 enum _DetSort {
@@ -17,7 +18,9 @@ int _detRadioRank(Map<String, dynamic> d) {
   if (isBleMethod(method)) return 0;
   if (isWifiMethod(method)) return 1;
   final engine = (d['engine'] as String?) ?? '';
-  if (engine == 'flockBle' || engine == 'detector') return 0;
+  if (engine == 'axon' || engine == 'flockBle' || engine == 'detector') {
+    return 0;
+  }
   if (engine == 'flockWifi') return 1;
   final ch = (d['channel'] as int?) ?? 0;
   return (ch >= 1 && ch <= 14) ? 1 : 0;
@@ -237,6 +240,7 @@ class _DetectionsTabState extends ConsumerState<_DetectionsTab> {
   }
 
   Color _engineColor(String engine) => switch (engine) {
+    'axon' => AppTheme.axon,
     'flockBle' => AppTheme.flockBle,
     'flockWifi' => AppTheme.flockWifi,
     'detector' => AppTheme.detector,
@@ -245,6 +249,7 @@ class _DetectionsTabState extends ConsumerState<_DetectionsTab> {
   };
 
   String _engineLabel(String engine) => switch (engine) {
+    'axon' => 'AXON',
     'flockBle' => 'FLOCK BLE',
     'flockWifi' => 'FLOCK WiFi',
     'detector' => 'DETECTOR',

@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT
 import 'dart:io';
 
 import 'package:flutter/services.dart';
@@ -175,16 +176,14 @@ class LiveActivityService {
 
   static String resolvePrimaryMode(Set<String> activeEngines, {String? foxhuntTarget}) {
     final hasWardrive = activeEngines.contains('wardrive');
-    final hasFlockBle = activeEngines.contains('flockBle');
     final hasFlockWifi = activeEngines.contains('flockWifi');
-    final hasFlock = hasFlockBle || hasFlockWifi;
+    final hasFlock = hasFlockWifi;
 
     if (foxhuntTarget != null && activeEngines.contains('foxhunter')) return 'foxhunter';
     if (hasWardrive && hasFlock) return 'wardriveFlock';
     if (hasWardrive) return 'wardrive';
-    if (hasFlockBle && hasFlockWifi) return 'flockDual';
-    if (hasFlockBle) return 'flockBle';
     if (hasFlockWifi) return 'flockWifi';
+    if (activeEngines.contains('axon')) return 'axon';
     if (activeEngines.contains('skySpy')) return 'skySpy';
     if (activeEngines.contains('detector')) return 'detector';
     if (activeEngines.contains('uniPwn')) return 'uniPwn';

@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT
 import 'dart:async';
 
 import 'package:flutter/material.dart';
@@ -16,11 +17,47 @@ import 'package:oui_spy/features/home/engine_card.dart';
 import 'package:oui_spy/features/home/status_bar.dart';
 import 'package:oui_spy/theme/app_theme.dart';
 
-class HomeScreen extends ConsumerWidget {
+class HomeScreen extends ConsumerStatefulWidget {
   const HomeScreen({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<HomeScreen> createState() => _HomeScreenState();
+}
+
+class _HomeScreenState extends ConsumerState<HomeScreen> {
+  StreamSubscription<String>? _pairingSub;
+
+  @override
+  void initState() {
+    super.initState();
+    // A failed pairing leaves the board unreachable until the user reads its
+    // passkey off the USB console, which is too much to say in a snackbar.
+    _pairingSub = ref.read(bleManagerProvider).pairingFailures.listen((msg) {
+      if (!mounted) return;
+      showDialog<void>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          title: const Text('Pairing failed'),
+          content: Text(msg),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(ctx).pop(),
+              child: const Text('OK'),
+            ),
+          ],
+        ),
+      );
+    });
+  }
+
+  @override
+  void dispose() {
+    _pairingSub?.cancel();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final t = AppTheme.of(context);
     final state = ref.watch(appStateProvider);
 
@@ -417,16 +454,25 @@ class _ConnectedView extends ConsumerWidget {
 
           SizedBox(height: pad),
 
-          _SectionLabel(label: 'SAFETY', color: AppTheme.flockBle),
+          _SectionLabel(label: 'SAFETY', color: AppTheme.axon),
           const SizedBox(height: 6),
-          // Flock BLE is deliberately absent. Upstream flock-you reports that
-          // the community BLE method stopped working in spring 2026; the
-          // Wi-Fi IE fingerprint is the reliable path. The engine still exists
-          // and can be enabled from Config — it may still catch older or
-          // unpatched hardware — it just no longer occupies half of this row.
+          // Two different findings, so two tiles: a municipal ALPR camera on a
+          // pole, and duty equipment worn by someone close enough to hear.
           SizedBox(
             height: _mediumCardHeight(context),
-            child: _sizedCard(Engine.flockWifi, CardSize.medium, state, wd),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Expanded(
+                  child:
+                      _sizedCard(Engine.flockWifi, CardSize.medium, state, wd),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: _sizedCard(Engine.axon, CardSize.medium, state, wd),
+                ),
+              ],
+            ),
           ),
 
           SizedBox(height: pad),
@@ -908,6 +954,7 @@ String _spoolBreakdown(Map<String, int> byEngine) {
   if (byEngine.isEmpty) return '';
   const label = {
     'flockBle': 'flock',
+    'axon': 'axon',
     'flockWifi': 'flock',
     'skySpy': 'drone',
     'detector': 'detector',

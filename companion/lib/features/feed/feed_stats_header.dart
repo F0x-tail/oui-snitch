@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:oui_spy/core/models/detection.dart';
@@ -77,7 +78,7 @@ class FeedStatsHeader extends ConsumerWidget {
 
   static List<_ChipEntry> _topFlock(List<Detection> dets, int n) {
     final flockDets = dets.where((d) =>
-        d.engine == Engine.flockBle ||
+        d.engine == Engine.axon ||
         d.engine == Engine.flockWifi ||
         (d.engine == Engine.wardrive && d.method == 'flock_oui'));
     final macCounts = <String, _FlockAgg>{};

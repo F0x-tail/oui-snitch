@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT
 import 'dart:io';
 
 import 'package:drift/drift.dart';
@@ -390,7 +391,7 @@ class AppDatabase extends _$AppDatabase {
   Future<List<Map<String, dynamic>>> getFlockDetectorDetections() async {
     final rows = await (select(detections)
           ..where((d) => d.engine.isIn([
-                'flockBle', 'flockWifi', 'detector', 'skySpy',
+                'flockBle', 'flockWifi', 'detector', 'skySpy', 'axon',
               ]))
           ..orderBy([(d) => OrderingTerm.desc(d.appTimestamp)]))
         .get();
@@ -492,7 +493,8 @@ class AppDatabase extends _$AppDatabase {
       (delete(detections)..where((d) => d.id.equals(id))).go();
 
   Future<int> clearFlockDetectorDetections() => (delete(detections)
-        ..where((d) => d.engine.isIn(['flockBle', 'flockWifi', 'detector', 'skySpy'])))
+        ..where((d) => d.engine.isIn(
+            ['flockBle', 'flockWifi', 'detector', 'skySpy', 'axon'])))
       .go();
 
   Future<void> deleteDetectionsByMacs(String sessionId, List<String> macs) {

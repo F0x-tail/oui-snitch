@@ -1,11 +1,16 @@
+// SPDX-License-Identifier: MIT
 import 'package:oui_spy/core/models/detection.dart';
 import 'package:oui_spy/core/models/engine.dart';
 
 /// Maps a raw `detections` row map onto the app-side [Detection] model.
 Detection detectionFromDbRow(Map<String, dynamic> row) {
   final engineName = row['engine'] as String;
+  // Slot 1 was 'flockBle' before it was reused for Axon. Rows written by older
+  // builds keep the old name, so map it onto the same slot rather than letting
+  // the orElse below silently file them under wardrive.
+  final canonical = engineName == 'flockBle' ? Engine.axon.name : engineName;
   final engine = Engine.values.firstWhere(
-    (e) => e.name == engineName,
+    (e) => e.name == canonical,
     orElse: () => Engine.wardrive,
   );
 
@@ -38,7 +43,10 @@ Detection detectionFromDbRow(Map<String, dynamic> row) {
     wardrive: engine == Engine.wardrive
         ? WardriveExtension(ssid: ssid, authMode: authMode, deviceName: deviceName)
         : null,
-    flock: (engine == Engine.flockBle || engine == Engine.flockWifi)
+    // Slot 1 no longer carries a Flock payload: Axon reports detector-shaped
+    // events (confidence + filter_desc), which this mapper does not restore
+    // for any engine, so the slot simply has no extension here.
+    flock: engine == Engine.flockWifi
         ? FlockExtension(
             isRaven: (row['isRaven'] as bool?) ?? false,
             ravenFirmware: row['ravenFirmware'] as String?,

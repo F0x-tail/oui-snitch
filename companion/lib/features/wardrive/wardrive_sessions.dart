@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT
 part of 'wardrive_screen.dart';
 
 class _CompletedSessionBar extends ConsumerStatefulWidget {
@@ -357,7 +358,7 @@ class _CompletedSessionBarState extends ConsumerState<_CompletedSessionBar> {
                 itemCount: flockDets.length,
                 itemBuilder: (_, i) {
                   final d = flockDets[i];
-                  final isBle = d.engine == Engine.flockBle;
+                  final isBle = d.engine == Engine.axon;
                   final engineColor = isBle ? AppTheme.flockBle : AppTheme.flockWifi;
                   final rssiNorm = ((d.rssi + 100) / 70).clamp(0.0, 1.0);
                   final rssiColor = Color.lerp(AppTheme.error, AppTheme.success, rssiNorm)!;

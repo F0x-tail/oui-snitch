@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT
 #ifdef OUISPY_DONGLE
 
 #include "dongle.h"
@@ -321,7 +322,7 @@ static const char* wigleDevice(void) {
 static const char* engShortName(uint8_t id) {
     switch ((EngineId)id) {
         case ENGINE_DETECTOR:   return "DETECT";
-        case ENGINE_FLOCK_BLE:  return "FLOCKB";
+        case ENGINE_AXON:  return "AXON";
         case ENGINE_FLOCK_WIFI: return "FLOCKW";
         case ENGINE_FOXHUNTER:  return "FOXHNT";
         case ENGINE_SKYSPY:     return "SKYSPY";
@@ -738,7 +739,7 @@ static void iconPcap(int16_t x, int16_t y, uint16_t c) {
 static void drawEngineIcon(uint8_t id, int16_t x, int16_t y, uint16_t c) {
     switch ((EngineId)id) {
         case ENGINE_DETECTOR:   iconDetector(x, y, c);   break;
-        case ENGINE_FLOCK_BLE:  iconFlockBle(x, y, c);   break;
+        case ENGINE_AXON:  iconDetector(x, y, c);   break;
         case ENGINE_FLOCK_WIFI: iconFlockWifi(x, y, c);  break;
         case ENGINE_FOXHUNTER:  iconFoxhunter(x, y, c);  break;
         case ENGINE_SKYSPY:     iconSkyspy(x, y, c);     break;
@@ -755,7 +756,7 @@ static const uint16_t kEngColor[ENGINE_COUNT] = {
 };
 
 static const uint8_t kStripEngines[DONGLE_STRIP_MAX] = {
-    ENGINE_DETECTOR, ENGINE_FLOCK_BLE, ENGINE_FLOCK_WIFI, ENGINE_FOXHUNTER,
+    ENGINE_DETECTOR, ENGINE_AXON, ENGINE_FLOCK_WIFI, ENGINE_FOXHUNTER,
     ENGINE_SKYSPY, ENGINE_UNIPWN,
     ENGINE_WARDRIVE, ENGINE_PCAP,
 };
@@ -874,7 +875,7 @@ static void tftDraw(void) {
 
     const uint8_t wifiMask = (1 << ENGINE_FLOCK_WIFI) | (1 << ENGINE_WARDRIVE) |
                              (1 << ENGINE_PCAP) | (1 << ENGINE_SKYSPY);
-    const uint8_t bleMask  = (1 << ENGINE_FLOCK_BLE) | (1 << ENGINE_UNIPWN) |
+    const uint8_t bleMask  = (1 << ENGINE_AXON) | (1 << ENGINE_UNIPWN) |
                              (1 << ENGINE_DETECTOR) | (1 << ENGINE_FOXHUNTER);
     drawWifiIcon(LY_WIFI_IX, LY_WIFI_IY, (mask & wifiMask) ? DGX_LIME : DGX_GREY);
     drawBleIcon(LY_BLE_IX, LY_BLE_IY, (mask & bleMask) ? DGX_SKY : DGX_GREY);
@@ -1009,10 +1010,9 @@ static void cycleDetMode(uint32_t now) {
 }
 
 static void toggleFlock(uint32_t now) {
-    bool on = engineGetState(ENGINE_FLOCK_BLE) != ESTATE_DISABLED ||
-              engineGetState(ENGINE_FLOCK_WIFI) != ESTATE_DISABLED;
-    if (on) { engineDisableLocal(ENGINE_FLOCK_BLE); engineDisableLocal(ENGINE_FLOCK_WIFI); }
-    else    { engineEnableLocal(ENGINE_FLOCK_BLE);  engineEnableLocal(ENGINE_FLOCK_WIFI); }
+    bool on = engineGetState(ENGINE_FLOCK_WIFI) != ESTATE_DISABLED;
+    if (on) { engineDisableLocal(ENGINE_FLOCK_WIFI); }
+    else    { engineEnableLocal(ENGINE_FLOCK_WIFI); }
     Serial.printf("[DONGLE] flock %s\n", on ? "off" : "on");
     buttonFlash(now, 0, 90, 40);
 }
@@ -1264,14 +1264,15 @@ void dongleOnDetection(const DetectionEvent* evt) {
     if (!evt) return;
     s_hits++;
 
-    bool isBle = (evt->engine_id == ENGINE_FLOCK_BLE ||
-                  evt->engine_id == ENGINE_UNIPWN ||
+    bool isBle = (evt->engine_id == ENGINE_UNIPWN ||
                   evt->channel == 0);
     const char* name = "";
     if (evt->engine_id == ENGINE_WARDRIVE)
         name = isBle ? evt->ext.wardrive.device_name : evt->ext.wardrive.ssid;
-    else if (evt->engine_id == ENGINE_FLOCK_BLE || evt->engine_id == ENGINE_FLOCK_WIFI)
+    else if (evt->engine_id == ENGINE_FLOCK_WIFI)
         name = evt->ext.flock.name;
+    else if (evt->engine_id == ENGINE_AXON)
+        name = evt->ext.detector.filter_desc;
     else if (evt->engine_id == ENGINE_SKYSPY)
         name = evt->ext.odid.uav_id;
     else if (evt->engine_id == ENGINE_DETECTOR)
@@ -1289,7 +1290,7 @@ void dongleOnDetection(const DetectionEvent* evt) {
 
     switch ((EngineId)evt->engine_id) {
         case ENGINE_DETECTOR:
-        case ENGINE_FLOCK_BLE:
+        case ENGINE_AXON:
         case ENGINE_FLOCK_WIFI:
         case ENGINE_SKYSPY:
         case ENGINE_UNIPWN:

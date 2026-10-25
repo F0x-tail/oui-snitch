@@ -81,7 +81,7 @@ Map<String, dynamic> _$$DetectionImplToJson(_$DetectionImpl instance) =>
 
 const _$EngineEnumMap = {
   Engine.detector: 'detector',
-  Engine.flockBle: 'flockBle',
+  Engine.axon: 'axon',
   Engine.flockWifi: 'flockWifi',
   Engine.foxhunter: 'foxhunter',
   Engine.skySpy: 'skySpy',

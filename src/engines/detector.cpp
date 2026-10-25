@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT
 #include "detector.h"
 #include "protocol.h"
 #include "../mesh_espnow.h"
@@ -9,6 +10,7 @@
 #include <WiFi.h>
 #include <esp_wifi.h>
 #include "camera_match.h"
+#include "axon_match.h"
 
 // Extended camera OUI entries (reserved for observed Wi-Fi module OUIs) stay off
 // unless explicitly enabled; see camera_oui.h.
@@ -105,7 +107,8 @@ static inline int IRAM_ATTR beaconSsid(const uint8_t* p, int len, const uint8_t*
     return -1;
 }
 
-static const uint8_t AXON_OUI[3] = {0x00, 0x25, 0xdf};
+// AXON_OUI and the signature helpers live in axon_match.h, shared with the
+// dedicated Axon engine so the two cannot drift apart.
 
 // Law-enforcement / public-safety vendors, from the IEEE MA-L registry.
 // Axon only ships duty equipment, so its OUI is meaningful on its own. The
@@ -450,19 +453,17 @@ static void detectorCheckSignatures(NimBLEAdvertisedDevice* dev, const uint8_t* 
         if (dev->haveManufacturerData()) {
             std::string am = dev->getManufacturerData();
             if (am.size() >= 2) {
-                uint16_t cid = (uint16_t)((uint8_t)am[0] | ((uint8_t)am[1] << 8));
-                axonMfg = (cid == 0x034D);
+                axonMfg = axonMfgMatches((const uint8_t*)am.data(), am.size());
             }
         }
-        bool axonSvc = dev->isAdvertisingService(NimBLEUUID((uint16_t)0xFC81)) ||
-                       dev->isAdvertisingService(NimBLEUUID((uint16_t)0xFE6B)) ||
-                       dev->isAdvertisingService(NimBLEUUID((uint16_t)0xFE6C));
-        bool axonMac = (memcmp(mac, AXON_OUI, 3) == 0);
+        bool axonSvc = false;
+        for (unsigned u = 0; u < sizeof(AXON_SVC_UUIDS)/sizeof(AXON_SVC_UUIDS[0]); u++) {
+            if (dev->isAdvertisingService(NimBLEUUID(AXON_SVC_UUIDS[u]))) { axonSvc = true; break; }
+        }
+        bool axonMac = axonMacMatches(mac);
         const char* leVendor = leVendorLookup(mac);
-        uint8_t tier = DET_CONF_NONE;
-        if ((axonMfg || axonSvc) && axonMac)   tier = DET_CONF_VERIFIED;
-        else if (axonMfg || axonSvc || axonMac) tier = DET_CONF_HIGH;
-        else if (leVendor)                      tier = DET_CONF_SUSPECTED;
+        uint8_t tier = axonConfidence(axonMfg || axonSvc, axonMac);
+        if (tier == DET_CONF_NONE && leVendor) tier = DET_CONF_SUSPECTED;
         if (tier != DET_CONF_NONE && !sigDedup.check(mac)) {
             const char* vendor = axonMac ? "Axon" : (leVendor ? leVendor : "Axon");
             const char* leKind = axonMac ? nullptr : leKindLookup(mac);
@@ -737,7 +738,7 @@ static bool IRAM_ATTR detectorSigFrameISR(const uint8_t* p, int len, int rssi, u
 
     if (sigMask & SIG_AXON) {
         const uint8_t* src = &p[10];
-        bool axonMac = (memcmp(src, AXON_OUI, 3) == 0);
+        bool axonMac = axonMacMatches(src);
         const char* leVendor = axonMac ? "Axon" : leVendorLookup(src);
         if (leVendor) {
             if (!axonDedupISR.check(src)) {

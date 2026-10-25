@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT
 import 'package:oui_spy/core/models/engine.dart';
 
 enum RadioFilter { ble, wifi }
@@ -17,7 +18,7 @@ enum FilterPreset {
 
   static const _bleEngines = {
     Engine.detector,
-    Engine.flockBle,
+    Engine.axon,
     Engine.foxhunter,
     Engine.uniPwn,
     Engine.wardrive,
@@ -29,7 +30,7 @@ enum FilterPreset {
     Engine.skySpy,
     Engine.wardrive,
   };
-  static const _flockEngines = {Engine.flockBle, Engine.flockWifi};
+  static const _flockEngines = {Engine.flockWifi};
   static const _droneEngines = {Engine.skySpy};
   static const _alertEngines = {Engine.detector};
 

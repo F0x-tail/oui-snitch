@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -223,7 +224,11 @@ class AppTheme {
 
   // Engine colors — muted neon, same saturation/lightness family
   static const detector = Color(0xFF6B8AFF);
-  static const flockBle = Color(0xFF9B6BFF);
+  static const axon = Color(0xFF9B6BFF);
+  /// Slot 1's colour under its former name. Kept because much of the UI uses
+  /// it as the generic "this row is BLE" purple rather than as an engine
+  /// colour, and those call sites are not about slot 1 at all.
+  static const flockBle = axon;
   static const flockWifi = Color(0xFFE66B9B);
   static const foxhunter = Color(0xFF5AE6A1);
   static const skySpy = Color(0xFF5AE6D6);

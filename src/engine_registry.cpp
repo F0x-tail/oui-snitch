@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT
 #include "engine_registry.h"
 #include "engines/pcap.h"
 #include "mesh_espnow.h"
@@ -23,7 +24,7 @@ static bool isWifiEngine(EngineId id) {
 }
 
 static bool isBleScanEngine(EngineId id) {
-    return id == ENGINE_FLOCK_BLE || id == ENGINE_UNIPWN ||
+    return id == ENGINE_AXON || id == ENGINE_UNIPWN ||
            id == ENGINE_FOXHUNTER || id == ENGINE_DETECTOR ||
            id == ENGINE_PCAP;
 }
@@ -401,7 +402,7 @@ void engineRequestAutoPcap(EngineId src, uint8_t channel, const uint8_t* mac) {
     if (!autoPcapEnabled) return;
     switch (src) {
         case ENGINE_DETECTOR:
-        case ENGINE_FLOCK_BLE:
+        case ENGINE_AXON:
         case ENGINE_FLOCK_WIFI:
         case ENGINE_SKYSPY:
         case ENGINE_UNIPWN:
@@ -430,7 +431,7 @@ void engineRequestAutoPcap(EngineId src, uint8_t channel, const uint8_t* mac) {
 
     bool isBle;
     switch (src) {
-        case ENGINE_FLOCK_BLE:
+        case ENGINE_AXON:
         case ENGINE_UNIPWN:
             isBle = true; break;
         case ENGINE_FLOCK_WIFI:

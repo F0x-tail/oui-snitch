@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:oui_spy/core/detection_icon.dart';
@@ -35,9 +36,13 @@ void main() {
     expect(icons['glasses'], Icons.visibility);
   });
 
-  test('Flock cameras share one symbol across both radios', () {
-    expect(detectionMapIcon(_d(Engine.flockBle, 'oui_addr2')),
-        detectionMapIcon(_d(Engine.flockWifi, 'wildcard_probe_ie_sig')));
+  test('Axon duty equipment does not wear the Flock camera symbol', () {
+    // Slot 1 used to be the Flock BLE engine, so the two shared the videocam.
+    // It is the Axon engine now: a body camera on an officer and a municipal
+    // ALPR pole are different findings and must not look alike on the map.
+    expect(detectionMapIcon(_d(Engine.axon, 'axon')), Icons.local_police);
+    expect(detectionMapIcon(_d(Engine.axon, 'axon')),
+        isNot(detectionMapIcon(_d(Engine.flockWifi, 'wildcard_probe_ie_sig'))));
   });
 
   test('Flock is visually distinct from a consumer camera', () {

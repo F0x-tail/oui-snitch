@@ -1,6 +1,6 @@
+// SPDX-License-Identifier: MIT
 import 'package:flutter/material.dart';
 import 'package:oui_spy/core/models/detection.dart';
-import 'package:oui_spy/core/models/engine.dart';
 import 'package:oui_spy/theme/app_theme.dart';
 
 Color _flockConfColor(FlockConfidence c) => switch (c) {
@@ -116,8 +116,9 @@ class _Row extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final t = AppTheme.of(context);
-    final isBle = d.engine == Engine.flockBle;
-    final color = isBle ? AppTheme.flockBle : AppTheme.flockWifi;
+    // Flock is Wi-Fi only now: the BLE engine was removed and its slot reused
+    // for Axon, so every row in this panel is a Wi-Fi hit.
+    const color = AppTheme.flockWifi;
     final isRaven = d.flock?.isRaven ?? false;
     final rssiNorm = ((d.rssi + 100) / 70).clamp(0.0, 1.0);
     final rssiColor = Color.lerp(AppTheme.error, AppTheme.success, rssiNorm)!;
@@ -152,7 +153,7 @@ class _Row extends StatelessWidget {
                   borderRadius: BorderRadius.circular(2),
                 ),
                 child: Text(
-                  isBle ? 'B' : 'W',
+                  'W',
                   style: TextStyle(color: color, fontSize: 7, fontWeight: FontWeight.w700),
                 ),
               ),

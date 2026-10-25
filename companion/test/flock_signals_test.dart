@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT
 import 'package:flutter_test/flutter_test.dart';
 import 'package:oui_spy/core/ble/ble_protocol.dart';
 import 'package:oui_spy/core/models/detection.dart';
@@ -42,7 +43,7 @@ Detection _decode(List<int> data) => BleProtocol.decodeDetection(
 void main() {
   test('bare serial name survives the wire verbatim', () {
     final d = _decode(_flockPacket(name: '0102000000'));
-    expect(d.engine, Engine.flockBle);
+    expect(d.engine, Engine.axon);
     expect(d.deviceName, '0102000000');
     expect(d.method, 'name_match');
   });

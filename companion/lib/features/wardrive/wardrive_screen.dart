@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT
 import 'dart:convert';
 import 'dart:math';
 import 'dart:math' as math;
@@ -60,7 +61,7 @@ part 'wardrive_popups.dart';
 @visibleForTesting
 bool mapShowsEngine(Engine e) =>
     e == Engine.skySpy ||
-    e == Engine.flockBle ||
+    e == Engine.axon ||
     e == Engine.flockWifi ||
     e == Engine.detector ||
     e == Engine.wardrive;
@@ -1131,7 +1132,7 @@ class _WardriveScreenState extends ConsumerState<WardriveScreen> with WidgetsBin
     } else if (filterActive) {
       geoDetections = allGeo.where((d) {
         if (wd.flockFilter &&
-            (d.engine == Engine.flockBle || d.engine == Engine.flockWifi)) {
+            d.engine == Engine.flockWifi) {
           return true;
         }
         if (wd.detectorFilter && (d.engine == Engine.detector || isAlerted(d))) return true;
@@ -1148,7 +1149,7 @@ class _WardriveScreenState extends ConsumerState<WardriveScreen> with WidgetsBin
     final priority = <Detection>[];
     final clusterable = <Detection>[];
     for (final d in geoDetections) {
-      final isFlock = d.engine == Engine.flockBle || d.engine == Engine.flockWifi;
+      final isFlock = d.engine == Engine.flockWifi;
       final isDrone = d.engine == Engine.skySpy;
       final isDetector = d.engine == Engine.detector;
       if (isFlock || isDrone || isDetector || isAlerted(d)) {
@@ -1411,7 +1412,7 @@ class _WardriveScreenState extends ConsumerState<WardriveScreen> with WidgetsBin
         continue;
       }
 
-      final pinColor = isAlerted(d) && d.engine != Engine.detector && d.engine != Engine.flockBle && d.engine != Engine.flockWifi
+      final pinColor = isAlerted(d) && d.engine != Engine.detector && d.engine != Engine.axon && d.engine != Engine.flockWifi
           ? AppTheme.warning
           : wt.engineColor(d.engine);
       final box = (fan.length + pinHead + 5) * 2;

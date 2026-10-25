@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT
 import 'dart:async';
 import 'dart:io';
 
@@ -165,7 +166,7 @@ class _FeedScreenState extends ConsumerState<FeedScreen> {
 
     final feedFlockMacs = <String>{};
     for (final d in feedDetections) {
-      if (d.engine == Engine.flockBle || d.engine == Engine.flockWifi) {
+      if (d.engine == Engine.flockWifi) {
         feedFlockMacs.add(d.macAddress);
       }
     }

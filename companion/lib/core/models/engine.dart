@@ -1,17 +1,19 @@
+// SPDX-License-Identifier: MIT
 import 'package:flutter/material.dart';
 
 /// All scan engines available in the OUI-SPY firmware.
 enum Engine {
   // Mid-tone hues: vivid on the dark background, still legible on white.
   detector('Detector', 'WiFi + BLE watchlist alerting', Color(0xFF3286E6), 0x01),
-  /// RESERVED — engine removed from the firmware (the community BLE method
-  /// stopped working in spring 2026; the Wi-Fi IE fingerprint is the reliable
-  /// path). The entry is kept because `Engine.index` IS the wire protocol
-  /// engine ID and indexes the firmware's state array: deleting it would shift
-  /// every later engine's ID and silently mis-target enable/disable commands,
-  /// including on mesh nodes running other builds. Historical detections stored
-  /// as 'flockBle' also still decode through it.
-  flockBle('Flock BLE', 'Removed — use Flock Wi-Fi', Color(0xFF9A35E6), 0x02),
+  /// Slot 1. Previously the Flock BLE engine, removed when the community BLE
+  /// method stopped working (the Wi-Fi IE fingerprint is the reliable path).
+  /// The slot was held reserved because `Engine.index` IS the wire-protocol
+  /// engine ID and indexes the firmware's state array — deleting it would
+  /// shift every later engine's ID and silently mis-target enable/disable
+  /// commands, including on mesh nodes running other builds — and is now
+  /// reused for duty-equipment detection. Historical rows stored as 'flockBle'
+  /// are mapped on read; see detectionFromDbRow.
+  axon('Axon', 'Axon / TASER duty equipment', Color(0xFF9A35E6), 0x02),
   flockWifi(
       'Flock WiFi', 'Flock Safety WiFi promiscuous', Color(0xFFE63577), 0x04),
   foxhunter('Foxhunter', 'WiFi + BLE proximity tracker', Color(0xFF1FA866), 0x08),
@@ -32,7 +34,7 @@ enum Engine {
 
   bool get isBle =>
       this == detector ||
-      this == flockBle ||
+      this == axon ||
       this == foxhunter ||
       this == uniPwn;
 
@@ -45,6 +47,7 @@ enum Engine {
   /// Engines that scan both WiFi and BLE radios.
   bool get isDualRadio =>
       this == detector ||
+      this == axon ||
       this == foxhunter ||
       this == wardrive ||
       this == skySpy;
@@ -52,7 +55,7 @@ enum Engine {
   IconData get icon {
     return switch (this) {
       Engine.detector => Icons.radar,
-      Engine.flockBle => Icons.videocam,
+      Engine.axon => Icons.local_police,
       Engine.flockWifi => Icons.wifi,
       Engine.foxhunter => Icons.gps_fixed,
       Engine.skySpy => Icons.flight,

@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT
 import 'dart:io';
 
 import 'package:flutter/material.dart';
@@ -6,6 +7,7 @@ import 'package:geolocator/geolocator.dart';
 import 'package:permission_handler/permission_handler.dart' as ph;
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:oui_spy/core/app_state.dart';
+import 'package:oui_spy/core/ble/ble_manager.dart';
 import 'package:oui_spy/core/debug_log.dart';
 import 'package:oui_spy/core/gps/gps_provider.dart';
 import 'package:oui_spy/core/models/engine.dart';
@@ -15,11 +17,11 @@ import 'package:oui_spy/theme/app_theme.dart';
 bool targetEngineRunning(AppState app, WardriveTarget m) {
   bool on(Engine e) => app.getEngineState(e) != EngineState.disabled;
   return switch (m) {
-    WardriveTarget.flock => on(Engine.flockBle) || on(Engine.flockWifi),
+    WardriveTarget.flock => on(Engine.flockWifi),
     WardriveTarget.drone => on(Engine.skySpy),
     WardriveTarget.detector => on(Engine.detector),
     WardriveTarget.wigle => on(Engine.wardrive),
-    WardriveTarget.wigleFlock => on(Engine.wardrive) || on(Engine.flockBle) || on(Engine.flockWifi),
+    WardriveTarget.wigleFlock => on(Engine.wardrive) || on(Engine.flockWifi),
   };
 }
 
@@ -214,6 +216,21 @@ Future<bool> startWardriveSession(BuildContext context, WidgetRef ref, {bool req
   if (!await confirmRadioRoles(context, ref)) {
     DebugLog.log('WARDRIVE: start aborted — radio roles canceled');
     return false;
+  }
+  // Wardrive can't be captured offline on this board: it is not spoolable (no
+  // SD card — the firmware only spools to the small internal flash, and
+  // deliberately excludes wardrive from it). So while "Keep scanning while
+  // disconnected" is on, a wardrive runs live only — it records nothing once
+  // the phone is out of range, and the experimental mode's spool-flush is
+  // skipped so it does not swallow the live feed. Warn, but still start.
+  if (ref.read(bleManagerProvider).offlineScanEnabled) {
+    DebugLog.log('WARDRIVE: offline-scan on — wardrive is live-only (no SD capture)');
+    messenger?.showSnackBar(const SnackBar(
+      content: Text(
+          'Keep-scanning is on: wardrive runs live only and is NOT captured '
+          'while disconnected (needs an SD card). Turn it off for offline runs.'),
+      duration: Duration(seconds: 6),
+    ));
   }
   await ref.read(wardriveProvider).startSession();
   return true;

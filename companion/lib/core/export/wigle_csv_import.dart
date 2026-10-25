@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT
 import 'dart:convert';
 import 'dart:io';
 
@@ -363,7 +364,7 @@ class WigleCsvRescan {
         );
         rowsUpdated++;
         if (targetEngine == Engine.detector.name) newDetector.add(mac);
-        if (targetEngine == Engine.flockBle.name ||
+        if (targetEngine == Engine.axon.name ||
             targetEngine == Engine.flockWifi.name) {
           newFlock.add(mac);
         }
@@ -450,7 +451,7 @@ class WigleCsvRescan {
         );
         rowsUpdated++;
         if (targetEngine == Engine.detector.name) newDetector.add(mac);
-        if (targetEngine == Engine.flockBle.name ||
+        if (targetEngine == Engine.axon.name ||
             targetEngine == Engine.flockWifi.name) {
           newFlock.add(mac);
         }

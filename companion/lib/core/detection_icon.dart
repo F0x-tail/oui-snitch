@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT
 import 'package:flutter/material.dart';
 import 'package:oui_spy/core/models/detection.dart';
 import 'package:oui_spy/core/models/engine.dart';
@@ -15,7 +16,8 @@ import 'package:oui_spy/core/models/engine.dart';
 IconData detectionMapIcon(Detection d) => switch (d.engine) {
       Engine.detector => detectorMethodIcon(d.method),
       // Flock cameras, either radio: one symbol, because it is one device.
-      Engine.flockBle || Engine.flockWifi => Icons.videocam,
+      Engine.axon => Icons.local_police,
+      Engine.flockWifi => Icons.videocam,
       Engine.skySpy => Icons.flight,
       Engine.uniPwn => Icons.smart_toy,
       Engine.foxhunter => Icons.gps_fixed,
