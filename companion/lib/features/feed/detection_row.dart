@@ -6,6 +6,7 @@ import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 import 'package:oui_spy/core/ble/ble_manager.dart';
 import 'package:oui_spy/core/app_state.dart';
+import 'package:oui_spy/core/privacy.dart';
 import 'package:oui_spy/core/deflock/deflock_provider.dart';
 import 'package:oui_spy/core/drone_grouping.dart';
 import 'package:oui_spy/core/models/detection.dart';
@@ -61,8 +62,12 @@ class DetectionRow extends ConsumerWidget {
           ),
         ),
         child: Builder(builder: (_) {
-          final headline = _headline(detection, manufacturer);
-          final headlineIsMac = headline == detection.macAddress.toUpperCase();
+          final privacy = ref.watch(privacyModeProvider);
+          final rawHeadline = _headline(detection, manufacturer);
+          final headlineIsMac = rawHeadline == detection.macAddress.toUpperCase();
+          final headline = headlineIsMac
+              ? maskMac(rawHeadline, privacy)
+              : maskId(rawHeadline, privacy);
           return Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             mainAxisSize: MainAxisSize.min,
@@ -268,6 +273,8 @@ void showDetectionDetails(
     {bool showMapAction = true,
     VoidCallback? onDelete,
     VoidCallback? onShowMap}) {
+    // Display-only masking; copy/ignore actions below still use the real values.
+    final privacy = ref.read(privacyModeProvider);
     final nodeLabel = detection.sourceNodeId.isEmpty
         ? ''
         : ref.read(appStateProvider).labelForNode(detection.sourceNodeId);
@@ -299,7 +306,7 @@ void showDetectionDetails(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
-              detection.macAddress.toUpperCase(),
+              maskMac(detection.macAddress.toUpperCase(), privacy),
               style: TextStyle(
                 color: t.textPrimary, fontSize: 14,
                 fontFamily: 'monospace', fontWeight: FontWeight.w600,
@@ -309,7 +316,7 @@ void showDetectionDetails(
               Text(vendor,
                   style: TextStyle(color: t.textSecondary, fontSize: 12)),
             if (detection.deviceName.isNotEmpty)
-              Text(detection.deviceName,
+              Text(maskId(detection.deviceName, privacy),
                   style: TextStyle(color: t.textSecondary, fontSize: 12)),
             const SizedBox(height: 8),
             Flexible(

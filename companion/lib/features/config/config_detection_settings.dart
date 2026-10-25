@@ -188,6 +188,21 @@ class _DetectionSettingsTabState extends ConsumerState<_DetectionSettingsTab> {
         // which is what made "engines all off but still notifying" possible.
         // The board is the sensor; the phone is the display.
         const SizedBox(height: 20),
+        const ConfigSectionHeader(label: 'PRIVACY SCREEN'),
+        ConfigToggleRow(
+          icon: ref.watch(privacyModeProvider)
+              ? Icons.visibility_off
+              : Icons.visibility,
+          label: 'Mask identifiers on screen',
+          subtitle:
+              'Hides most of each MAC, SSID and device name in the app. '
+              'Display only — the database, CSV export and WiGLE upload still '
+              'contain the full values.',
+          color: AppTheme.accent,
+          value: ref.watch(privacyModeProvider),
+          onChanged: (v) => ref.read(privacyModeProvider.notifier).set(v),
+        ),
+        const SizedBox(height: 20),
       ],
     );
   }

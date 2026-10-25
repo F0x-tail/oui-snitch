@@ -54,6 +54,7 @@ import 'package:oui_spy/core/app_time.dart';
 import 'package:oui_spy/core/gps/gps_provider.dart';
 import 'package:oui_spy/theme/app_theme.dart';
 import 'package:oui_spy/widgets/map_tiles.dart';
+import 'package:oui_spy/core/privacy.dart';
 
 part 'config_wardrive_settings.dart';
 part 'config_wardrive_tab.dart';
