@@ -192,6 +192,13 @@ cd companion && flutter pub get && flutter build apk --release   # or ipa / maco
 - Company and service IDs: [Bluetooth SIG assigned numbers](https://bitbucket.org/bluetooth-SIG/public).
 - OUI sources: [zmattmanz](https://github.com/zmattmanz), [dougborg/AirHound](https://github.com/dougborg), [VirtuallyScott](https://github.com/VirtuallyScott).
 
+## Licence
+
+MIT — see [LICENSE](LICENSE). Some vendored files and build-time dependencies
+carry other terms; [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) lists them,
+including the LGPL condition that attaches to handing out prebuilt firmware
+binaries.
+
 ## Disclaimer
 
 Security-research and privacy-auditing tool. Follow local law on wireless scanning. Lawful use only.
