@@ -390,23 +390,38 @@ static void wardriveUpdateDedupWindow(uint32_t now) {
 // so this is a real failure mode here in a way it is not for a single-engine
 // device.
 //
-// g_engRawSeen is bumped on every callback before any filtering, so it moves
-// whenever the radio is alive, even somewhere with no networks worth logging.
+// The counter has to be fed by this engine's Wi-Fi callback and nothing else.
+// g_engRawSeen looks right and is not: it is a global that every engine bumps,
+// including this engine's own BLE scan callback. Watching it meant a wedged
+// sniffer was masked by whatever else was running — the detector shares the
+// BLE callback, so the counter kept climbing while no frame had arrived for
+// minutes — and, worse, that unrelated traffic could go quiet and trigger a
+// "recovery" on a radio that was fine.
+static volatile uint32_t wdWifiFrames = 0;
+
 #define WD_STALL_SWEEPS      4   // consecutive silent sweeps before acting
 #define WD_STALL_SWEEPS_HARD 8   // ... before the heavier recovery
 static uint32_t wdStallLastRaw   = 0;
 static uint8_t  wdStallSweeps    = 0;
 static bool     wdStallEverSaw   = false;
+// The heavy recovery stops and restarts the radio. It runs at most once per
+// start: if a cycle did not fix it, cycling every eight sweeps forever will
+// not either, and a radio torn down on a loop never recovers.
+static bool     wdStallCycled    = false;
 
 static void wardriveStallReset(void) {
-    wdStallLastRaw = g_engRawSeen;
+    wdStallLastRaw = wdWifiFrames;
     wdStallSweeps = 0;
     wdStallEverSaw = false;
+    wdStallCycled = false;
 }
 
 // Called once per completed sweep of the hop schedule.
 static void wardriveStallCheck(void) {
-    uint32_t raw = g_engRawSeen;
+    // Nothing to watch if we are not using the Wi-Fi radio at all.
+    if (!(wardriveRadio & 0x01)) return;
+
+    uint32_t raw = wdWifiFrames;
     if (raw != wdStallLastRaw) {
         wdStallLastRaw = raw;
         wdStallSweeps = 0;
@@ -424,18 +439,20 @@ static void wardriveStallCheck(void) {
                       (unsigned)wdStallSweeps);
         wifiCoexReassertPromiscuous();
         esp_wifi_set_channel(currentChannel, WIFI_SECOND_CHAN_NONE);
-    } else if (wdStallSweeps >= WD_STALL_SWEEPS_HARD) {
+    } else if (wdStallSweeps >= WD_STALL_SWEEPS_HARD && !wdStallCycled) {
         Serial.printf("[WARDRIVE] still no frames after %u sweeps — cycling radio\n",
                       (unsigned)wdStallSweeps);
+        wdStallCycled = true;
         if (wifiCoexCycleRadio()) {
             esp_wifi_set_channel(currentChannel, WIFI_SECOND_CHAN_NONE);
         }
-        wdStallSweeps = 0;  // give whichever recovery ran a chance to take
+        wdStallSweeps = 0;  // give the recovery a chance to take
     }
 }
 
 static void IRAM_ATTR wardriveWifiCb(void* buf, wifi_promiscuous_pkt_type_t type) {
     g_engRawSeen++;
+    wdWifiFrames++;
     if (!wardriveActive) return;
 
     if (type != WIFI_PKT_MGMT && type != WIFI_PKT_DATA) return;
