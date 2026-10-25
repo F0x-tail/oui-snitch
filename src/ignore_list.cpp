@@ -90,6 +90,11 @@ void ignoreListSet(const uint8_t* buf, size_t len) {
     }
     xSemaphoreTake(g_tmpLock, portMAX_DELAY);
     IgnoreSlot* tmp = g_tmp;
+    // Zero first: only vlen bytes of each value[] are written, and the
+    // change-detection memcmp below compares whole slots. Stale tail bytes
+    // from an earlier call would make an identical list look changed and
+    // force a needless version bump / re-sync.
+    memset(tmp, 0, sizeof(IgnoreSlot) * IGNORE_MAX_ENTRIES);
     uint8_t cnt = 0;
     size_t i = 0;
     uint8_t declared = buf[i++];
