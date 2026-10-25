@@ -402,8 +402,6 @@ class _ConnectedView extends ConsumerWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-          _SyncBar(state: state),
-          const SizedBox(height: 6),
           _SummaryStrip(state: state),
           SizedBox(height: pad),
 
@@ -551,108 +549,6 @@ class _SectionLabel extends StatelessWidget {
 /// So this shows: link state, and how long the current connection has held
 /// (a growing uptime is the "it has been solid" reassurance). SYNC forces a
 /// re-read for the rare in-connection missed push.
-class _SyncBar extends ConsumerStatefulWidget {
-  const _SyncBar({required this.state});
-  final AppState state;
-
-  @override
-  ConsumerState<_SyncBar> createState() => _SyncBarState();
-}
-
-class _SyncBarState extends ConsumerState<_SyncBar> {
-  Timer? _tick;
-  DateTime? _justSynced;
-
-  @override
-  void initState() {
-    super.initState();
-    // Keep the uptime label moving while the screen is idle. 5 s is plenty —
-    // the label resolves to minutes/hours once a connection is more than a
-    // minute old — and keeps wakeups low on a device left running for hours.
-    // This rebuilds only this small widget, not the whole screen.
-    _tick = Timer.periodic(const Duration(seconds: 5), (_) {
-      if (mounted) setState(() {});
-    });
-  }
-
-  @override
-  void dispose() {
-    _tick?.cancel();
-    super.dispose();
-  }
-
-  AppState get state => widget.state;
-
-  String _uptime(DateTime? since) {
-    if (since == null) return '';
-    final s = DateTime.now().difference(since).inSeconds;
-    if (s < 60) return '${s ~/ 5 * 5}s';     // 5 s granularity under a minute
-    final h = s ~/ 3600, m = (s % 3600) ~/ 60;
-    return h > 0 ? '${h}h ${m}m' : '${m}m';
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final t = AppTheme.of(context);
-    final cs = state.connectionState;
-    final justSynced = _justSynced != null &&
-        DateTime.now().difference(_justSynced!).inSeconds < 4;
-
-    // Map the real connection state to one honest status.
-    final (IconData icon, Color color, String text) = switch (cs) {
-      NodeConnectionState.ready => (
-          Icons.check_circle,
-          AppTheme.success,
-          justSynced
-              ? 'Synced ✓'
-              : 'Live · ${_uptime(state.sessionStartTime)}',
-        ),
-      NodeConnectionState.reconnecting => (
-          Icons.sync, AppTheme.warning, 'Reconnecting…'),
-      NodeConnectionState.scanning ||
-      NodeConnectionState.connecting ||
-      NodeConnectionState.negotiating ||
-      NodeConnectionState.syncing => (
-          Icons.bluetooth_searching, AppTheme.warning, 'Connecting…'),
-      NodeConnectionState.disconnected => (
-          Icons.link_off, t.textDim, 'Offline'),
-    };
-
-    final ready = cs == NodeConnectionState.ready;
-    return Row(
-      children: [
-        Icon(icon, size: 14, color: color),
-        const SizedBox(width: 6),
-        Expanded(
-          child: Text('Board: $text',
-              style: TextStyle(color: t.textDim, fontSize: 11)),
-        ),
-        TextButton.icon(
-          onPressed: !ready || state.isSyncing
-              ? null
-              : () async {
-                  await ref.read(appStateProvider).syncEngineState();
-                  if (mounted) setState(() => _justSynced = DateTime.now());
-                },
-          icon: state.isSyncing
-              ? const SizedBox(
-                  width: 13, height: 13,
-                  child: CircularProgressIndicator(strokeWidth: 2))
-              : const Icon(Icons.sync, size: 15),
-          label: Text(state.isSyncing ? 'SYNCING' : 'SYNC',
-              style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w700)),
-          style: TextButton.styleFrom(
-            foregroundColor: AppTheme.accent,
-            padding: const EdgeInsets.symmetric(horizontal: 8),
-            minimumSize: const Size(0, 32),
-            tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-          ),
-        ),
-      ],
-    );
-  }
-}
-
 class _SummaryStrip extends ConsumerWidget {
   const _SummaryStrip({required this.state});
   final AppState state;

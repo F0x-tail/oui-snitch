@@ -80,13 +80,36 @@ class _StatusBarState extends ConsumerState<StatusBar> {
             ),
             const SizedBox(width: 10),
           ],
-          // GPS
+          // GPS — crosshair; a plain crosshair when there is a usable fix,
+          // a broken crosshair when it is stale/searching or absent.
           _InfoChip(
-            icon: _hwGps.inUse ? Icons.memory : Icons.smartphone,
+            icon: (_gpsPosition == null && !_hwGps.inUse)
+                ? Icons.gps_off
+                : (_gpsColor == AppTheme.warning
+                    ? Icons.gps_not_fixed
+                    : Icons.gps_fixed),
             label: _gpsLabel,
             color: _gpsColor,
           ),
           const Spacer(),
+          // Sync — force a re-read of the board's engine state. Lives here (not
+          // in a second row) so the top bar is the single status line; shown
+          // only when connected, since there is nothing to sync otherwise.
+          if (state.isConnected)
+            IconButton(
+              visualDensity: VisualDensity.compact,
+              padding: EdgeInsets.zero,
+              constraints: const BoxConstraints(minWidth: 32, minHeight: 28),
+              tooltip: 'Sync board state',
+              icon: state.isSyncing
+                  ? const SizedBox(
+                      width: 14, height: 14,
+                      child: CircularProgressIndicator(strokeWidth: 2))
+                  : Icon(Icons.sync, size: 16, color: AppTheme.accent),
+              onPressed: state.isSyncing
+                  ? null
+                  : () => ref.read(appStateProvider).syncEngineState(),
+            ),
           // Device name + node count — tap to switch device
           Flexible(
             child: InkWell(
