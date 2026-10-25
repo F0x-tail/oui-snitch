@@ -18,6 +18,18 @@
 #define ENOW_CORE_MAX_NODES   24
 #define ENOW_PASSPHRASE_MAX   64
 
+// Why the last start attempt refused. Cleared on a successful start or stop,
+// so the app can explain a button that appeared to do nothing.
+#define ENOW_ERR_NONE      0
+#define ENOW_ERR_NO_KEY    1
+#define ENOW_ERR_SCANNING  2
+#define ENOW_ERR_RADIO     3
+uint8_t espnowCoreLastError(void);
+
+// True while the hub holds the rendezvous channel. The engine registry asks
+// this before starting anything that would hop away from it.
+bool espnowCoreBlocksChannelHopping(void);
+
 // Lifecycle. init() is cheap and safe to call before a passphrase exists.
 void espnowCoreInit(void);
 // Verifies key derivation against vectors the node firmware also produces.

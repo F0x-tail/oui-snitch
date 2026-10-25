@@ -990,6 +990,9 @@ static void enowPublishStatus(void) {
     uint32_t rj = espnowCoreRejected();
     memcpy(v + 5, &rx, 4);
     memcpy(v + 9, &rj, 4);
+    // Why the last start refused, so the app can say more than "nothing
+    // happened" when the hub declines to take the radio off a scan.
+    v[13] = espnowCoreLastError();
     chrEnowCore->setValue(v, sizeof(v));
 }
 

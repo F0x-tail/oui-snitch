@@ -479,15 +479,46 @@ void espnowCoreInit(void) {
 
 bool espnowCoreRunning(void) { return s_running; }
 
+static uint8_t s_lastError = ENOW_ERR_NONE;
+
+uint8_t espnowCoreLastError(void) { return s_lastError; }
+
+// The hub never scans. That is not a nicety: it is the whole reason the
+// rendezvous works. A node sets the channel, sends, and leaves, with no
+// handshake and no acknowledgement, trusting that someone is parked there
+// listening. Any engine that moves the WiFi channel breaks that trust, and it
+// breaks it silently — the node sees a successful send, we see nothing, and
+// neither side can tell the difference from an idle fleet. So the two are
+// mutually exclusive rather than merely warned about, on the same first-come
+// terms the PCAP engine already claims the radio on.
+static const uint8_t kHoppingEngines =
+    ENGINE_BITMASK(ENGINE_WARDRIVE) |
+    ENGINE_BITMASK(ENGINE_FLOCK_WIFI) |
+    ENGINE_BITMASK(ENGINE_PCAP) |
+    ENGINE_BITMASK(ENGINE_SKYSPY);
+
+bool espnowCoreBlocksChannelHopping(void) { return s_running; }
+
 void espnowCoreStart(void) {
     if (s_running) return;
+    s_lastError = ENOW_ERR_NONE;
+
     if (!s_haveKeys && !s_allowPlaintext) {
         Serial.println("[ENOW] refusing to start — no passphrase, and plaintext is not allowed");
+        s_lastError = ENOW_ERR_NO_KEY;
+        return;
+    }
+
+    if (engineGetActiveMask() & kHoppingEngines) {
+        Serial.println("[ENOW] refusing to start — a scanning engine owns the "
+                       "WiFi channel. The hub must stay parked to hear nodes.");
+        s_lastError = ENOW_ERR_SCANNING;
         return;
     }
 
     if (esp_now_init() != ESP_OK) {
         Serial.println("[ENOW] esp_now_init failed");
+        s_lastError = ENOW_ERR_RADIO;
         return;
     }
     if (s_haveKeys && esp_now_set_pmk(s_pmk) != ESP_OK) {
@@ -500,8 +531,6 @@ void espnowCoreStart(void) {
     // necessity; it carries no data, only the request.
     addPeer(kBroadcast, false);
 
-    // The hub never scans. That is the whole reason the rendezvous works: a
-    // node can set the channel, talk, and leave, knowing someone is listening.
     esp_wifi_set_channel(ENOW_RENDEZVOUS_CH, WIFI_SECOND_CHAN_NONE);
 
     s_running = true;
@@ -509,21 +538,6 @@ void espnowCoreStart(void) {
                   ENOW_RENDEZVOUS_CH,
                   s_haveKeys ? "encrypted" : "PLAINTEXT",
                   s_allowlistOn ? "on" : "off");
-
-    // The role only works because the hub is always listening: a node sets the
-    // rendezvous channel, talks, and leaves, with no handshake to say when. A
-    // channel-hopping engine on this board breaks that guarantee, and the loss
-    // is silent, so say so rather than letting someone wonder where their
-    // nodes went.
-    const uint8_t hoppers = ENGINE_BITMASK(ENGINE_WARDRIVE) |
-                            ENGINE_BITMASK(ENGINE_FLOCK_WIFI) |
-                            ENGINE_BITMASK(ENGINE_PCAP) |
-                            ENGINE_BITMASK(ENGINE_SKYSPY);
-    if (engineGetActiveMask() & hoppers) {
-        Serial.println("[ENOW] WARNING: a channel-hopping engine is running. "
-                       "This board will leave the rendezvous channel and will "
-                       "miss node traffic while it does.");
-    }
 }
 
 void espnowCoreStop(void) {
@@ -534,6 +548,7 @@ void espnowCoreStop(void) {
     esp_now_deinit();
     s_nodeCount = 0;
     s_running = false;
+    s_lastError = ENOW_ERR_NONE;
     Serial.println("[ENOW] core down");
 }
 

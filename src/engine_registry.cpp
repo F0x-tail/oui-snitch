@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: MIT
 #include "engine_registry.h"
+#include "espnow_core.h"
 #include "engines/pcap.h"
 #include "mesh_espnow.h"
 #include "radio_coex.h"
@@ -163,6 +164,16 @@ static bool engineEnableImpl(EngineId id) {
                           engines[id]->name);
             return false;
         }
+    }
+
+    // The ESP-NOW hub is parked on the rendezvous channel so third-party
+    // nodes can report without a handshake. Hopping away loses their traffic
+    // with no symptom on either side, so the hub keeps the radio until it is
+    // stopped — the same first-come rule PCAP gets above.
+    if (isWifiEngine(id) && espnowCoreBlocksChannelHopping()) {
+        Serial.printf("[ENGINE] enable %s refused — ESP-NOW hub owns the channel\n",
+                      engines[id]->name);
+        return false;
     }
 
     if (isWifiEngine(id)) {
