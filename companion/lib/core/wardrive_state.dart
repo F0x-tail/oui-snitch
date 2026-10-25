@@ -550,6 +550,13 @@ class WardriveController extends ChangeNotifier {
     return list;
   }
 
+  /// Persist and publish a direct change to [selectedTargets] made from outside
+  /// the normal toggle path (e.g. the wardrive tile defaulting to WiGLE).
+  void notifyTargetsChanged() {
+    notifyListeners();
+    _savePrefs();
+  }
+
   void toggleTarget(WardriveTarget t) {
     if (isActive) return;
     if (selectedTargets.contains(t)) {

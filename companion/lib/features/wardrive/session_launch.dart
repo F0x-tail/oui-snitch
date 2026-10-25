@@ -184,10 +184,21 @@ class SessionBar extends ConsumerWidget {
 Future<bool> startWardriveSession(BuildContext context, WidgetRef ref, {bool requireLocation = true}) async {
   DebugLog.log('WARDRIVE: start requested');
   final messenger = ScaffoldMessenger.maybeOf(context);
-  if (ref.read(wardriveProvider).selectedTargets.isEmpty) {
-    DebugLog.log('WARDRIVE: start aborted — no targets');
-    messenger?.showSnackBar(const SnackBar(content: Text('Select at least one target to scan')));
-    return false;
+  final wd = ref.read(wardriveProvider);
+  if (wd.selectedTargets.isEmpty) {
+    // A wardrive with no specific target is a plain all-networks run for WiGLE —
+    // that is the point of wardriving, not filtering for particular signals. The
+    // session chips were removed in the tiles-only model, so the wardrive tile
+    // arrives here with nothing selected; default to the WiGLE (all networks)
+    // target instead of refusing to start.
+    wd.selectedTargets.add(WardriveTarget.wigle);
+    // A plain wardrive listens on both radios so Bluetooth devices are captured
+    // too, not just Wi-Fi. (GPS is optional — without a fix it still records to
+    // the database for search and ignore-list building; those rows are simply
+    // skipped in the WiGLE CSV, which requires coordinates.)
+    wd.radio = WardriveRadio.both;
+    wd.notifyTargetsChanged();
+    DebugLog.log('WARDRIVE: no target — defaulting to WiGLE all-networks, WiFi+BLE');
   }
   ref.read(gpsProvider).onMessage = (msg) => messenger?.showSnackBar(
         SnackBar(content: Text(msg), backgroundColor: AppTheme.accent, duration: const Duration(seconds: 4)),
