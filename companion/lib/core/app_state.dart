@@ -67,7 +67,23 @@ class AppState extends ChangeNotifier {
       sessionStartTime != null ? DateTime.now().difference(sessionStartTime!) : Duration.zero;
 
   // Detection counts per engine — unique MACs, not raw event count
+  // Per-engine set of MACs seen, for the unique counter and the is-new-MAC
+  // notification check. Bounded (insertion-ordered, oldest evicted over the
+  // cap) so a multi-hour run cannot grow it without limit. Above the cap the
+  // unique count becomes approximate and a long-absent device may re-notify
+  // once — both acceptable; an exact unbounded tally is what leaked.
+  static const int _uniqueMacCap = 50000;
   final Map<Engine, Set<String>> _uniqueMacsPerEngine = {};
+
+  /// Record [mac] for [engine]; returns true if it was not already known.
+  bool _recordUniqueMac(Engine engine, String mac) {
+    final set = _uniqueMacsPerEngine.putIfAbsent(engine, () => <String>{});
+    final isNew = set.add(mac);
+    if (isNew && set.length > _uniqueMacCap) {
+      set.remove(set.first); // evict oldest (LinkedHashSet is insertion-ordered)
+    }
+    return isNew;
+  }
   int get totalDetections => _uniqueMacsPerEngine.values.fold(0, (a, b) => a + b.length);
 
   // Per-engine last detection time
@@ -502,8 +518,7 @@ class AppState extends ChangeNotifier {
       if (_geofenceFilter.isExcludedNullable(det.latitude, det.longitude)) {
         return;
       }
-      final isNewMac = !(_uniqueMacsPerEngine[det.engine]?.contains(det.macAddress) ?? false);
-      (_uniqueMacsPerEngine[det.engine] ??= {}).add(det.macAddress);
+      final isNewMac = _recordUniqueMac(det.engine, det.macAddress);
       lastDetectionTime[det.engine] = DateTime.now();
       final rt = (_recentDetectionTimes[det.engine] ??= [])..add(DateTime.now());
       if (rt.length > 2000) rt.removeRange(0, rt.length - 2000);
@@ -652,7 +667,7 @@ class AppState extends ChangeNotifier {
       return;
     }
     if (det.sourceNodeId.isNotEmpty) _recordSeenNode(det.sourceNodeId);
-    (_uniqueMacsPerEngine[det.engine] ??= {}).add(det.macAddress);
+    _recordUniqueMac(det.engine, det.macAddress);
     lastDetectionTime[det.engine] = DateTime.now();
     _upsertDetection(det);
     _recordDroneTrack(det);
