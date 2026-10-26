@@ -18,6 +18,36 @@ import 'package:oui_spy/core/notifications/live_activity_service.dart';
 import 'package:oui_spy/features/feed/detection_row.dart' show detectorTitle, methodLabel;
 
 /// Notification channels for Android grouping.
+/// Unique-network counts worth interrupting someone for, in order.
+///
+/// A flat "every 1000" rule fired about once a minute: a recorded session
+/// reached 7,167 unique networks in 81 minutes, and the opening minutes ran at
+/// ~875 new networks each. Seven notifications for one drive is not progress
+/// reporting, it is noise, and it trains people to swipe the channel away —
+/// taking the alerts that matter with it.
+///
+/// The gaps widen instead, so alerts stay rare as a session grows. The same
+/// session now raises two. Past the top of the ladder they settle at every
+/// [kWardriveMilestoneStep], which no session in this data has ever reached.
+const List<int> kWardriveMilestones = [1000, 5000, 10000, 25000, 50000];
+const int kWardriveMilestoneStep = 100000;
+
+/// The highest milestone [uniqueCount] has passed, or 0 if it has passed none.
+int wardriveMilestoneFor(int uniqueCount) {
+  if (uniqueCount >= kWardriveMilestoneStep) {
+    return (uniqueCount ~/ kWardriveMilestoneStep) * kWardriveMilestoneStep;
+  }
+  var reached = 0;
+  for (final m in kWardriveMilestones) {
+    if (uniqueCount >= m) reached = m;
+  }
+  return reached;
+}
+
+/// 25000 -> "25,000". Six-figure counts are unreadable without it.
+String _grouped(int n) => n.toString().replaceAllMapped(
+    RegExp(r'(\d)(?=(\d{3})+$)'), (m) => '${m[1]},');
+
 class NotifChannel {
   const NotifChannel._();
 
@@ -375,7 +405,7 @@ class NotificationService extends ChangeNotifier {
     if (!_initialized || !_permissionGranted) return;
     if (!milestoneAlertsEnabled) return;
 
-    final milestone = (uniqueCount ~/ 1000) * 1000;
+    final milestone = wardriveMilestoneFor(uniqueCount);
     if (milestone > 0 && milestone > _lastMilestone) {
       _lastMilestone = milestone;
       _fireMilestoneNotification(milestone);
@@ -544,7 +574,7 @@ class NotificationService extends ChangeNotifier {
       id: _notifId(NotifChannel.wardrive),
       channel: NotifChannel.wardrive,
       title: 'Wardrive Milestone',
-      body: '$count unique networks captured so far.',
+      body: '${_grouped(count)} unique networks captured so far.',
       groupKey: NotifChannel.wardrive,
     );
   }
