@@ -7,7 +7,8 @@ import 'package:oui_spy/features/devices/devices_screen.dart';
 import 'package:oui_spy/features/feed/feed_screen.dart';
 import 'package:oui_spy/theme/app_theme.dart';
 
-enum DetectionsView { live, devices, history }
+/// Declared in the order the segment bar shows them.
+enum DetectionsView { live, detection, devices }
 
 final detectionsViewProvider = StateProvider<DetectionsView>((ref) => DetectionsView.live);
 
@@ -19,7 +20,7 @@ class DetectionsScreen extends ConsumerWidget {
     final t = AppTheme.of(context);
     final view = ref.watch(detectionsViewProvider);
     ref.listen<String?>(historyFilterRequestProvider, (_, req) {
-      if (req != null) ref.read(detectionsViewProvider.notifier).state = DetectionsView.history;
+      if (req != null) ref.read(detectionsViewProvider.notifier).state = DetectionsView.detection;
     });
     return Scaffold(
       backgroundColor: t.background,
@@ -30,12 +31,12 @@ class DetectionsScreen extends ConsumerWidget {
             _SegmentBar(current: view),
             Expanded(
               child: switch (view) {
-                DetectionsView.history => DetectionHistoryView(
+                DetectionsView.detection => DetectionHistoryView(
                     onShowLive: () => ref.read(detectionsViewProvider.notifier).state = DetectionsView.live,
                   ),
                 DetectionsView.devices => const DevicesScreen(embedded: true),
                 DetectionsView.live => FeedScreen(
-                    onShowHistory: () => ref.read(detectionsViewProvider.notifier).state = DetectionsView.history,
+                    onShowHistory: () => ref.read(detectionsViewProvider.notifier).state = DetectionsView.detection,
                   ),
               },
             ),
@@ -61,8 +62,8 @@ class _SegmentBar extends ConsumerWidget {
       child: SegmentedButton<DetectionsView>(
         segments: const [
           ButtonSegment(value: DetectionsView.live, label: Text('LIVE')),
+          ButtonSegment(value: DetectionsView.detection, label: Text('DETECTION')),
           ButtonSegment(value: DetectionsView.devices, label: Text('DEVICES')),
-          ButtonSegment(value: DetectionsView.history, label: Text('HISTORY')),
         ],
         selected: {current},
         onSelectionChanged: (v) => ref.read(detectionsViewProvider.notifier).state = v.first,

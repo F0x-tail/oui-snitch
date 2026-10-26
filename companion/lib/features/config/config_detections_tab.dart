@@ -691,7 +691,7 @@ class _DetectionsTabState extends ConsumerState<_DetectionsTab> {
     return Column(
       children: [
         CommandHeader(
-          title: 'HISTORY',
+          title: 'DETECTION',
           count: _activeFilterCount > 0 || hasQuery ? '${items.length}/${_detections.length}' : '${_detections.length}',
           chips: _filterChips(),
           actions: [

@@ -283,7 +283,7 @@ class _AppShellState extends ConsumerState<AppShell> {
           BottomNavigationBarItem(
             icon: Icon(Icons.list_alt_outlined),
             activeIcon: Icon(Icons.list_alt),
-            label: 'Detections',
+            label: 'Log',
           ),
           BottomNavigationBarItem(
             icon: Icon(Icons.map_outlined),
