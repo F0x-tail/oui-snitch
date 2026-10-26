@@ -456,7 +456,12 @@ bool espnowCoreSelfTest(void) {
     deriveKey16(kPhrase, "_lmk", lmk);
 
     bool ok = memcmp(pmk, kPmk, 16) == 0 && memcmp(lmk, kLmk, 16) == 0;
-    if (!ok) {
+    if (ok) {
+        // Say so on the way past. A silent pass is indistinguishable at boot
+        // from a self-test that was never reached, which is the one thing a
+        // self-test must not leave in doubt.
+        Serial.println("[ENOW] key derivation self-test OK");
+    } else {
         Serial.println("[ENOW] SELFTEST FAILED — link keys will not match node "
                        "firmware and nothing will decrypt");
     }
