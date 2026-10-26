@@ -176,6 +176,30 @@ bool fixUsableAsFallback(GpsPosition p, DateTime now) {
   return !age.isNegative && age <= kStaleFixAfter;
 }
 
+/// How long a running wardrive waits for the board before giving up.
+///
+/// A wardrive records nothing while the link is down: this hardware has no SD
+/// card, and the firmware deliberately keeps wardrive out of the small flash
+/// spool. So a session whose board is gone is not paused, it is over — it just
+/// does not know it yet, and every minute it stays "running" is a minute the
+/// user believes is being logged.
+///
+/// Five minutes is the compromise. Long enough to cover a walk round a
+/// building, a pocketed phone or a flat battery swapped on the move; short
+/// enough that nobody drives for an hour trusting a dead session.
+const Duration kWardriveResumeWindow = Duration(minutes: 5);
+
+/// Whether a session that lost its link [lostFor] ago should be given up on.
+///
+/// Separate from the timer that normally triggers it, because a timer is not
+/// trustworthy here: Android may hold it in Doze while the phone is in a
+/// pocket, which is exactly when a link is most likely to drop. The elapsed
+/// time is therefore re-checked whenever the app comes back to life, and this
+/// is the one rule both paths use.
+bool resumeWindowExpired(Duration lostFor, {Duration window = kWardriveResumeWindow}) {
+  return !lostFor.isNegative && lostFor >= window;
+}
+
 /// Whether a reconnect may resume a wardrive session from the board's engine
 /// mask.
 ///
@@ -201,6 +225,9 @@ class WardriveController extends ChangeNotifier {
       if (connState == NodeConnectionState.ready) {
         SharedPreferences.getInstance().then(
             (p) => offlineGpsTag = p.getBool('offlineGpsTagEnabled') ?? false);
+        // The board is back. Either it beat the window, or the window elapsed
+        // while a timer was held in Doze and we only find out now.
+        if (!_closeResumeWindow()) return;
         if (state == WardriveState.running &&
             _droppedWhileRunning &&
             !_ble.offlineScanEnabled) {
@@ -226,7 +253,10 @@ class WardriveController extends ChangeNotifier {
         _pushWifiBand();
       } else if (connState == NodeConnectionState.disconnected ||
           connState == NodeConnectionState.reconnecting) {
-        if (state == WardriveState.running) _droppedWhileRunning = true;
+        if (state == WardriveState.running) {
+          _droppedWhileRunning = true;
+          _beginResumeWindow();
+        }
       }
     });
     // Always-on recorder. Detections used to reach the database only while a
@@ -862,6 +892,9 @@ class WardriveController extends ChangeNotifier {
     state = WardriveState.running;
     _userStopped = false;
     _setSessionIntent(true);
+    _resumeTimer?.cancel();
+    _resumeTimer = null;
+    _linkLostAt = null;
     _ble.wardriveSessionActive = true;
     radioTransition = 'starting';
     notifyListeners();
@@ -907,6 +940,9 @@ class WardriveController extends ChangeNotifier {
     _userStopped = true;
     _setSessionIntent(false);
     _droppedWhileRunning = false;
+    _resumeTimer?.cancel();
+    _resumeTimer = null;
+    _linkLostAt = null;
     pendingReconnectPrompt = false;
     stopIncomplete = false;
     _ble.wardriveSessionActive = false;
@@ -950,6 +986,68 @@ class WardriveController extends ChangeNotifier {
   /// True when a stop was requested, the link was up, and the board did **not**
   /// confirm its engines were off. The board may still be scanning.
   bool stopIncomplete = false;
+
+  // -- Resume window --
+  //
+  // See [kWardriveResumeWindow]. A session whose board has gone is ended
+  // deliberately, saved and announced, rather than left showing "running"
+  // over a link that is recording nothing.
+
+  DateTime? _linkLostAt;
+  Timer? _resumeTimer;
+
+  /// When the current session lost its link, or null while the link is up.
+  /// Exposed so the UI can show how long is left rather than a bare spinner.
+  DateTime? get linkLostAt => _linkLostAt;
+  bool get isAwaitingResume => _linkLostAt != null && state == WardriveState.running;
+
+  void _beginResumeWindow() {
+    if (_linkLostAt != null) return; // already counting; do not restart it
+    _linkLostAt = DateTime.now();
+    _resumeTimer?.cancel();
+    _resumeTimer = Timer(kWardriveResumeWindow, _giveUpOnResume);
+    DebugLog.log('WARDRIVE: link lost mid-session — '
+        '${kWardriveResumeWindow.inMinutes} min to come back');
+    notifyListeners();
+  }
+
+  /// Returns false when the session was ended because the window had already
+  /// elapsed, so the caller should not go on to re-assert a dead session.
+  bool _closeResumeWindow() {
+    final lost = _linkLostAt;
+    _resumeTimer?.cancel();
+    _resumeTimer = null;
+    if (lost == null) return true;
+    final waited = DateTime.now().difference(lost);
+    if (state == WardriveState.running && resumeWindowExpired(waited)) {
+      DebugLog.log('WARDRIVE: board returned after ${waited.inSeconds}s, past '
+          'the resume window — ending the session it missed');
+      _giveUpOnResume();
+      return false;
+    }
+    _linkLostAt = null;
+    DebugLog.log('WARDRIVE: board back after ${waited.inSeconds}s — session continues');
+    notifyListeners();
+    return true;
+  }
+
+  void _giveUpOnResume() {
+    final lost = _linkLostAt;
+    _resumeTimer?.cancel();
+    _resumeTimer = null;
+    _linkLostAt = null;
+    if (state != WardriveState.running) return;
+    final waited = lost == null ? kWardriveResumeWindow : DateTime.now().difference(lost);
+    DebugLog.log('WARDRIVE: no board for ${waited.inSeconds}s — ending and saving');
+    _notificationService.onWardriveEndedAfterLostLink(
+      uniqueCount: uniqueMacs.length,
+      waited: waited,
+    );
+    // stopSession saves the session and tears down what it can. With the board
+    // unreachable the teardown writes fail, which it already handles — and the
+    // engines are re-pushed on the next connect anyway.
+    unawaited(stopSession());
+  }
 
   /// Engines that were already running when this session started.
   ///
@@ -2074,6 +2172,7 @@ class WardriveController extends ChangeNotifier {
     _importedDetSub?.cancel();
     _awayLiveSub?.cancel();
     _spoolImportSub?.cancel();
+    _resumeTimer?.cancel();
     super.dispose();
   }
 

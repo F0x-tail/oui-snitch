@@ -412,6 +412,29 @@ class NotificationService extends ChangeNotifier {
     }
   }
 
+  /// A wardrive was ended because the board never came back.
+  ///
+  /// Deliberately not gated on [milestoneAlertsEnabled]: that switch is for
+  /// progress chatter, and this is the opposite — the session is over and the
+  /// user is somewhere else, so it is the only chance to say so. A wardrive
+  /// records nothing while the link is down (there is no SD card on this
+  /// hardware and the firmware keeps wardrive out of the flash spool), so
+  /// silence here would mean believing a drive was still being logged when it
+  /// had stopped minutes ago.
+  void onWardriveEndedAfterLostLink({required int uniqueCount, required Duration waited}) {
+    if (!_initialized || !_permissionGranted) return;
+    final mins = waited.inMinutes;
+    _fireNotification(
+      id: _notifId(NotifChannel.wardrive),
+      channel: NotifChannel.wardrive,
+      title: 'Wardrive ended — board did not come back',
+      body: 'No connection for ${mins < 1 ? "under a minute" : "$mins min"}. '
+          'The session was saved with ${_grouped(uniqueCount)} unique networks. '
+          'Nothing is recorded while the board is out of range.',
+      groupKey: NotifChannel.wardrive,
+    );
+  }
+
   /// Reset milestone tracking (call on session start).
   void resetMilestones() {
     _lastMilestone = 0;

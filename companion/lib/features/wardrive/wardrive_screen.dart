@@ -852,6 +852,39 @@ class _WardriveScreenState extends ConsumerState<WardriveScreen> with WidgetsBin
                 ),
               ),
 
+            // Waiting on a board that has gone. Says how long is left, because
+            // the session ends when it runs out and nothing is being recorded
+            // until then — a bare spinner would imply the drive is still
+            // being logged.
+            if (wd.isAwaitingResume && wd.radioTransition == null)
+              Positioned(
+                top: 0, left: 0, right: 0,
+                child: Container(
+                  color: t.background.withValues(alpha: 0.96),
+                  padding: const EdgeInsets.symmetric(vertical: 16),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      const SizedBox(
+                        width: 16, height: 16,
+                        child: CircularProgressIndicator(
+                            strokeWidth: 2, color: AppTheme.warning),
+                      ),
+                      const SizedBox(width: 12),
+                      Text(
+                        'BOARD LOST — ${_resumeLeftLabel(wd)} TO RECONNECT',
+                        style: const TextStyle(
+                          color: AppTheme.warning,
+                          fontSize: 12,
+                          fontWeight: FontWeight.w700,
+                          letterSpacing: 1.5,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+
             if (wd.radioTransition != null)
               Positioned(
                 top: 0, left: 0, right: 0,
@@ -1535,6 +1568,17 @@ class _WardriveScreenState extends ConsumerState<WardriveScreen> with WidgetsBin
       t = 0.83 + 0.17 * ((count - p90) / span).clamp(0.0, 1.0);
     }
     return _densityLerp(t);
+  }
+
+  /// Time left in the resume window, rounded up so it never reads "0s left"
+  /// while the session is in fact still waiting.
+  static String _resumeLeftLabel(WardriveController wd) {
+    final lost = wd.linkLostAt;
+    if (lost == null) return '';
+    final left = kWardriveResumeWindow - DateTime.now().difference(lost);
+    if (left.isNegative) return 'NO TIME';
+    if (left.inMinutes >= 1) return '${left.inMinutes + 1}M';
+    return '${left.inSeconds}S';
   }
 
   Widget _runControls(WidgetRef ref, WardriveController wd) {
