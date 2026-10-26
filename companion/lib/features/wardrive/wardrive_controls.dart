@@ -13,10 +13,12 @@ class _IdleControls extends StatelessWidget {
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
-        const Padding(
-          padding: EdgeInsets.symmetric(horizontal: 24),
-          child: SessionBar(),
-        ),
+        // No session bar here. Starting and stopping a wardrive belongs to the
+        // wardrive tile on HOME, which calls the same startWardriveSession /
+        // stopSession this used to. The target chips duplicated HOME's engine
+        // tiles with a second vocabulary and a second owner, and the two
+        // disagreed — the same duplication already removed from HOME. The map
+        // shows what is running; it does not decide it.
         const SizedBox(height: 6),
         Container(
           margin: const EdgeInsets.symmetric(horizontal: 24),
