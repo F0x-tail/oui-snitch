@@ -52,7 +52,14 @@ class SessionBar extends ConsumerWidget {
               for (final m in WardriveController.selectableTargets)
                 Expanded(
                   child: Builder(builder: (context) {
-                    final sel = live.contains(m) || (live.isEmpty && wd.isTargetSelected(m));
+                    // Two different things light a chip: the engine is running
+                    // now, or it is picked for the session START would begin.
+                    // These used to be exclusive — any live engine hid the
+                    // whole selection — so with the detector on from HOME,
+                    // tapping WIGLE recorded the choice and changed nothing on
+                    // screen. The only way through was to switch the detector
+                    // off first.
+                    final sel = live.contains(m) || wd.isTargetSelected(m);
                     return InkWell(
                       borderRadius: BorderRadius.circular(10),
                       onTap: () => wd.onChipTap(m, live),
