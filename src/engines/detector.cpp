@@ -817,6 +817,12 @@ static void IRAM_ATTR wifiSnifferCb(void* buf, wifi_promiscuous_pkt_type_t type)
     evt.channel = pkt->rx_ctrl.channel;
     evt.timestamp_ms = millis();
     evt.method = 1;
+    // Carry the rule that matched, as every other watchlist path does. Without
+    // it the phone has only "a watchlist entry fired" to show, with no way to
+    // say which — the alert names nothing the user can act on.
+    evt.ext.detector.is_full_mac = (hit->prefixLen == 6) ? 1 : 0;
+    strncpy(evt.ext.detector.filter_desc, hit->desc,
+            sizeof(evt.ext.detector.filter_desc) - 1);
     pushDetectionFromISR(&evt);
 }
 

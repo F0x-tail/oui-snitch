@@ -539,6 +539,18 @@ class NotificationService extends ChangeNotifier {
 
   static String _detectorHeadline(Detection det) {
     final why = det.detector?.filterDescription?.trim() ?? '';
+
+    // A watchlist hit has to say that is what it is. The description is the
+    // user's own label for the rule, which can be anything — an imported list
+    // gives names like "IFI-3714" — and alone in the notification shade it is
+    // a bare string with nothing to say where it came from or why the phone
+    // buzzed. Every other method here names a category; this one did not.
+    // In the feed the row carries a WATCHLIST badge, so detectorTitle stays
+    // unprefixed and only the notification gains the lead-in.
+    if (det.method == 'ble_watchlist' || det.method == 'wifi_watchlist') {
+      return why.isEmpty ? 'Watchlist hit' : 'Watchlist: $why';
+    }
+
     if (why.isNotEmpty || det.method == 'probe_ssid') return detectorTitle(det);
     return switch (det.method) {
       'tracker' => 'Find My Tracker',
@@ -547,7 +559,6 @@ class NotificationService extends ChangeNotifier {
       'pwnagotchi' => 'Pwnagotchi',
       'glasses' => 'Meta Smart Glasses',
       'axon' => 'Axon Device',
-      'ble_watchlist' || 'wifi_watchlist' => 'Watchlist Hit',
       _ => detectorTitle(det),
     };
   }

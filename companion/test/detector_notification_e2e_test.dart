@@ -8,7 +8,7 @@ import 'package:oui_spy/core/notifications/notification_service.dart';
 List<int> _hex(String s) => [for (var i = 0; i < s.length; i += 2) int.parse(s.substring(i, i + 2), radix: 16)];
 
 void main() {
-  test('S3 capture (v3_app_controlled_ie_e2e): watchlist hit notification titled by description', () {
+  test('S3 capture (v3_app_controlled_ie_e2e): watchlist hit names the rule and says it is a watchlist', () {
     final det = BleProtocol.decodeDetection(
       _hex('0040486e8bd31aa9064a1a0000010000000000004e6f6b696120726f757465720000000000000000000000000000000000000000'),
       sessionId: 's',
@@ -16,7 +16,9 @@ void main() {
       appTimestamp: DateTime(2026),
     );
     final (title, subtitle, body, channel) = NotificationService.detectionNotificationText(det)!;
-    expect(title, 'Nokia router');
+    // The description alone ("Nokia router", or an imported list's "IFI-3714")
+    // says nothing in the shade about why the phone buzzed.
+    expect(title, 'Watchlist: Nokia router');
     expect(subtitle, 'Detector · WATCHLIST');
     // Body contract changed deliberately: proximity-led, and the MAC is no
     // longer in the notification (it stays in the detection list and export).

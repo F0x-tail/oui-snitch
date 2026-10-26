@@ -27,10 +27,15 @@ Uint8List _withDesc(List<int> raw) {
   return b;
 }
 
+/// The decoded description as the notification shows it, with the category
+/// lead-in removed. These tests are about decoding the description bytes, not
+/// about how the title is framed around them.
 String _title(List<int> raw) {
   final det = BleProtocol.decodeDetection(_withDesc(raw),
       sessionId: 's', nodeId: 'n', appTimestamp: DateTime(2026));
-  return NotificationService.detectionNotificationText(det)!.$1;
+  final title = NotificationService.detectionNotificationText(det)!.$1;
+  const prefix = 'Watchlist: ';
+  return title.startsWith(prefix) ? title.substring(prefix.length) : title;
 }
 
 void main() {
