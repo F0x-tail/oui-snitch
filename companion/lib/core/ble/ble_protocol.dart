@@ -545,12 +545,18 @@ class BleProtocol {
 
   static DetectorExtension _decodeDetectorExtension(Uint8List ext) {
     if (ext.isEmpty) return const DetectorExtension();
-    final isFullMac = ext[0] == 1;
-    String? desc;
-    if (ext.length > 1) {
-      desc = _extractString(ext, 1, 32);
-    }
-    // Appended after the description; firmware that predates it sends 33 bytes.
+    // Layout, from the firmware struct (protocol.h, `detector`):
+    //   filter_desc[32] @0, is_full_mac @32, confidence @33
+    //
+    // This read the description from offset 1 and is_full_mac from offset 0,
+    // which silently ate the first character of every description — a
+    // watchlist hit on an access point called "WIFI-8C80" arrived as
+    // "IFI-8C80" — and left is_full_mac holding that character instead of a
+    // flag, so an OUI match could be reported as a full-MAC one. Confidence
+    // sits at 33 under either reading, which is why it looked consistent.
+    final desc = _extractString(ext, 0, 32);
+    final isFullMac = ext.length > 32 && ext[32] == 1;
+    // Appended after is_full_mac; firmware that predates it sends 33 bytes.
     final confidence = ext.length > 33 ? ext[33] : 0;
     return DetectorExtension(
         isFullMac: isFullMac, filterDescription: desc, confidence: confidence);

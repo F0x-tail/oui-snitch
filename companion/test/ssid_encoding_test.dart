@@ -7,12 +7,12 @@ import 'package:oui_spy/core/ble/ble_protocol.dart';
 import 'package:oui_spy/core/notifications/notification_service.dart';
 
 /// A real S3 detector capture (the one used by detector_notification_e2e_test).
-/// Header is 14 bytes, then 6 bytes of extension preamble, so the 32-byte
-/// description field starts at absolute offset 20.
+/// Header is 19 bytes (14 + a 5-byte source node id) and filter_desc is the
+/// first field of the detector extension, so it starts at absolute offset 19.
 const _capture =
-    '0040486e8bd31aa9064a1a0000010000000000004e6f6b696120726f757465720000'
-    '000000000000000000000000000000000000';
-const _descOffset = 20;
+    '0040486e8bd31aa9064a1a0000010000000000004e6f6b696120726f75746572000000'
+    '0000000000000000000000000000000000';
+const _descOffset = 19;
 const _descLen = 32;
 
 Uint8List _hex(String s) => Uint8List.fromList(
