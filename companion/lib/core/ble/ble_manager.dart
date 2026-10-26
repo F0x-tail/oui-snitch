@@ -187,10 +187,26 @@ class BleManager {
   /// once, so every write in this class goes through one chain.
   Future<void> _writeChain = Future<void>.value();
 
+  /// How long a single GATT write may take before we stop waiting on it.
+  ///
+  /// Writes are chained so only one is outstanding at a time, which the
+  /// Android stack requires. Without a bound, one write that never completes
+  /// parks every later write behind it for the life of the connection — the
+  /// app stays "connected", the UI keeps accepting taps, and nothing reaches
+  /// the board. Ten seconds is far longer than a healthy write (tens of
+  /// milliseconds) and short enough to recover inside one user action.
+  static const Duration kWriteTimeout = Duration(seconds: 10);
+
   Future<void> _serialWrite(BluetoothCharacteristic c, List<int> value,
-      {bool withoutResponse = false}) {
+      {bool withoutResponse = false, Duration? timeout}) {
     final next = _writeChain.then((_) async {
-      await c.write(value, withoutResponse: withoutResponse);
+      await c.write(value, withoutResponse: withoutResponse).timeout(
+        timeout ?? kWriteTimeout,
+        onTimeout: () {
+          DebugLog.log('BLE: write to ${c.uuid} timed out — releasing the queue');
+          throw TimeoutException('GATT write timed out', timeout ?? kWriteTimeout);
+        },
+      );
     });
     // Keep the chain alive even if one write throws, or every later write on
     // this connection would inherit the failure.
@@ -605,27 +621,38 @@ class BleManager {
     }
   }
 
-  Future<void> connect(BluetoothDevice device, {required String sessionId}) async {
+  Future<void> connect(BluetoothDevice device,
+      {required String sessionId, bool useAutoConnect = false}) async {
     if (_connecting) {
       DebugLog.log('BLE: connect in flight — ignoring duplicate ${device.remoteId}');
       return;
     }
     _connecting = true;
     try {
-      await _doConnect(device, sessionId: sessionId);
+      await _doConnect(device, sessionId: sessionId, useAutoConnect: useAutoConnect);
     } finally {
       _connecting = false;
       _isReconnect = false;
     }
   }
 
-  Future<void> _doConnect(BluetoothDevice device, {required String sessionId}) async {
+  /// How long to let the operating system hold a pending connection before
+  /// falling back to scanning for the board ourselves.
+  ///
+  /// The OS attempt costs nothing while it waits, so this is generous. It
+  /// exists only for the cases autoConnect cannot serve — chiefly a board that
+  /// comes back on a different address, which the controller will never match.
+  static const Duration kOsReconnectWindow = Duration(seconds: 60);
+
+  Future<void> _doConnect(BluetoothDevice device,
+      {required String sessionId, bool useAutoConnect = false}) async {
     // Clean up previous subscriptions to prevent reconnect storm
     for (final sub in _subscriptions) {
       await sub.cancel();
     }
     _subscriptions.clear();
     _reconnectTimer?.cancel();
+    _stopLinkWatchdog();
 
     _sessionId = sessionId;
     _device = device;
@@ -633,11 +660,31 @@ class BleManager {
     _currentState = NodeConnectionState.connecting; _connectionState.add(NodeConnectionState.connecting);
 
     _lastDeviceId = device.remoteId.toString();
-    DebugLog.log('BLE: connecting to ${device.remoteId}');
-    await device.connect(
-      autoConnect: false,
-      timeout: const Duration(seconds: 15),
-    );
+    DebugLog.log('BLE: connecting to ${device.remoteId}'
+        '${useAutoConnect ? ' (os autoConnect)' : ''}');
+    if (useAutoConnect) {
+      // Hand recovery to the Bluetooth controller. It holds the connection
+      // pending and completes it the instant the board advertises again —
+      // no scanning, no polling, no worst-case wait, and it keeps working
+      // while the app is backgrounded. autoConnect takes no timeout and
+      // forbids an MTU argument, so the wait is ours to bound.
+      await device.connect(autoConnect: true, mtu: null);
+      final reached = await device.connectionState
+          .firstWhere((s) => s == BluetoothConnectionState.connected)
+          .timeout(kOsReconnectWindow,
+              onTimeout: () => BluetoothConnectionState.disconnected);
+      if (reached != BluetoothConnectionState.connected) {
+        // Stand the pending connection down before anything else tries.
+        await device.disconnect();
+        throw TimeoutException(
+            'autoConnect window elapsed', kOsReconnectWindow);
+      }
+    } else {
+      await device.connect(
+        autoConnect: false,
+        timeout: const Duration(seconds: 15),
+      );
+    }
     DebugLog.log('BLE: connected');
     if (_userInitiatedDisconnect || _device != device) {
       DebugLog.log('BLE: disconnect requested during connect — aborting');
@@ -649,6 +696,7 @@ class BleManager {
       device.connectionState.listen((state) {
         DebugLog.log('BLE: connectionState=$state');
         if (state == BluetoothConnectionState.disconnected) {
+          _stopLinkWatchdog();
           _currentState = NodeConnectionState.disconnected; _connectionState.add(NodeConnectionState.disconnected);
           if (_importing) {
             _abortImport();
@@ -783,6 +831,7 @@ class BleManager {
       await _engineControl!.setNotifyValue(true);
       _subscriptions.add(
         _engineControl!.onValueReceived.listen((data) {
+          _lastInboundAt = DateTime.now();
           _engineStates.add(BleProtocol.decodeEngineStatus(data));
         }),
       );
@@ -855,6 +904,7 @@ class BleManager {
     }
 
     _currentState = NodeConnectionState.ready; _connectionState.add(NodeConnectionState.ready);
+    _startLinkWatchdog();
 
     final getter = _watchlistGetter;
     if (getter != null && _detectorConfig != null) {
@@ -1564,6 +1614,7 @@ class BleManager {
   Future<void> disconnect() async {
     _userInitiatedDisconnect = true;
     _reconnectTimer?.cancel();
+    _stopLinkWatchdog();
     DebugLog.log('BLE: disconnect — leaving engine state to firmware (offline-scan aware)');
     for (final sub in _subscriptions) {
       await sub.cancel();
@@ -1582,6 +1633,7 @@ class BleManager {
     if (_device != null) _lastDevice = _device;
     _userInitiatedDisconnect = true;
     _reconnectTimer?.cancel();
+    _stopLinkWatchdog();
     final subs = List.of(_subscriptions);
     _subscriptions.clear();
     for (final sub in subs) {
@@ -1825,6 +1877,53 @@ class BleManager {
   int _reconnectAttempt = 0;
   bool _connecting = false;
 
+  // -- Soft-dead link watchdog --
+  //
+  // A GATT connection can stay nominally up while nothing crosses it: the
+  // board resets its BLE stack, the controller keeps the handle, and the app
+  // sits there looking connected with a live UI and no data. It is the link
+  // version of the wedged sniffer the firmware watches for, and it fails the
+  // same way — silently, with every indicator saying fine.
+  //
+  // The board notifies engine state every 5 s whenever a phone is connected,
+  // so that is a heartbeat that ticks regardless of whether anything is being
+  // detected. Detections are the wrong signal: a quiet street would read as a
+  // dead link.
+  static const Duration kLinkSilenceLimit = Duration(seconds: 25);
+  static const Duration kLinkCheckInterval = Duration(seconds: 10);
+  DateTime? _lastInboundAt;
+  Timer? _linkWatchdog;
+
+  void _startLinkWatchdog() {
+    _linkWatchdog?.cancel();
+    _lastInboundAt = DateTime.now();
+    _linkWatchdog = Timer.periodic(kLinkCheckInterval, (_) {
+      // Only judge a link we believe is up. While reconnecting, the OS may be
+      // holding a pending connection — tearing that down would fight the very
+      // mechanism that is recovering us.
+      if (_currentState != NodeConnectionState.ready) return;
+      final last = _lastInboundAt;
+      if (last == null) return;
+      final silent = DateTime.now().difference(last);
+      if (silent < kLinkSilenceLimit) return;
+      DebugLog.log('BLE: no heartbeat for ${silent.inSeconds}s on a connected '
+          'link — forcing a reconnect');
+      _lastInboundAt = DateTime.now(); // do not fire again while this runs
+      final target = _device;
+      if (target == null) return;
+      // Dropping the link puts us through the normal disconnect path, which
+      // starts recovery; it does not count as a user-initiated disconnect.
+      target.disconnect().catchError((Object e) {
+        DebugLog.log('BLE: watchdog disconnect failed: $e');
+      });
+    });
+  }
+
+  void _stopLinkWatchdog() {
+    _linkWatchdog?.cancel();
+    _linkWatchdog = null;
+  }
+
   void _startReconnect() {
     if (_device == null) return;
     if (_connecting || (_reconnectTimer?.isActive ?? false)) return;
@@ -1833,21 +1932,37 @@ class BleManager {
     _attemptReconnect();
   }
 
+  /// Recovery alternates between two strategies rather than running both.
+  ///
+  /// Even attempts hand the job to the operating system (see
+  /// [kOsReconnectWindow]): it completes the moment the board advertises, so
+  /// a blip is recovered in about as long as the board takes to come back,
+  /// instead of waiting out a timer. Odd attempts scan and connect ourselves,
+  /// which is the only thing that finds a board whose address has changed.
+  ///
+  /// They alternate instead of racing: two connect paths against one device
+  /// fight each other, and the loser's failure looks like a real one.
   void _attemptReconnect() {
-    final delay = Duration(
-      seconds: [1, 2, 4, 8, 15, 30][_reconnectAttempt.clamp(0, 5)],
-    );
+    final useOs = _reconnectAttempt.isEven;
+    final delay = useOs
+        ? Duration.zero
+        : Duration(seconds: [1, 2, 4, 8, 15, 30][(_reconnectAttempt ~/ 2).clamp(0, 5)]);
     _reconnectTimer?.cancel();
+    _stopLinkWatchdog();
     _reconnectTimer = Timer(delay, () async {
       if (_device == null || _userInitiatedDisconnect) return;
       final target = _device!;
-      final found = await _scanForRemoteId(target.remoteId.toString());
-      if (_device == null || _userInitiatedDisconnect) return;
+      BluetoothDevice? found;
+      if (!useOs) {
+        found = await _scanForRemoteId(target.remoteId.toString());
+        if (_device == null || _userInitiatedDisconnect) return;
+      }
       _isReconnect = true;
       try {
-        await connect(found ?? target, sessionId: _sessionId);
+        await connect(found ?? target,
+            sessionId: _sessionId, useAutoConnect: useOs);
       } catch (e) {
-        DebugLog.log('BLE: reconnect attempt failed: $e');
+        DebugLog.log('BLE: reconnect attempt failed (${useOs ? 'os' : 'scan'}): $e');
       }
       if (_device != null &&
           !_userInitiatedDisconnect &&
