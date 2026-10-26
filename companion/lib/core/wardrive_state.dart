@@ -176,6 +176,25 @@ bool fixUsableAsFallback(GpsPosition p, DateTime now) {
   return !age.isNegative && age <= kStaleFixAfter;
 }
 
+/// Whether a reconnect may resume a wardrive session from the board's engine
+/// mask.
+///
+/// The mask alone cannot answer this. An engine switched on from HOME sets the
+/// same bits a session with that target would, so adopting on the mask alone
+/// turns a detector tile into a running wardrive the next time the phone comes
+/// back in range. [sessionIntent] is the only thing that distinguishes them.
+bool canAdoptSession({
+  required bool offlineScanEnabled,
+  required bool userStopped,
+  required bool sessionIntent,
+}) {
+  // Nothing was asked to keep running, so whatever is on the board is stale.
+  if (!offlineScanEnabled) return false;
+  // The user stopped it; do not bring it back.
+  if (userStopped) return false;
+  return sessionIntent;
+}
+
 class WardriveController extends ChangeNotifier {
   WardriveController(this._ble, this._gps, this._db, this._ignoreList, this._geofenceFilter, this._notificationService, this._liveActivity) {
     _connSub = _ble.connectionState.listen((connState) {
@@ -229,6 +248,7 @@ class WardriveController extends ChangeNotifier {
   Future<void> _loadPrefs() async {
     final p = await SharedPreferences.getInstance();
     offlineGpsTag = p.getBool('offlineGpsTagEnabled') ?? false;
+    _sessionIntent = p.getBool('wd_sessionIntent') ?? false;
     _wifiRssiRelogDb = p.getInt('wd_wifiRssiRelog') ?? 20;
     _bleRssiRelogDb = p.getInt('wd_bleRssiRelog') ?? 15;
     _wifiScanInterval = p.getInt('wd_wifiScanInterval') ?? 350;
@@ -320,6 +340,14 @@ class WardriveController extends ChangeNotifier {
   /// Detections dropped because they fell inside a wardrive-exclusion zone.
   int geofenceSuppressed = 0;
   bool _userStopped = false;
+  /// Whether the user has a wardrive session open, persisted so it survives
+  /// the app being killed.
+  ///
+  /// Adoption below needs to tell "the board is still running my session"
+  /// from "the board has an engine tile on". Both look identical in the
+  /// engine mask, and without this an engine switched on from HOME was
+  /// promoted to a full wardrive session on the next reconnect.
+  bool _sessionIntent = false;
   bool _droppedWhileRunning = false;
   bool pendingReconnectPrompt = false;
   final Set<WardriveTarget> selectedTargets = {};
@@ -833,6 +861,7 @@ class WardriveController extends ChangeNotifier {
 
     state = WardriveState.running;
     _userStopped = false;
+    _setSessionIntent(true);
     _ble.wardriveSessionActive = true;
     radioTransition = 'starting';
     notifyListeners();
@@ -876,6 +905,7 @@ class WardriveController extends ChangeNotifier {
     // it. Stay in 'stopping' until the board confirms.
     radioTransition = 'stopping';
     _userStopped = true;
+    _setSessionIntent(false);
     _droppedWhileRunning = false;
     pendingReconnectPrompt = false;
     stopIncomplete = false;
@@ -1381,6 +1411,13 @@ class WardriveController extends ChangeNotifier {
     }
   }
 
+  void _setSessionIntent(bool on) {
+    if (_sessionIntent == on) return;
+    _sessionIntent = on;
+    SharedPreferences.getInstance()
+        .then((p) => p.setBool('wd_sessionIntent', on));
+  }
+
   Future<void> _adoptFirmwareState() async {
     await _prefsLoaded;
     if (_ble.offlineScanEnabled) {
@@ -1407,6 +1444,16 @@ class WardriveController extends ChangeNotifier {
 
     if (!_ble.offlineScanEnabled || _userStopped) {
       await _disableStaleEngines();
+      return;
+    }
+
+    if (!canAdoptSession(
+      offlineScanEnabled: _ble.offlineScanEnabled,
+      userStopped: _userStopped,
+      sessionIntent: _sessionIntent,
+    )) {
+      DebugLog.log('WARDRIVE: board busy but no session was started — '
+          'leaving those engines to their own tiles');
       return;
     }
 
