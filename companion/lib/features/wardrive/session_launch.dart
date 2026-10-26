@@ -25,25 +25,21 @@ bool targetEngineRunning(AppState app, WardriveTarget m) {
   };
 }
 
-Future<bool> startWardriveSession(BuildContext context, WidgetRef ref, {bool requireLocation = true}) async {
-  DebugLog.log('WARDRIVE: start requested');
+/// Start a wardrive session. **The only way one starts.**
+///
+/// Every caller — the HOME tile, the map's START, anything added later —
+/// arrives here, so the permission prime, the radio-role confirmation and the
+/// offline-scan warning cannot be skipped by reaching past it. [origin] is
+/// recorded so a session's provenance is in the log when something goes wrong.
+///
+/// [requireLocation] is the one deliberate difference between callers: the map
+/// prompts for location because that is where the track is about to be drawn,
+/// while the HOME tile starts without interrupting and records ungeotagged
+/// rows if there is no fix.
+Future<bool> startWardriveSession(BuildContext context, WidgetRef ref,
+    {bool requireLocation = true, String origin = 'unknown'}) async {
+  DebugLog.log('WARDRIVE: start requested from $origin');
   final messenger = ScaffoldMessenger.maybeOf(context);
-  final wd = ref.read(wardriveProvider);
-  if (wd.selectedTargets.isEmpty) {
-    // A wardrive with no specific target is a plain all-networks run for WiGLE —
-    // that is the point of wardriving, not filtering for particular signals. The
-    // session chips were removed in the tiles-only model, so the wardrive tile
-    // arrives here with nothing selected; default to the WiGLE (all networks)
-    // target instead of refusing to start.
-    wd.selectedTargets.add(WardriveTarget.wigle);
-    // A plain wardrive listens on both radios so Bluetooth devices are captured
-    // too, not just Wi-Fi. (GPS is optional — without a fix it still records to
-    // the database for search and ignore-list building; those rows are simply
-    // skipped in the WiGLE CSV, which requires coordinates.)
-    wd.radio = WardriveRadio.both;
-    wd.notifyTargetsChanged();
-    DebugLog.log('WARDRIVE: no target — defaulting to WiGLE all-networks, WiFi+BLE');
-  }
   ref.read(gpsProvider).onMessage = (msg) => messenger?.showSnackBar(
         SnackBar(content: Text(msg), backgroundColor: AppTheme.accent, duration: const Duration(seconds: 4)),
       );
@@ -76,6 +72,18 @@ Future<bool> startWardriveSession(BuildContext context, WidgetRef ref, {bool req
   }
   await ref.read(wardriveProvider).startSession();
   return true;
+}
+
+/// Stop a wardrive session. **The only way one stops by request.**
+///
+/// A thin hop, deliberately: teardown itself belongs to the controller, which
+/// is the only thing that knows which engines the session borrowed rather than
+/// owns. What this adds is a single named door, so a stop is attributable to
+/// the screen that asked for it and any future guard lands once instead of at
+/// every button.
+Future<void> stopWardriveSession(WidgetRef ref, {String origin = 'unknown'}) {
+  DebugLog.log('WARDRIVE: stop requested from $origin');
+  return ref.read(wardriveProvider).stopSession();
 }
 
 Future<bool>? _priming;

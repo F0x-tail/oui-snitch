@@ -39,7 +39,8 @@ class DetectorScreen extends ConsumerWidget {
             scale: 0.7,
             child: Switch(
               value: state.isEngineActive(Engine.detector),
-              onChanged: (on) => setEngineEnabled(ref, Engine.detector, on),
+              onChanged: (on) =>
+                  setEngineEnabled(context, ref, Engine.detector, on, origin: 'detector screen'),
               activeTrackColor: AppTheme.detector.withValues(alpha: 0.3),
               activeThumbColor: AppTheme.detector,
             ),

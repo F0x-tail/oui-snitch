@@ -87,11 +87,14 @@ class _EngineCardState extends ConsumerState<EngineCard>
 
   void _toggleEngine(bool value) {
     if (widget.engine == Engine.wardrive) {
-      if (value) {
-        unawaited(startWardriveSession(context, ref, requireLocation: false));
-      } else {
-        ref.read(wardriveProvider).stopSession();
-      }
+      // Returns early rather than falling through to the optimistic-state
+      // handling below: starting a wardrive can sit on a permission dialog for
+      // longer than that 6s revert allows, and the tile would snap back while
+      // the user was still reading the prompt. The session's own state drives
+      // this tile instead. Both directions still go through the one
+      // coordinator — this is a different *wait*, not a different path.
+      unawaited(setEngineEnabled(context, ref, Engine.wardrive, value,
+          requireLocation: false, origin: 'home tile'));
       return;
     }
 
@@ -126,8 +129,9 @@ class _EngineCardState extends ConsumerState<EngineCard>
         ref.read(appStateProvider).syncEngineState();
       }
     });
-    setEngineEnabled(ref, widget.engine, value,
-            targetNodeId: widget.engine == Engine.foxhunter ? appState.foxhunterTargetNodeId : null)
+    setEngineEnabled(context, ref, widget.engine, value,
+            targetNodeId: widget.engine == Engine.foxhunter ? appState.foxhunterTargetNodeId : null,
+            origin: 'home tile')
         .catchError((Object e) {
       DebugLog.log('ENGINE: toggle ${widget.engine.name} -> $value FAILED: $e');
       if (!mounted) return;

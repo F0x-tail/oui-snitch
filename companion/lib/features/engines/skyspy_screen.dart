@@ -30,7 +30,8 @@ class SkySpyScreen extends ConsumerWidget {
             scale: 0.7,
             child: Switch(
               value: isActive,
-              onChanged: (enable) => setEngineEnabled(ref, Engine.skySpy, enable),
+              onChanged: (enable) => setEngineEnabled(context, ref, Engine.skySpy, enable,
+                  origin: 'drone screen'),
               activeTrackColor: AppTheme.skySpy.withValues(alpha: 0.3),
               activeThumbColor: AppTheme.skySpy,
             ),

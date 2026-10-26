@@ -38,7 +38,8 @@ class _UnipwnScreenState extends ConsumerState<UnipwnScreen> {
     final st = ref.read(appStateProvider);
     final node = st.isManagerConnected ? _selectedNode : null;
     if (enable && st.isManagerConnected && node == null) return;
-    setEngineEnabled(ref, Engine.uniPwn, enable, targetNodeId: node);
+    setEngineEnabled(context, ref, Engine.uniPwn, enable,
+        targetNodeId: node, origin: 'unipwn screen');
   }
 
   @override

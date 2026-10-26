@@ -148,6 +148,20 @@ Set<Engine> enginesFromMask(int mask) {
 /// Success is "nothing left running but what we were asked to preserve", not
 /// "nothing running at all" — the latter reads a deliberately preserved engine
 /// as a failed teardown.
+/// The targets a wardrive actually runs with, given what the user selected.
+///
+/// A wardrive with nothing selected is not an error: an unfiltered run that
+/// logs every network for WiGLE is the ordinary case, and it is what the
+/// wardrive tile means. Selecting nothing therefore means "everything", not
+/// "refuse to start".
+///
+/// This rule lives here, and only here. It used to exist twice — once in the
+/// tile path, which *cleared* the selection and forced WiGLE, and once in the
+/// map path, which preserved it — so the same switch did different things
+/// depending on which screen you touched it from.
+Set<WardriveTarget> wardriveTargetsForStart(Set<WardriveTarget> selected) =>
+    selected.isEmpty ? {WardriveTarget.wigle} : {...selected};
+
 bool teardownComplete(int maskAfter, Set<Engine> preserved) {
   if (maskAfter < 0) return false; // could not read — do not claim success
   int expected = 0;
@@ -825,29 +839,22 @@ class WardriveController extends ChangeNotifier {
     notifyListeners();
   }
 
-  /// Start a wardrive session from the home-screen tile.
-  ///
-  /// Selects the WIGLE target so the session logs every network and yields a
-  /// WiGLE CSV — the thing the wardrive tile is for. Other engines keep running
-  /// independently; their detections are recorded ambiently without WiGLE
-  /// output.
-  Future<void> startWardriveTile() async {
-    if (isActive) return;
-    selectedTargets
-      ..clear()
-      ..add(WardriveTarget.wigle);
-    _savePrefs();
-    await startSession();
-  }
-
   Future<void> startSession() async {
     if (isActive) {
       DebugLog.log('WARDRIVE: start ignored — already $state');
       return;
     }
+    final targets = wardriveTargetsForStart(selectedTargets);
     if (selectedTargets.isEmpty) {
-      DebugLog.log('WARDRIVE: start ignored — no targets selected');
-      return;
+      // Nothing selected: run unfiltered for WiGLE, on both radios so Bluetooth
+      // devices are captured too. Persisted, so the chips on the map agree with
+      // what is running.
+      selectedTargets
+        ..clear()
+        ..addAll(targets);
+      radio = WardriveRadio.both;
+      _savePrefs();
+      DebugLog.log('WARDRIVE: no target — defaulting to WiGLE all-networks, WiFi+BLE');
     }
     final gpsOk = await _gps.start();
     if (!gpsOk) {

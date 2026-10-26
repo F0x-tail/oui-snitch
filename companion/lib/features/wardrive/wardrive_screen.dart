@@ -1592,14 +1592,14 @@ class _WardriveScreenState extends ConsumerState<WardriveScreen> with WidgetsBin
               onTap: () => ref.read(wardriveProvider).pauseSession()),
           const SizedBox(width: 12),
           _Pill(label: 'STOP', color: AppTheme.error,
-              onTap: () => ref.read(wardriveProvider).stopSession()),
+              onTap: () => stopWardriveSession(ref, origin: 'map')),
         ]),
       WardriveState.paused => Row(mainAxisSize: MainAxisSize.min, children: [
           _Pill(label: 'RESUME', color: AppTheme.success,
               onTap: () => ref.read(wardriveProvider).resumeSession()),
           const SizedBox(width: 12),
           _OutlinePill(label: 'STOP', color: AppTheme.error,
-              onTap: () => ref.read(wardriveProvider).stopSession()),
+              onTap: () => stopWardriveSession(ref, origin: 'map')),
         ]),
     };
   }
