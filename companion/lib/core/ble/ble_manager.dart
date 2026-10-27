@@ -416,6 +416,42 @@ class BleManager {
       (_role.isEmpty &&
           (_device?.platformName ?? '').toUpperCase().contains('OUI-SPY-MGR'));
 
+  /// Set while a reconnect is aimed at a board found by role rather than by
+  /// address: the node id it must turn out to be, checked once the link is up.
+  String? _reconnectExpectNodeId;
+  /// Addresses a role scan has already offered and been wrong about, so a
+  /// second board in range is not retried forever.
+  final Set<String> _reconnectRejected = {};
+
+  /// Find a board of the same role as the one we lost. Every scan result is
+  /// already one of ours — startScan filters on our service UUID — so the only
+  /// question is node or manager. Matched on the name's -MGR suffix rather than
+  /// the product name, which is being renamed.
+  Future<BluetoothDevice?> _scanForSameRole(bool mgr,
+      {required Set<String> exclude,
+      Duration timeout = const Duration(seconds: 6)}) async {
+    final completer = Completer<BluetoothDevice?>();
+    final sub = scanResults.listen((results) {
+      for (final r in results) {
+        if (exclude.contains(r.device.remoteId.toString())) continue;
+        final n = '${r.device.platformName} ${r.advertisementData.advName}'
+            .toUpperCase();
+        if (n.contains('-MGR') != mgr) continue;
+        if (!completer.isCompleted) completer.complete(r.device);
+      }
+    });
+    try {
+      await startScan(timeout: timeout);
+    } on Exception catch (e) {
+      DebugLog.log('BLE: role scan error $e');
+    }
+    final found = await completer.future
+        .timeout(timeout + const Duration(seconds: 2), onTimeout: () => null);
+    await sub.cancel();
+    await stopScan();
+    return found;
+  }
+
   void markAsPrimary() {
     _primaryDeviceId = _lastDeviceId;
     final id = _primaryDeviceId;
@@ -800,6 +836,25 @@ class BleManager {
     _nodeId = parts.length > 1 ? parts[1] : '';
     _board = parts.length > 2 ? parts[2] : '';
     _role = parts.length > 3 ? parts[3] : '';
+
+    // A role scan can only say "a board of the right kind"; the node id says
+    // which one. Reaching the wrong board is not a failure to retry — it is
+    // someone else's device, so it is put down untouched and not offered again.
+    final expectNodeId = _reconnectExpectNodeId;
+    if (expectNodeId != null && _nodeId != expectNodeId) {
+      DebugLog.log('BLE: reconnect reached $_nodeId, expected $expectNodeId — '
+          'dropping it untouched');
+      _reconnectRejected.add(device.remoteId.toString());
+      for (final sub in _subscriptions) {
+        await sub.cancel();
+      }
+      _subscriptions.clear();
+      await device.disconnect();
+      _currentState = NodeConnectionState.reconnecting;
+      _connectionState.add(NodeConnectionState.reconnecting);
+      throw Exception('reconnect: different board');
+    }
+    _reconnectRejected.clear();
 
     // Fields [5]..[7] are absent on firmware older than this handshake. Treat
     // that as "cannot prove it kept running" and re-push, which is what the
@@ -1953,16 +2008,40 @@ class BleManager {
       if (_device == null || _userInitiatedDisconnect) return;
       final target = _device!;
       BluetoothDevice? found;
+      final expectNodeId = _nodeId;
       if (!useOs) {
         found = await _scanForRemoteId(target.remoteId.toString());
-        if (_device == null || _userInitiatedDisconnect) return;
+        if (found == null && expectNodeId.isNotEmpty) {
+          // The saved address never appeared. A board that randomises its MAC
+          // each boot is gone from that address for good, so look for one of
+          // the same role and let the node-id check decide if it is ours.
+          found = await _scanForSameRole(_role == 'mgr',
+              exclude: _reconnectRejected);
+          if (found != null) {
+            DebugLog.log('BLE: saved address gone — trying ${found.remoteId} '
+                '(the board may have rotated its MAC)');
+            _reconnectExpectNodeId = expectNodeId;
+          }
+        }
+        if (_device == null || _userInitiatedDisconnect) {
+          _reconnectExpectNodeId = null;
+          return;
+        }
       }
       _isReconnect = true;
       try {
         await connect(found ?? target,
             sessionId: _sessionId, useAutoConnect: useOs);
+        // Reconnected at a new address: save it, or every later attempt starts
+        // from the address that is never coming back.
+        if (_reconnectExpectNodeId != null &&
+            _currentState == NodeConnectionState.ready) {
+          markAsPrimary();
+        }
       } catch (e) {
         DebugLog.log('BLE: reconnect attempt failed (${useOs ? 'os' : 'scan'}): $e');
+      } finally {
+        _reconnectExpectNodeId = null;
       }
       if (_device != null &&
           !_userInitiatedDisconnect &&

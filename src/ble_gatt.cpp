@@ -10,6 +10,7 @@
 #include "engines/wardrive.h"
 #include "mesh_espnow.h"
 #include "ota_handler.h"
+#include "opsec_mac.h"
 #include "wifi_ota_handler.h"
 #include <Arduino.h>
 #include <Preferences.h>
@@ -2412,7 +2413,7 @@ class DeviceInfoCallbacks : public NimBLECharacteristicCallbacks {
         int len = snprintf(info, sizeof(info), "%s", FW_VERSION);
         len++;
         uint8_t mac[6];
-        esp_read_mac(mac, ESP_MAC_BT);
+        opsecFactoryBtMac(mac);
         len += snprintf(info + len, sizeof(info) - len, "OUISPY-%02X%02X",
                         mac[4], mac[5]);
         len++;
@@ -2473,12 +2474,13 @@ void bleGattInit(void) {
 
     char devName[24];
     {
-        uint8_t bmac[6];
-        esp_read_mac(bmac, ESP_MAC_BT);
+        // No MAC suffix in the advertised name. It was derived from the
+        // factory MAC, so it stayed the same across boots and would have
+        // identified the board just as well as the address it replaced.
 #ifdef OUISPY_ROLE_MANAGER
-        snprintf(devName, sizeof(devName), "OUI-SPY-MGR-%02X%02X", bmac[4], bmac[5]);
+        snprintf(devName, sizeof(devName), "OUI-SPY-MGR");
 #else
-        snprintf(devName, sizeof(devName), "OUI-SPY-%02X%02X", bmac[4], bmac[5]);
+        snprintf(devName, sizeof(devName), "OUI-SPY");
 #endif
         NimBLEDevice::init(devName);
         Serial.printf("[BLE] device name: %s\n", devName);
@@ -2523,7 +2525,7 @@ void bleGattInit(void) {
         int len = snprintf(info, sizeof(info), "%s", FW_VERSION);
         len++;
         uint8_t mac[6];
-        esp_read_mac(mac, ESP_MAC_BT);
+        opsecFactoryBtMac(mac);
         len += snprintf(info + len, sizeof(info) - len, "OUISPY-%02X%02X",
                         mac[4], mac[5]);
         len++;
