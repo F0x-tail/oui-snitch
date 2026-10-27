@@ -14,6 +14,7 @@ import 'package:latlong2/latlong.dart';
 import 'package:oui_spy/core/db/app_database.dart' hide Detection;
 import 'package:oui_spy/core/export/wigle_csv_import.dart';
 import 'package:oui_spy/core/app_state.dart';
+import 'package:oui_spy/core/classify/device_registry.dart';
 import 'package:oui_spy/core/detection_icon.dart';
 import 'package:oui_spy/core/gps/gps_provider.dart';
 import 'package:oui_spy/core/models/detection.dart';
@@ -91,6 +92,11 @@ class _WardriveScreenState extends ConsumerState<WardriveScreen> with WidgetsBin
   double _povHeading = double.nan;
   _DetectionLayers? _cachedLayers;
   Detection? _focusedDetection;
+  // "Show all" holds a set of MACs rather than the detections themselves, so
+  // the group keeps tracking live updates to those devices instead of freezing
+  // a snapshot taken at the moment of the tap.
+  Set<String> _classGroupMacs = const {};
+  String _classGroupLabel = '';
   String _cachedLayersKey = '';
   List<Geofence> _exclusionZones = [];
   bool _reconnectPromptOpen = false;
@@ -196,6 +202,10 @@ class _WardriveScreenState extends ConsumerState<WardriveScreen> with WidgetsBin
       }
     }
 
+    _fitToPoints(points);
+  }
+
+  void _fitToPoints(List<LatLng> points) {
     if (points.length < 2) {
       if (points.length == 1) {
         _mapController.move(points.first, 16);
@@ -269,6 +279,58 @@ class _WardriveScreenState extends ConsumerState<WardriveScreen> with WidgetsBin
   void _clearFocusedDetection() {
     if (_focusedDetection == null) return;
     setState(() => _focusedDetection = null);
+  }
+
+  /// What to call the group a detection belongs to. The classifier's class is
+  /// the useful answer ("Cameras"), but it only knows devices it has seen this
+  /// run, so the engine that found it is the fallback.
+  Map<String, String> _classIndex() {
+    final out = <String, String>{};
+    for (final dev in ref.read(deviceRegistryProvider).devices) {
+      final cls = dev.primaryClass;
+      if (cls != null) out[dev.obs.mac.toUpperCase()] = cls.folded.label;
+    }
+    return out;
+  }
+
+  String _classLabelOf(Detection d, [Map<String, String>? index]) =>
+      (index ?? _classIndex())[d.macAddress.toUpperCase()] ?? d.engine.label;
+
+  void _showAllOfClass() {
+    final focus = _focusedDetection;
+    if (focus == null) return;
+    // One pass over the registry, not one per detection: the loop below can
+    // run over thousands of sightings.
+    final index = _classIndex();
+    final label = _classLabelOf(focus, index);
+    final wd = ref.read(wardriveProvider);
+    final macs = <String>{};
+    final points = <LatLng>[];
+    for (final d in [
+      ...wd.dedupedDetections,
+      ...ref.read(appStateProvider).recentDetections,
+    ]) {
+      if (_classLabelOf(d, index) != label) continue;
+      if (!_hasMapCoord(d.latitude, d.longitude)) continue;
+      if (!macs.add(d.macAddress.toUpperCase())) continue;
+      points.add(LatLng(d.latitude!, d.longitude!));
+    }
+    if (macs.isEmpty) return;
+    setState(() {
+      _focusedDetection = null;
+      _classGroupMacs = macs;
+      _classGroupLabel = label;
+      _followMode = false;
+    });
+    _fitToPoints(points);
+  }
+
+  void _clearClassGroup() {
+    if (_classGroupMacs.isEmpty && _classGroupLabel.isEmpty) return;
+    setState(() {
+      _classGroupMacs = const {};
+      _classGroupLabel = '';
+    });
   }
 
   static bool _hasMapCoord(double? lat, double? lon) {
@@ -496,6 +558,8 @@ class _WardriveScreenState extends ConsumerState<WardriveScreen> with WidgetsBin
         wd.hasSessionData) {
       _lastSessionLoadEpoch = wd.sessionLoadEpoch;
       _focusedDetection = null;
+      _classGroupMacs = const {};
+      _classGroupLabel = '';
       _followMode = false;
       _initialFitDone = true;
       WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -719,7 +783,20 @@ class _WardriveScreenState extends ConsumerState<WardriveScreen> with WidgetsBin
                 child: Center(
                   child: _FocusedDetectionChip(
                     detection: _focusedDetection!,
+                    classLabel: _classLabelOf(_focusedDetection!),
+                    onShowAll: _showAllOfClass,
                     onClear: _clearFocusedDetection,
+                  ),
+                ),
+              ),
+            if (_focusedDetection == null && _classGroupMacs.isNotEmpty)
+              Positioned(
+                top: horizonY + 8, left: 0, right: 0,
+                child: Center(
+                  child: _ClassGroupChip(
+                    label: _classGroupLabel,
+                    count: _classGroupMacs.length,
+                    onClear: _clearClassGroup,
                   ),
                 ),
               ),
@@ -1117,7 +1194,8 @@ class _WardriveScreenState extends ConsumerState<WardriveScreen> with WidgetsBin
     final alerted = ref.read(notificationServiceProvider).classAlertedMacs.length;
     final key = '$alerted|${wd.dedupedDetections.length}|$recentLen|${wd.flockFilter}|'
         '${wd.detectorFilter}|${_currentZoom.toStringAsFixed(1)}|${wd.sessionId}|'
-        '${focus == null ? '' : '${focus.macAddress}|${focus.engine.name}'}';
+        '${focus == null ? '' : '${focus.macAddress}|${focus.engine.name}'}|'
+        '$_classGroupLabel|${_classGroupMacs.length}';
     if (_cachedLayersKey == key && _cachedLayers != null) return _cachedLayers!;
     final layers = _computeDetectionLayers(wd, wt);
     _cachedLayers = layers;
@@ -1162,6 +1240,10 @@ class _WardriveScreenState extends ConsumerState<WardriveScreen> with WidgetsBin
           : (_hasMapCoord(focused.latitude, focused.longitude)
               ? [focused]
               : const <Detection>[]);
+    } else if (_classGroupMacs.isNotEmpty) {
+      geoDetections = allGeo
+          .where((d) => _classGroupMacs.contains(d.macAddress.toUpperCase()))
+          .toList();
     } else if (filterActive) {
       geoDetections = allGeo.where((d) {
         if (wd.flockFilter &&

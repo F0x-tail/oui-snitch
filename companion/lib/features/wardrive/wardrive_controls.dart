@@ -561,9 +561,68 @@ class _MapStyleButton extends StatelessWidget {
   }
 }
 
+class _ClassGroupChip extends StatelessWidget {
+  const _ClassGroupChip({
+    required this.label,
+    required this.count,
+    required this.onClear,
+  });
+  final String label;
+  final int count;
+  final VoidCallback onClear;
+
+  @override
+  Widget build(BuildContext context) {
+    final t = AppTheme.of(context);
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onClear,
+        borderRadius: BorderRadius.circular(14),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+          decoration: BoxDecoration(
+            color: t.surface.withValues(alpha: 0.92),
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(color: t.textDim.withValues(alpha: 0.6)),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(label.toUpperCase(),
+                  style: TextStyle(
+                    color: t.textPrimary,
+                    fontSize: 11,
+                    fontWeight: FontWeight.w700,
+                    letterSpacing: 1,
+                  )),
+              const SizedBox(width: 6),
+              Text('$count',
+                  style: TextStyle(
+                    color: t.textDim,
+                    fontSize: 11,
+                    fontWeight: FontWeight.w700,
+                  )),
+              const SizedBox(width: 6),
+              Icon(Icons.close, size: 12, color: t.textDim),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 class _FocusedDetectionChip extends StatelessWidget {
-  const _FocusedDetectionChip({required this.detection, required this.onClear});
+  const _FocusedDetectionChip({
+    required this.detection,
+    required this.classLabel,
+    required this.onShowAll,
+    required this.onClear,
+  });
   final Detection detection;
+  final String classLabel;
+  final VoidCallback onShowAll;
   final VoidCallback onClear;
 
   @override
@@ -602,13 +661,22 @@ class _FocusedDetectionChip extends StatelessWidget {
                 ),
               ),
               const SizedBox(width: 8),
-              Text('SHOW ALL',
-                  style: TextStyle(
-                    color: t.textDim,
-                    fontSize: 8,
-                    fontWeight: FontWeight.w700,
-                    letterSpacing: 1,
-                  )),
+              // The label used to say SHOW ALL and only clear the focus. It
+              // now does what it says: every device of the same class, framed.
+              GestureDetector(
+                behavior: HitTestBehavior.opaque,
+                onTap: onShowAll,
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 2, vertical: 4),
+                  child: Text('ALL ${classLabel.toUpperCase()}',
+                      style: TextStyle(
+                        color: detection.engine.color,
+                        fontSize: 8,
+                        fontWeight: FontWeight.w700,
+                        letterSpacing: 1,
+                      )),
+                ),
+              ),
               const SizedBox(width: 4),
               Icon(Icons.close, size: 12, color: t.textDim),
             ],
