@@ -1,4 +1,4 @@
-package com.rootdowndigital.ouispy
+package io.github.f0xtail.ouisnitch
 
 import android.app.NotificationManager
 import android.app.Service
