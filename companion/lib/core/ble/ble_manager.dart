@@ -445,8 +445,12 @@ class BleManager {
       for (final r in results) {
         if (exclude.contains(r.device.remoteId.toString())) continue;
         final n = '${r.device.platformName} ${r.advertisementData.advName}'
+            .trim()
             .toUpperCase();
-        if (n.contains('-MGR') != mgr) continue;
+        // A board with a bonded phone advertises without its name, so the name
+        // can only rule a candidate out when there is one. The node-id check
+        // after connecting is what actually decides.
+        if (n.isNotEmpty && n.contains('-MGR') != mgr) continue;
         if (!completer.isCompleted) completer.complete(r.device);
       }
     });
@@ -1582,6 +1586,7 @@ class BleManager {
     bool extendedOui = false,
     bool offlineScan = false,
     bool allowOuiOnly = false,
+    bool passiveBleScan = false,
   }) async {
     if (_hardwareConfig == null) return;
     await _serialWrite(_hardwareConfig!, 
@@ -1593,6 +1598,7 @@ class BleManager {
         extendedOui: extendedOui,
         offlineScan: offlineScan,
         allowOuiOnly: allowOuiOnly,
+        passiveBleScan: passiveBleScan,
       ),
     );
   }

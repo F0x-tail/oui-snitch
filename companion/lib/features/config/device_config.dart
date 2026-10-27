@@ -91,6 +91,7 @@ class DeviceConfigScreen extends ConsumerStatefulWidget {
 class _DeviceConfigScreenState extends ConsumerState<DeviceConfigScreen> {
   bool _flockExtendedOui = false;
   bool _flockAllowOuiOnly = false;
+  bool _blePassiveScan = false;
   bool _offlineScanEnabled = false;
   bool _offlineGpsTag = false;
   bool _buzzerEnabled = true;
@@ -181,6 +182,7 @@ class _DeviceConfigScreenState extends ConsumerState<DeviceConfigScreen> {
             _buzzerVolume = hw.length >= 4 ? hw[3] : 100;
             _flockExtendedOui = hw.length >= 5 && hw[4] != 0;
             _flockAllowOuiOnly = hw.length >= 7 && hw[6] != 0;
+            _blePassiveScan = hw.length >= 8 && hw[7] != 0;
             _offlineScanEnabled = hw.length > 5 && hw[5] != 0;
           });
           ref.read(sharedPreferencesProvider)
@@ -804,6 +806,20 @@ class _DeviceConfigScreenState extends ConsumerState<DeviceConfigScreen> {
           value: _flockAllowOuiOnly,
           onChanged: (v) {
             setState(() => _flockAllowOuiOnly = v);
+            _writeHardwareConfig();
+          },
+        ),
+
+        const SizedBox(height: 16),
+        const ConfigSectionHeader(label: 'RADIO PRIVACY'),
+        ConfigToggleRow(
+          icon: Icons.hearing,
+          label: 'Passive Bluetooth scanning',
+          subtitle: 'Listen only. By default the board asks each nearby device for its name, which sends its own address to the very devices it is detecting. Passive scanning sends nothing, but some devices will show without a name.',
+          color: const Color(0xFF9B8AFB),
+          value: _blePassiveScan,
+          onChanged: (v) {
+            setState(() => _blePassiveScan = v);
             _writeHardwareConfig();
           },
         ),
@@ -1505,6 +1521,7 @@ class _DeviceConfigScreenState extends ConsumerState<DeviceConfigScreen> {
             extendedOui: _flockExtendedOui,
             allowOuiOnly: _flockAllowOuiOnly,
             offlineScan: _offlineScanEnabled,
+            passiveBleScan: _blePassiveScan,
           );
       ref.read(sharedPreferencesProvider)
           .setBool('offlineScanEnabled', _offlineScanEnabled);

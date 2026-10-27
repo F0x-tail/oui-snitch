@@ -8,6 +8,7 @@
 static NimBLEAdvertisedDeviceCallbacks* g_cbs[BLE_COEX_MAX];
 static volatile int g_count = 0;
 static bool g_wantActive = false;
+static volatile bool g_passiveScan = false;
 static portMUX_TYPE g_mux = portMUX_INITIALIZER_UNLOCKED;
 volatile uint32_t g_bleRawSeen = 0;
 #ifdef OUISPY_STATUS_LOG
@@ -59,7 +60,7 @@ void bleCoexRegister(NimBLEAdvertisedDeviceCallbacks* cb, bool activeScan) {
 
     NimBLEScan* s = NimBLEDevice::getScan();
     s->setAdvertisedDeviceCallbacks(&g_dispatch, true);
-    if (g_wantActive) s->setActiveScan(true);
+    if (g_wantActive) bleScanSetActive(s, true);
     Serial.printf("[BLE-COEX] register (count=%d)\n", count);
 }
 
@@ -73,7 +74,7 @@ void bleCoexEnsureScanning(void) {
     if (meshIsEnabled() && meshInMeshWindow()) return;
     NimBLEScan* s = NimBLEDevice::getScan();
     if (s->isScanning()) return;
-    s->setActiveScan(g_wantActive);
+    bleScanSetActive(s, g_wantActive);
     s->setInterval(100);
     s->setWindow(99);
 #ifdef OUISPY_NIMBLE2_API
@@ -109,3 +110,20 @@ void bleCoexUnregister(NimBLEAdvertisedDeviceCallbacks* cb) {
 bool bleCoexActive(void) {
     return g_count > 0;
 }
+
+void bleScanSetActive(NimBLEScan* s, bool wantActive) {
+    if (s) s->setActiveScan(wantActive && !g_passiveScan);
+}
+
+void bleSetPassiveScan(bool passive) {
+    if (g_passiveScan == passive) return;
+    g_passiveScan = passive;
+    // The mode is fixed for the life of a scan. Stopping it lets the next
+    // restart pick the new mode up, so the change does not wait for the next
+    // engine restart to take effect.
+    NimBLEScan* s = NimBLEDevice::getScan();
+    if (s && s->isScanning()) s->stop();
+    Serial.printf("[BLE-COEX] scan mode: %s\n", passive ? "passive (listen only)" : "active");
+}
+
+bool bleGetPassiveScan(void) { return g_passiveScan; }

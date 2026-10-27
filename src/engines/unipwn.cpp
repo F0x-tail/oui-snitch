@@ -61,7 +61,7 @@ static UnipwnCallback scanCb;
 
 static void unipwnInit(void) {
     bleScan = NimBLEDevice::getScan();
-    bleScan->setActiveScan(true);
+    bleScanSetActive(bleScan, true);
     bleScan->setInterval(100);
     bleScan->setWindow(99);
     dedup.reset();

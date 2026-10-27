@@ -140,7 +140,7 @@ static void axonStart(void) {
     if (!othersOwnRadio && wantBle) {
         bleScan = NimBLEDevice::getScan();
         bleCoexRegister(&scanCb, false);   // passive: these are ADV_IND payloads
-        bleScan->setActiveScan(false);
+        bleScanSetActive(bleScan, false);
         bleScan->setInterval(100);
         bleScan->setWindow(99);
     }

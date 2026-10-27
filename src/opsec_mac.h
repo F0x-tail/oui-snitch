@@ -6,10 +6,14 @@
 
 // A board that keeps its factory MAC is trackable across every place it is
 // switched on, by anyone within radio range, forever. A fresh locally
-// administered base MAC each boot removes that, at the cost of being
-// unrecognisable to a phone that saved the old address — which is why the app
-// falls back to scanning for a board of the same role and verifying its node
-// id (BleManager._scanForSameRole).
+// administered base MAC each boot removes that for Wi-Fi and ESP-NOW.
+//
+// Bluetooth does not use it. A new Bluetooth address every boot invalidated
+// every bond, so the phone asked for the passkey after each reboot. BLE
+// advertises from a random static address that is generated once and kept
+// instead (bleUseStableAddress in ble_gatt.cpp). The app still falls back to
+// scanning for a board of the same role and verifying its node id
+// (BleManager._scanForSameRole) for any address it cannot find.
 
 inline uint8_t g_factoryBtMac[6] = {0};
 inline bool g_factoryBtMacSet = false;

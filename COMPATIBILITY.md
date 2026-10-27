@@ -113,12 +113,27 @@ may run other builds. Slot 1 now holds a dedicated duty-equipment engine.
 
 ### Privacy and safety posture
 
-- **Passive by default.** Wardrive no longer transmits probe requests unless the
-  user opts in. The gate (`g_activeProbeEnabled`) is deliberately global rather
-  than per-engine, because more than one engine has its own probe routine and
-  gating only one leaves the device transmitting while the UI says it is
-  listening.
-- **Pairing required** for the phone link, with a settable passkey.
+- **No Wi-Fi probe requests unless the user opts in.** The gate
+  (`g_activeProbeEnabled`) is deliberately global rather than per-engine,
+  because more than one engine has its own probe routine and gating only one
+  leaves the device transmitting while the UI says it is listening.
+- **Passive Bluetooth scanning as an option.** Bluetooth scanning is active by
+  default, because active scans return device names. That means the board
+  sends a scan request, carrying its own address, to every advertiser it hears,
+  including the devices it detects. *Settings → Radio privacy* switches every
+  engine to listen-only through one gate (`bleScanSetActive`).
+- **The mesh is off until the user turns it on.** It used to start at every
+  boot, unencrypted, beaconing a factory-derived node id every 1.5 s and
+  accepting firmware from any sender in range. The user's choice now persists
+  in NVS, and nothing else enables it.
+- **Pairing required** for the phone link, with a settable passkey. A peer
+  that connects but does not pair within 60 s is dropped, and the board keeps
+  advertising while an unpaired peer is connected, so a stranger cannot hold
+  the link and lock the owner's phone out.
+- **A kept random Bluetooth address.** The board advertises from a random
+  static address generated once and stored, not the factory address and not a
+  new one every boot, which would break bonding. The Wi-Fi MAC still changes
+  every boot. Once a phone is bonded, the advertised name is dropped.
 - **A privacy screen** that masks identifiers in the UI.
 - **Android backup disabled**; detection logging gated to debug builds.
 - **Runs under GrapheneOS's** dynamic-code-loading restriction.

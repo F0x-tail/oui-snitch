@@ -146,6 +146,12 @@ is in use.
 The default exists so a board with no screen and no buttons can be set up at
 all. It is a starting point, not a setting to leave alone.
 
+You pair once per phone. The board keeps the same Bluetooth address across
+reboots, so the bond survives them. Once a phone is paired, the board stops
+advertising its name. Your phone still finds it, but a stranger scanning
+nearby no longer sees "OUI-SNITCH". Someone who connects without pairing is
+dropped after a minute, and can't lock your phone out while connected.
+
 ---
 
 ## What it detects
@@ -219,10 +225,15 @@ module wins. With no fix at all, rows are still logged but cannot be uploaded.
 
 Read these before trusting the device with anything that matters.
 
-- **The mesh link is not secure.** ESP-NOW defaults to plaintext broadcast, and
-  the current key exchange has flaws that have not been fixed. Do not treat mesh
-  traffic as private, and do not use it to carry anything you would not shout.
-  The phone↔board Bluetooth link is separate and is encrypted once paired.
+- **The mesh is off by default, and not secure when on.** Turning it on in
+  the app starts ESP-NOW, which defaults to plaintext broadcast, and the key
+  exchange has flaws that have not been fixed. A board on the mesh also accepts
+  firmware updates from other mesh devices. Leave it off unless you need it, and
+  do not carry anything over it you would not shout. The phone↔board Bluetooth
+  link is separate and is encrypted once paired.
+- **Bluetooth scanning is active by default.** To read device names, the board
+  sends a scan request to everything it hears, including what it detects. For
+  listen-only, turn on *Settings → Radio privacy → Passive Bluetooth scanning*.
 - **The default passkey protects nothing.** See *Pairing* above.
 - **Detections are signal matches.** No engine identifies a device with
   certainty. Confidence tiers tell you how much evidence there was.

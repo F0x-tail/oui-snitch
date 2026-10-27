@@ -62,6 +62,8 @@ void bleGattSpoolE2EStart(void);
 void bleGattE2ESmokeStart(void);
 #endif
 void bleGattNodeGraceTick(void);
+// Drops any peer that connected but has not paired within the deadline.
+void bleGattPeerDeadlineTick(void);
 
 // Send mesh status notification
 void bleGattNotifyMeshStatus(void);

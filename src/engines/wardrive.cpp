@@ -715,7 +715,7 @@ static void wardriveStart(void) {
     if (wardriveRadio & 0x02) {
         pWardriveScan = NimBLEDevice::getScan();
         bleCoexRegister(&wardriveBleCallbacks, true);
-        pWardriveScan->setActiveScan(true);
+        bleScanSetActive(pWardriveScan, true);
         pWardriveScan->setInterval(100);
         pWardriveScan->setWindow(99);
     }

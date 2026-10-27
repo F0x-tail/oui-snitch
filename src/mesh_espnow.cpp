@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: MIT
 #include "mesh_espnow.h"
 #include "opsec_mac.h"
+#include <Preferences.h>
 #include "engine_registry.h"
 #include "engines/wardrive.h"
 #include "ignore_list.h"
@@ -1502,6 +1503,35 @@ void meshInit(void) {
 static bool g_meshEverInit = false;
 void meshEnable(const MeshConfig* cfg) {
     meshEnableEx(cfg, true);
+}
+
+// The mesh used to start at every boot, unencrypted, and beacon every 1.5 s
+// with a node id derived from the factory MAC — a permanent identifier on the
+// air, plus whether the phone was connected and whether the board sat inside
+// an exclusion zone. It also accepted firmware from any sender in range. None
+// of that should happen to someone who never asked for a mesh, so the mesh is
+// now off until the user turns it on, and stays however they left it.
+void meshSaveUserConfig(const MeshConfig* cfg) {
+    Preferences p;
+    p.begin("ouispy-mesh", false);
+    p.putBytes("cfg", cfg, sizeof(MeshConfig));
+    p.end();
+}
+
+bool meshRestoreUserConfig(void) {
+    MeshConfig cfg = {};
+    Preferences p;
+    p.begin("ouispy-mesh", true);
+    size_t n = p.getBytes("cfg", &cfg, sizeof(cfg));
+    p.end();
+    if (n != sizeof(cfg) || !cfg.enabled) {
+        Serial.println("[MESH] off — turn it on in the app to use one");
+        return false;
+    }
+    meshEnable(&cfg);
+    Serial.printf("[MESH] restored: enc=%d peers=%d\n",
+                  cfg.encryption_enabled, cfg.peer_count);
+    return true;
 }
 
 void meshEnableEx(const MeshConfig* cfg, bool sendInvite) {

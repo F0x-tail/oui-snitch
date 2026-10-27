@@ -7,12 +7,25 @@ void main() {
     final on = BleProtocol.encodeHardwareConfig(
       buzzer: true, led: true, neopixelBrightness: 10, buzzerVolume: 20,
       extendedOui: false, offlineScan: true);
-    expect(on.length, 7);
+    expect(on.length, 8);
     expect(on[5], 1);
     final off = BleProtocol.encodeHardwareConfig(
       buzzer: true, led: true, neopixelBrightness: 10, buzzerVolume: 20,
       extendedOui: false, offlineScan: false);
     expect(off[5], 0);
+  });
+
+  test('hardware config carries passive-scan byte[7], active by default', () {
+    final active = BleProtocol.encodeHardwareConfig(
+      buzzer: true, led: true, neopixelBrightness: 10, buzzerVolume: 20);
+    expect(active[7], 0);
+    final passive = BleProtocol.encodeHardwareConfig(
+      buzzer: true, led: true, neopixelBrightness: 10, buzzerVolume: 20,
+      passiveBleScan: true);
+    expect(passive[7], 1);
+    // Every byte before it is unchanged, so older firmware that reads seven
+    // bytes sees exactly what it saw before.
+    expect(passive.sublist(0, 7), active.sublist(0, 7));
   });
 
   test('decodes spool header frame', () {

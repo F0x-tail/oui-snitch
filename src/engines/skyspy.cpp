@@ -384,7 +384,7 @@ static void skyspyInit(void) {
     memset(drones, 0, sizeof(drones));
     g_lastBleDrone = nullptr;
     bleScan = NimBLEDevice::getScan();
-    bleScan->setActiveScan(true);
+    bleScanSetActive(bleScan, true);
     bleScan->setInterval(100);
     bleScan->setWindow(99);
     bleScan->setDuplicateFilter(false);

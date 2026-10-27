@@ -484,7 +484,7 @@ static void pcapStart(void) {
     } else {
         pPcapScan = NimBLEDevice::getScan();
         bleCoexRegister(&pcapBleCallbacks, true);
-        pPcapScan->setActiveScan(true);
+        bleScanSetActive(pPcapScan, true);
         pPcapScan->setInterval(160);
         pPcapScan->setWindow(159);
         pPcapScan->start(0, pcapBleOnComplete, false);

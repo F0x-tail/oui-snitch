@@ -8,6 +8,10 @@ void meshInit(void);
 void meshEnable(const MeshConfig* cfg);
 void meshEnableEx(const MeshConfig* cfg, bool sendInvite);
 void meshDisable(void);
+// The mesh is off unless the user turns it on from the app. Their choice is
+// kept across reboots; nothing else turns the mesh on.
+void meshSaveUserConfig(const MeshConfig* cfg);
+bool meshRestoreUserConfig(void);
 void meshSendInvite(void);
 void meshBroadcastDetection(const DetectionEvent* evt, bool spooled = false);
 void meshFlushPendingTxAllChannels(void);

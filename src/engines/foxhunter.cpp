@@ -245,7 +245,7 @@ static void foxhunterStart(void) {
     if (!wardriveOwns) {
         bleScan = NimBLEDevice::getScan();
         bleCoexRegister(&scanCb, true);
-        bleScan->setActiveScan(true);
+        bleScanSetActive(bleScan, true);
         bleScan->setInterval(100);
         bleScan->setWindow(99);
         lastScanStart = 0;

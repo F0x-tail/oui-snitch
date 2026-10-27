@@ -11,6 +11,7 @@
 #include "mesh_espnow.h"
 #include "ota_handler.h"
 #include "opsec_mac.h"
+#include "ble_coex.h"
 #include "wifi_ota_handler.h"
 #include <Arduino.h>
 #include <Preferences.h>
@@ -1041,11 +1042,163 @@ class EnowCoreCallbacks : public NimBLECharacteristicCallbacks {
 };
 static EnowCoreCallbacks enowCoreCb;
 
+#ifdef OUISPY_NIMBLE2_API
+static char s_devName[24] = "OUI-SNITCH";
+
+// One random static address per board, generated on first boot and kept.
+// The factory address ties the board to its hardware for life, and a fresh
+// address every boot invalidates every bond, so the phone asked for the
+// passkey after each reboot. A kept random address does neither. Bluetooth's
+// own answer — a resolvable private address that rotates while bonded phones
+// still recognise it — builds on exactly this kind of stable identity.
+static void bleUseStableAddress(void) {
+    uint8_t a[6];
+    Preferences p;
+    p.begin("ouispy-ble", false);
+    size_t n = p.getBytes("addr", a, sizeof(a));
+    // NimBLE holds addresses little-endian, so a[5] is the most significant
+    // byte; its top two bits set is what marks an address random static.
+    bool valid = n == sizeof(a) && (a[5] & 0xC0) == 0xC0;
+    if (!valid) {
+        esp_fill_random(a, sizeof(a));
+        a[5] |= 0xC0;
+        p.putBytes("addr", a, sizeof(a));
+    }
+    p.end();
+    if (!NimBLEDevice::setOwnAddr(a) || !NimBLEDevice::setOwnAddrType(BLE_OWN_ADDR_RANDOM)) {
+        Serial.println("[BLE] could not apply the kept address — staying on the boot address");
+        return;
+    }
+    Serial.printf("[BLE] address %02X:%02X:%02X:%02X:%02X:%02X (random static, kept)\n",
+                  a[5], a[4], a[3], a[2], a[1], a[0]);
+}
+
+// The advertised name is for finding the board the first time. Once a phone
+// is bonded it recognises the board without it, and a name saying what this
+// device is tells nobody anything useful except strangers in range.
+static void bleConfigureAdvertising(void) {
+    NimBLEAdvertising* adv = NimBLEDevice::getAdvertising();
+    adv->reset();
+    adv->addServiceUUID(SVC_UUID);
+    const bool bonded = NimBLEDevice::getNumBonds() > 0;
+    adv->enableScanResponse(!bonded);
+    if (!bonded) adv->setName(s_devName);
+}
+#endif
+
+// The phone leaving: hand the board back to whatever it does on its own.
+static void phoneLinkLost(void) {
+#ifdef OUISPY_ROLE_MANAGER
+    mgrPhoneGoneMs = millis();
+    if (offlineScanEnabled) {
+        mgrDropWigleForOffline();
+        Serial.println("[BLE] Phone disconnected (manager) — offline scan, wigle dropped fleet-wide, targeted engines kept");
+    } else {
+        Serial.println("[BLE] Phone disconnected (manager) — teardown deferred (grace)");
+    }
+#else
+    nodePhoneDisconnected();
+#endif
+    NimBLEDevice::startAdvertising();
+#if defined(OUISPY_XIAO_C5) || defined(OUISPY_TDONGLE_C5)
+    Serial.printf("[BLET] advertising restarted t=%ums\n", (unsigned)millis());
+#endif
+}
+
+#ifdef OUISPY_NIMBLE2_API
+// Connections that have not authenticated yet. A peer that connects and never
+// pairs used to keep the board indefinitely: connecting stops advertising, so
+// the owner's phone could not reach it, and nothing ever dropped the stranger.
+// Now the board keeps advertising until a phone has authenticated, and any
+// peer still unauthenticated after the deadline is disconnected. The deadline
+// is long enough to read the passkey off a sticker and type it.
+static const uint32_t kPairDeadlineMs = 60000;
+static const int kMaxPeers = 4;
+struct PendingPeer { uint16_t handle; uint32_t since; };
+static PendingPeer s_pending[kMaxPeers] = {
+    {BLE_HS_CONN_HANDLE_NONE, 0}, {BLE_HS_CONN_HANDLE_NONE, 0},
+    {BLE_HS_CONN_HANDLE_NONE, 0}, {BLE_HS_CONN_HANDLE_NONE, 0}};
+static uint16_t s_phoneHandle = BLE_HS_CONN_HANDLE_NONE;
+static portMUX_TYPE s_peerMux = portMUX_INITIALIZER_UNLOCKED;
+
+static void pendingAdd(uint16_t h) {
+    portENTER_CRITICAL(&s_peerMux);
+    for (int i = 0; i < kMaxPeers; i++) {
+        if (s_pending[i].handle == BLE_HS_CONN_HANDLE_NONE) {
+            s_pending[i].handle = h;
+            s_pending[i].since = millis();
+            break;
+        }
+    }
+    portEXIT_CRITICAL(&s_peerMux);
+}
+
+static void pendingRemove(uint16_t h) {
+    portENTER_CRITICAL(&s_peerMux);
+    for (int i = 0; i < kMaxPeers; i++) {
+        if (s_pending[i].handle == h) s_pending[i].handle = BLE_HS_CONN_HANDLE_NONE;
+    }
+    portEXIT_CRITICAL(&s_peerMux);
+}
+
+void bleGattPeerDeadlineTick(void) {
+    if (!pServer) return;
+    uint32_t now = millis();
+    uint16_t expired[kMaxPeers];
+    int n = 0;
+    portENTER_CRITICAL(&s_peerMux);
+    for (int i = 0; i < kMaxPeers; i++) {
+        if (s_pending[i].handle == BLE_HS_CONN_HANDLE_NONE) continue;
+        if ((uint32_t)(now - s_pending[i].since) < kPairDeadlineMs) continue;
+        expired[n++] = s_pending[i].handle;
+        s_pending[i].handle = BLE_HS_CONN_HANDLE_NONE;
+    }
+    portEXIT_CRITICAL(&s_peerMux);
+    for (int i = 0; i < n; i++) {
+        Serial.printf("[BLE] peer %u never paired within %us — dropping it\n",
+                      (unsigned)expired[i], (unsigned)(kPairDeadlineMs / 1000));
+        pServer->disconnect(expired[i]);
+    }
+}
+#else
+void bleGattPeerDeadlineTick(void) {}
+#endif
+
 class ServerCallbacks : public NimBLEServerCallbacks {
-    void onConnect(NimBLEServer* server) override {
+#ifdef OUISPY_NIMBLE2_API
+    void onConnect(NimBLEServer* server, NimBLEConnInfo& info) override {
         // Link up, but unauthenticated. Stopping our own scan and asking for a
         // faster connection interval are both needed for pairing itself to go
         // through, so they happen here; trust does not.
+        const uint16_t h = info.getConnHandle();
+#if OUISPY_BLE_SECURE
+        pendingAdd(h);
+#else
+        s_phoneHandle = h;
+        phoneLinkAuthorised();
+#endif
+        NimBLEScan* scan = NimBLEDevice::getScan();
+        if (scan && scan->isScanning()) {
+            scan->stop();
+        }
+        server->updateConnParams(h, 12, 24, 0, 600);
+#if OUISPY_BLE_SECURE
+        // Until a phone has authenticated, this connection may be anyone's.
+        // Keep advertising so the real phone can still get in alongside it.
+        if (!phoneConnected) NimBLEDevice::startAdvertising();
+        Serial.printf("[BLE] Peer %u connected, waiting for pairing\n", (unsigned)h);
+#else
+        Serial.println("[BLE] Phone connected, requested fast conn params");
+#endif
+#if defined(OUISPY_XIAO_C5) || defined(OUISPY_TDONGLE_C5)
+        Serial.printf("[BLET] connected t=%ums interval=%u latency=%u timeout=%u mtu=%u\n",
+                      (unsigned)millis(), (unsigned)info.getConnInterval(),
+                      (unsigned)info.getConnLatency(), (unsigned)info.getConnTimeout(),
+                      (unsigned)server->getPeerMTU(h));
+#endif
+    }
+#else
+    void onConnect(NimBLEServer* server) override {
 #if !OUISPY_BLE_SECURE
         phoneLinkAuthorised();
 #endif
@@ -1053,7 +1206,6 @@ class ServerCallbacks : public NimBLEServerCallbacks {
         if (scan && scan->isScanning()) {
             scan->stop();
         }
-
         uint16_t connHandle = server->getPeerInfo(0).getConnHandle();
         server->updateConnParams(connHandle, 12, 24, 0, 600);
 #if OUISPY_BLE_SECURE
@@ -1061,22 +1213,21 @@ class ServerCallbacks : public NimBLEServerCallbacks {
 #else
         Serial.println("[BLE] Phone connected, requested fast conn params");
 #endif
-#if defined(OUISPY_XIAO_C5) || defined(OUISPY_TDONGLE_C5)
-        {
-            NimBLEConnInfo ci = server->getPeerInfo(0);
-            Serial.printf("[BLET] connected t=%ums interval=%u latency=%u timeout=%u mtu=%u\n",
-                          (unsigned)millis(), (unsigned)ci.getConnInterval(),
-                          (unsigned)ci.getConnLatency(), (unsigned)ci.getConnTimeout(),
-                          (unsigned)server->getPeerMTU(connHandle));
-        }
-#endif
     }
+#endif
 
 #if OUISPY_BLE_SECURE
     // MeshCore's lesson, in NimBLE terms: the pairing result is the only thing
     // that may promote a connection to a trusted one.
     void onAuthenticationComplete(NimBLEConnInfo& connInfo) override {
         if (connInfo.isEncrypted() && connInfo.isAuthenticated()) {
+#ifdef OUISPY_NIMBLE2_API
+            pendingRemove(connInfo.getConnHandle());
+            s_phoneHandle = connInfo.getConnHandle();
+            // The phone is here; nobody else needs to reach the board now.
+            NimBLEDevice::stopAdvertising();
+            if (connInfo.isBonded()) bleConfigureAdvertising();
+#endif
             phoneLinkAuthorised();
             Serial.printf("[BLE] paired%s — phone link authorised\n",
                           connInfo.isBonded() ? " and bonded" : " (not bonded)");
@@ -1097,10 +1248,28 @@ class ServerCallbacks : public NimBLEServerCallbacks {
     }
 #endif
 
-    void onDisconnect(NimBLEServer* server) override {
+#ifdef OUISPY_NIMBLE2_API
+    void onDisconnect(NimBLEServer* server, NimBLEConnInfo& info, int reason) override {
+        (void)server; (void)reason;
 #if defined(OUISPY_XIAO_C5) || defined(OUISPY_TDONGLE_C5)
         Serial.printf("[BLET] disconnected t=%ums\n", (unsigned)millis());
 #endif
+        const uint16_t h = info.getConnHandle();
+        pendingRemove(h);
+        // Only the phone leaving is the phone leaving. With more than one
+        // connection allowed, a stranger dropping must not tear down a phone
+        // session that is still up.
+        if (h != s_phoneHandle) {
+            if (!phoneConnected) NimBLEDevice::startAdvertising();
+            return;
+        }
+        s_phoneHandle = BLE_HS_CONN_HANDLE_NONE;
+        phoneConnected = false;
+        hwAlertsSuppressed = false;
+        phoneLinkLost();
+    }
+#else
+    void onDisconnect(NimBLEServer* server) override {
         // A peer that never finished pairing was never a phone as far as the
         // rest of the firmware is concerned, so it must not trigger the
         // phone-left teardown either.
@@ -1111,22 +1280,9 @@ class ServerCallbacks : public NimBLEServerCallbacks {
             NimBLEDevice::startAdvertising();
             return;
         }
-#ifdef OUISPY_ROLE_MANAGER
-        mgrPhoneGoneMs = millis();
-        if (offlineScanEnabled) {
-            mgrDropWigleForOffline();
-            Serial.println("[BLE] Phone disconnected (manager) — offline scan, wigle dropped fleet-wide, targeted engines kept");
-        } else {
-            Serial.println("[BLE] Phone disconnected (manager) — teardown deferred (grace)");
-        }
-#else
-        nodePhoneDisconnected();
-#endif
-        NimBLEDevice::startAdvertising();
-#if defined(OUISPY_XIAO_C5) || defined(OUISPY_TDONGLE_C5)
-        Serial.printf("[BLET] advertising restarted t=%ums\n", (unsigned)millis());
-#endif
+        phoneLinkLost();
     }
+#endif
 };
 
 #ifdef OUISPY_ROLE_MANAGER
@@ -1340,6 +1496,13 @@ void hardwareConfigApply(const uint8_t* data, size_t len) {
         offlineScanEnabled = data[5] != 0;
         p.putBool("offl_scan", offlineScanEnabled);
     }
+    // Byte 7, passive BLE scanning, is optional on the wire: an app that does
+    // not know about it sends seven bytes and leaves the setting alone.
+    if (len >= 8) {
+        bool passive = data[7] != 0;
+        p.putBool("ble_passive", passive);
+        bleSetPassiveScan(passive);
+    }
     p.end();
     if (len >= 7) flockSetAllowOuiOnly(data[6] != 0);
 
@@ -1508,7 +1671,7 @@ class HardwareConfigCallbacks : public NimBLECharacteristicCallbacks {
     void onRead(NimBLECharacteristic* chr) override {
         Preferences p;
         p.begin("ouispy-hw", true);
-        uint8_t buf[7];
+        uint8_t buf[8];
         buf[0] = p.getBool("buzzer", true) ? 1 : 0;
         buf[1] = p.getBool("led", true) ? 1 : 0;
         buf[2] = p.getUChar("neo_brt", 50);
@@ -1517,7 +1680,8 @@ class HardwareConfigCallbacks : public NimBLECharacteristicCallbacks {
         buf[5] = p.getBool("offl_scan", false) ? 1 : 0;
         p.end();
         buf[6] = flockGetAllowOuiOnly() ? 1 : 0;
-        chr->setValue(buf, 7);
+        buf[7] = bleGetPassiveScan() ? 1 : 0;
+        chr->setValue(buf, 8);
     }
 };
 
@@ -1732,6 +1896,7 @@ class MeshConfigCallbacks : public NimBLECharacteristicCallbacks {
         } else {
             meshDisable();
         }
+        meshSaveUserConfig(&cfg);
 
         Serial.printf("[BLE] Mesh config: enabled=%d enc=%d peers=%d\n",
                       cfg.enabled, cfg.encryption_enabled, cfg.peer_count);
@@ -2484,6 +2649,10 @@ void bleGattInit(void) {
 #endif
         NimBLEDevice::init(devName);
         Serial.printf("[BLE] device name: %s\n", devName);
+#ifdef OUISPY_NIMBLE2_API
+        snprintf(s_devName, sizeof(s_devName), "%s", devName);
+        bleUseStableAddress();
+#endif
     }
     bootIdentityInit();
 #if OUISPY_BLE_SECURE
@@ -2710,12 +2879,11 @@ void bleGattInit(void) {
 #endif
 
     NimBLEAdvertising* adv = NimBLEDevice::getAdvertising();
-    adv->addServiceUUID(SVC_UUID);
 #ifndef OUISPY_NIMBLE2_API
+    adv->addServiceUUID(SVC_UUID);
     adv->setScanResponse(true);
 #else
-    adv->enableScanResponse(true);
-    adv->setName(devName);
+    bleConfigureAdvertising();
 #endif
     if (!adv->start()) {
         Serial.println("[BLE] WARNING: advertising failed to start");

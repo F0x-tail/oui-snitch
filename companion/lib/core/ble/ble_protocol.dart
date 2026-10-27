@@ -210,7 +210,9 @@ class BleProtocol {
 
   // -- Hardware config --
 
-  /// Encode hardware config: buzzer[1] led[1] neopixel_brightness[1] buzzer_volume[1]
+  /// Encode hardware config: buzzer[1] led[1] neopixel_brightness[1]
+  /// buzzer_volume[1] extended_oui[1] offline_scan[1] allow_oui_only[1]
+  /// passive_ble_scan[1]. Firmware reads the trailing bytes only if present.
   static Uint8List encodeHardwareConfig({
     required bool buzzer,
     required bool led,
@@ -219,6 +221,7 @@ class BleProtocol {
     bool extendedOui = false,
     bool offlineScan = false,
     bool allowOuiOnly = false,
+    bool passiveBleScan = false,
   }) {
     return Uint8List.fromList([
       buzzer ? 1 : 0,
@@ -228,6 +231,7 @@ class BleProtocol {
       extendedOui ? 1 : 0,
       offlineScan ? 1 : 0,
       allowOuiOnly ? 1 : 0,
+      passiveBleScan ? 1 : 0,
     ]);
   }
 

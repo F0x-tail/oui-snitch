@@ -7,6 +7,7 @@
 #include "../opsec_mac.h"
 #include "../det_spool.h"
 #include "../ble_gatt.h"
+#include "../ble_coex.h"
 #include "../mesh_espnow.h"
 #include "../wifi_ota_handler.h"
 #include "../ignore_list.h"
@@ -180,17 +181,13 @@ void setup() {
         Preferences p;
         p.begin("ouispy-hw", true);
         bool offlScan = p.getBool("offl_scan", false);
+        bool blePassive = p.getBool("ble_passive", false);
         p.end();
         offlineScanEnabledSetFromPref(offlScan);
+        bleSetPassiveScan(blePassive);
     }
 
-    {
-        MeshConfig cfg = {};
-        cfg.enabled = 1;
-        cfg.encryption_enabled = 0;
-        cfg.peer_count = 0;
-        meshEnable(&cfg);
-    }
+    meshRestoreUserConfig();
 
 #ifdef OUISPY_MGR_DET_TEST
     offlineScanEnabledSetFromPref(true);
@@ -219,6 +216,7 @@ void loop() {
     delay(50);
 #ifdef OUISPY_WD_CYCLE_TEST
     bleGattWdCycleTick();
+    bleGattPeerDeadlineTick();
 #endif
 #ifdef OUISPY_MGR_DET_TEST
     static bool dtOn = false;

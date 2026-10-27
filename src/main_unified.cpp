@@ -18,6 +18,7 @@
 #include "radio_coex.h"
 #include "ignore_list.h"
 #include "ble_gatt.h"
+#include "ble_coex.h"
 #include "mesh_espnow.h"
 #include "wifi_ota_handler.h"
 #include "engines/detector.h"
@@ -163,8 +164,10 @@ static void loadHardwareConfig(void) {
     hwNeopixelBrightness = p.getUChar("neo_brt", 50);
     bool flockExt = p.getBool("flock_ext", false);
     bool offlScan = p.getBool("offl_scan", false);
+    bool blePassive = p.getBool("ble_passive", false);
     p.end();
 
+    bleSetPassiveScan(blePassive);
     flockSetExtendedOui(flockExt);
     {
         extern bool flockAllowOuiOnly;
@@ -181,9 +184,10 @@ static void loadHardwareConfig(void) {
 #ifdef OUISPY_WIGLE_OFFLINE_SELFTEST
     bleGattWigleOfflineSelfTest();
 #endif
-    Serial.printf("[HW] Config: buzzer=%d vol=%d led=%d neo=%d flock_ext=%d\n",
+    Serial.printf("[HW] Config: buzzer=%d vol=%d led=%d neo=%d flock_ext=%d ble_passive=%d\n",
                   (int)hwBuzzerEnabled, (int)hwBuzzerVolume,
-                  (int)hwLedEnabled, (int)hwNeopixelBrightness, (int)flockExt);
+                  (int)hwLedEnabled, (int)hwNeopixelBrightness, (int)flockExt,
+                  (int)blePassive);
 }
 
 static bool isAlertableEngine(uint8_t engine_id) {
@@ -717,6 +721,7 @@ static void statusHeartbeatTask(void* param) {
         detSpoolFlushIfDirty();
         bleGattSpoolFlushPump();
         bleGattNodeGraceTick();
+        bleGattPeerDeadlineTick();
         espnowCoreTick();
 
         if (bleGattOfflineScanEnabled() && !meshManagerJoined()) {
@@ -1605,14 +1610,7 @@ void setup() {
 
 #ifndef OUISPY_ENGINE_SELFTEST
 #if !defined(OUISPY_COEX_STRESS) && !defined(OUISPY_NO_MESH)
-    {
-        MeshConfig cfg = {};
-        cfg.enabled = 1;
-        cfg.encryption_enabled = 0;
-        cfg.peer_count = 0;
-        meshEnable(&cfg);
-        Serial.println("[INIT] mesh auto-enabled (plaintext broadcast, manager-controlled)");
-    }
+    meshRestoreUserConfig();
 #endif
 #ifdef OUISPY_STANDALONE_STRESS
     delay(3000);
