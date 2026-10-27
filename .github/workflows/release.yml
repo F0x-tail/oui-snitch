@@ -32,7 +32,6 @@ jobs:
           FWNUM=$(sed -n 's/.*#define FW_VERSION_NUM  *\(0x[0-9a-fA-F]*\).*/\1/p' src/protocol.h)
           PUB=$(sed -n 's/^version: *\([0-9.]*\)+.*/\1/p' companion/pubspec.yaml)
           APP=$(sed -n "s/.*appVersion = '\([0-9.]*\)'.*/\1/p" companion/lib/features/config/device_config.dart)
-          WEB=$(sed -n 's/.*<div class="version">v\([0-9.]*\)<\/div>.*/\1/p' docs/index.html)
 
           rc=0
           check() { [ "$2" = "$3" ] || { echo "::error::$1 is '$2', tag wants '$3'"; rc=1; }; }
@@ -40,7 +39,6 @@ jobs:
           check "src/protocol.h FW_VERSION_NUM"      "$FWNUM" "$WANT_NUM"
           check "companion/pubspec.yaml"             "$PUB"   "$V"
           check "device_config.dart appVersion"      "$APP"   "$V"
-          check "docs/index.html flasher version"    "$WEB"   "$V"
           [ $rc -eq 0 ] && echo "all version sources = $V"
           exit $rc
 
@@ -51,59 +49,14 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
+        # Only boards that have actually been run. platformio.ini carries many
+        # more targets; an untested build in a release is a claim nobody has
+        # checked. Add a row here once a board has been flashed and used.
         include:
           - env: v3_app_controlled
             role: node
             board: xiao_s3
             chip: esp32s3
-          - env: v3_app_controlled_s3_devkitc
-            role: node
-            board: s3_devkitc
-            chip: esp32s3
-          - env: v3_app_controlled_tdongle_s3
-            role: node
-            board: tdongle_s3
-            chip: esp32s3
-          - env: v3_app_controlled_c5
-            role: node
-            board: xiao_c5
-            chip: esp32c5
-          - env: v3_app_controlled_tdongle_c5
-            role: node
-            board: tdongle_c5
-            chip: esp32c5
-          - env: v3_app_controlled_stickc
-            role: node
-            board: stickc
-            chip: esp32
-          - env: v3_app_controlled_stickc_plus
-            role: node
-            board: stickc_plus
-            chip: esp32
-          - env: v3_app_controlled_stickc_plus2
-            role: node
-            board: stickc_plus2
-            chip: esp32
-          - env: v3_node_manager_wroom
-            role: mgr
-            board: wroom
-            chip: esp32
-          - env: v3_node_manager_xiao_c3
-            role: mgr
-            board: xiao_c3
-            chip: esp32c3
-          - env: v3_node_manager_s3
-            role: mgr
-            board: xiao_s3
-            chip: esp32s3
-          - env: v3_node_manager_s3_devkitc
-            role: mgr
-            board: s3_devkitc
-            chip: esp32s3
-          - env: v3_node_manager_c5
-            role: mgr
-            board: xiao_c5
-            chip: esp32c5
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
         with:
@@ -132,7 +85,7 @@ jobs:
           ROLE="${{ matrix.role }}"
           BOARD="${{ matrix.board }}"
           ENV="${{ matrix.env }}"
-          STEM="oui-spy-${ROLE}-${BOARD}-${VERSION}"
+          STEM="oui-snitch-${ROLE}-${BOARD}-${VERSION}"
           mkdir -p dist
           cp ".pio/build/${ENV}/firmware.bin"   "dist/${STEM}.bin"
           cp ".pio/build/${ENV}/bootloader.bin" "dist/${STEM}-bootloader.bin"
@@ -146,82 +99,8 @@ jobs:
         with:
           name: firmware-${{ matrix.role }}-${{ matrix.board }}
           path: |
-            dist/oui-spy-*.bin
-            oui-spy-*-usb.tar.gz
-
-  publish-flasher:
-    name: Refresh web flasher bins
-    if: startsWith(github.ref, 'refs/tags/v')
-    needs: [build-firmware]
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
-        with:
-          ref: companion
-
-      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
-        with:
-          path: artifacts
-          pattern: firmware-*
-          merge-multiple: true
-
-      - name: Copy release bins into docs/firmware
-        run: |
-          VERSION="${GITHUB_REF_NAME}"
-          : > "${RUNNER_TEMP}/targets.txt"
-          for pair in node:xiao_s3 node:s3_devkitc node:xiao_c5 \
-                      node:tdongle_s3 node:tdongle_c5 \
-                      node:stickc node:stickc_plus node:stickc_plus2 \
-                      mgr:xiao_s3 mgr:s3_devkitc mgr:xiao_c3 mgr:wroom mgr:xiao_c5; do
-            ROLE="${pair%%:*}"; BOARD="${pair##*:}"
-            STEM="oui-spy-${ROLE}-${BOARD}-${VERSION}"
-            DEST="docs/firmware/${ROLE}-${BOARD}"
-            mkdir -p "$DEST"
-            for part in "":firmware "-bootloader":bootloader "-partitions":partitions "-boot_app0":boot_app0; do
-              SUF="${part%%:*}"; OUT="${part##*:}"
-              SRC=$(find artifacts -type f -name "${STEM}${SUF}.bin" | head -1)
-              if [ -z "$SRC" ]; then
-                echo "::error::missing ${STEM}${SUF}.bin"
-                exit 1
-              fi
-              cp "$SRC" "${DEST}/${OUT}.bin"
-            done
-            echo "${ROLE}-${BOARD}" >> "${RUNNER_TEMP}/targets.txt"
-          done
-
-      - name: Commit bins, record version pin, push
-        run: |
-          git config user.name  "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add docs/firmware
-          if git diff --cached --quiet; then
-            echo "flasher bins already current"
-          else
-            git commit -m "chore: web flasher bins ${GITHUB_REF_NAME}"
-          fi
-
-          TAG="${GITHUB_REF_NAME}" SHA="$(git rev-parse HEAD)" \
-          TARGETS="$(tr '\n' ' ' < "${RUNNER_TEMP}/targets.txt")" python3 - <<'PY'
-          import json, os, pathlib
-          p = pathlib.Path('docs/firmware/versions.json')
-          entries = json.loads(p.read_text()) if p.exists() else []
-          version = os.environ['TAG'].lstrip('v')
-          entries = [e for e in entries if e.get('version') != version]
-          entries.insert(0, {
-              'version': version,
-              'ref': os.environ['SHA'],
-              'targets': os.environ['TARGETS'].split(),
-          })
-          p.write_text(json.dumps(entries, indent=2) + '\n')
-          PY
-
-          git add docs/firmware/versions.json
-          if git diff --cached --quiet; then
-            echo "flasher version manifest already current"
-          else
-            git commit -m "chore: flasher version manifest ${GITHUB_REF_NAME}"
-          fi
-          git push origin HEAD:companion
+            dist/oui-snitch-*.bin
+            oui-snitch-*-usb.tar.gz
 
   release:
     name: Create GitHub Release
@@ -239,80 +118,42 @@ jobs:
         uses: softprops/action-gh-release@da05d552573ad5aba039eaac05058a918a7bf631
         with:
           draft: true
-          generate_release_notes: false
+          generate_release_notes: true
           body: |
-            ## OUI-SPY ${{ github.ref_name }}
+            ## OUI-SNITCH ${{ github.ref_name }}
 
             > [!NOTE]
-            > Early beta — file bugs in Issues.
-
-            ### What's new since v0.6.0
-
-            **Added**
-            - ESP32-C5 boards (XIAO C5, T-Dongle-C5) and M5StickC PLUS / PLUS2 join the mesh as fleet nodes; only the original M5StickC remains standalone
-            - NimBLE 2.x on all boards; S3 builds reclaim internal RAM via PSRAM NimBLE pools
-            - Node board ID: firmware reports its board type over BLE so the app and OTA can target per-board
-            - Per-board OTA: companion app selects the correct firmware image by board ID
-            - Battery meter on M5StickC / PLUS (AXP192 ADC) and PLUS2 (built-in fuel gauge)
-            - PWM display dimmer on M5StickC PLUS2
-            - Upstream Flock GATT, DFU and OUI signatures synced
-            - WiGLE upload backs off 24 hours on HTTP 429
-            - Boards without SD (StickC family) show wardrive and pcap icons on the LCD strip when the app is connected; hidden when standalone since there is no local storage
-
-            **Fixed - firmware**
-            - C5 mesh: task creation, BLE scan DMA, wardrive relay, ESP-NOW TX all work under mesh
-            - T-Dongle-C5 RAM budget trimmed to fit mesh + wardrive
-            - Manager C3 and WROOM builds link again (#20)
-            - C5 BLE link timing (XIAO and T-Dongle)
-            - C5 WiFi init order no longer races BLE
-
-            **Fixed - app**
-            - Per-target OTA version check uses the board's own latest, not a global latest
-
-            **Fixed - web flasher**
-            - Flasher manifest source order corrected; C5 dist bins served
+            > Beta software. Read **Known limits** in the README before relying
+            > on this for anything that matters. Bugs go in Issues.
 
             ### Firmware
 
-            Companion app picks the matching `.bin` automatically by board + role over BLE DFU.
-
             | Target | Role | OTA asset | First flash (USB) |
             |--------|------|-----------|-------------------|
-            | XIAO ESP32-S3 | node | `oui-spy-node-xiao_s3-${{ github.ref_name }}.bin` | `oui-spy-node-xiao_s3-${{ github.ref_name }}-usb.tar.gz` |
-            | ESP32-S3 N16R8 DevKitC | node | `oui-spy-node-s3_devkitc-${{ github.ref_name }}.bin` | `oui-spy-node-s3_devkitc-${{ github.ref_name }}-usb.tar.gz` |
-            | LilyGO T-Dongle-S3 (LCD + SD) | node | `oui-spy-node-tdongle_s3-${{ github.ref_name }}.bin` | `oui-spy-node-tdongle_s3-${{ github.ref_name }}-usb.tar.gz` |
-            | XIAO ESP32-C5 (dual-band 2.4+5GHz) | node | `oui-spy-node-xiao_c5-${{ github.ref_name }}.bin` | `oui-spy-node-xiao_c5-${{ github.ref_name }}-usb.tar.gz` |
-            | LilyGO T-Dongle-C5 (LCD + SD, dual-band) | node | `oui-spy-node-tdongle_c5-${{ github.ref_name }}.bin` | `oui-spy-node-tdongle_c5-${{ github.ref_name }}-usb.tar.gz` |
-            | M5StickC (LCD + buttons) | node | `oui-spy-node-stickc-${{ github.ref_name }}.bin` | `oui-spy-node-stickc-${{ github.ref_name }}-usb.tar.gz` |
-            | M5StickC PLUS (LCD + buttons) | node | `oui-spy-node-stickc_plus-${{ github.ref_name }}.bin` | `oui-spy-node-stickc_plus-${{ github.ref_name }}-usb.tar.gz` |
-            | M5StickC PLUS2 (LCD + buttons) | node | `oui-spy-node-stickc_plus2-${{ github.ref_name }}.bin` | `oui-spy-node-stickc_plus2-${{ github.ref_name }}-usb.tar.gz` |
-            | ESP32 WROOM   | mgr  | `oui-spy-mgr-wroom-${{ github.ref_name }}.bin`   | `oui-spy-mgr-wroom-${{ github.ref_name }}-usb.tar.gz` |
-            | XIAO ESP32-S3 (recommended) | mgr  | `oui-spy-mgr-xiao_s3-${{ github.ref_name }}.bin` | `oui-spy-mgr-xiao_s3-${{ github.ref_name }}-usb.tar.gz` |
-            | ESP32-S3 N16R8 DevKitC | mgr  | `oui-spy-mgr-s3_devkitc-${{ github.ref_name }}.bin` | `oui-spy-mgr-s3_devkitc-${{ github.ref_name }}-usb.tar.gz` |
-            | XIAO ESP32-C3 | mgr  | `oui-spy-mgr-xiao_c3-${{ github.ref_name }}.bin` | `oui-spy-mgr-xiao_c3-${{ github.ref_name }}-usb.tar.gz` |
+            | XIAO ESP32-S3 | node | `oui-snitch-node-xiao_s3-${{ github.ref_name }}.bin` | `oui-snitch-node-xiao_s3-${{ github.ref_name }}-usb.tar.gz` |
 
-            First-time flash on bare board: extract `*-usb.tar.gz` and use webflasher or esptool.
+            The XIAO ESP32-S3 is the only board this release is built for. Other
+            targets exist in `platformio.ini` and are untested.
 
-            - Web flasher: https://lukeswitz.github.io/oui-spy-unified-blue/
+            First flash on a bare board: extract `*-usb.tar.gz` and write it with
+            esptool. **Use DIO mode** — writing the image as QIO produces a board
+            that boot loops with `TG0WDT_SYS_RST` and looks bricked.
 
-            ### Companion App
+            ### Companion app
 
-            App builds are attached to this release by hand; the workflow uploads firmware only.
-
-            | Platform | File | Instructions |
-            |----------|------|--------------|
-            | **Android** | `oui-spy-${{ github.ref_name }}.apk` | Download signed APK, tap to install. |
-            | **macOS** | `oui-spy-macos-${{ github.ref_name }}.zip` | Extract, move `.app` to Applications, run. Signed with Developer ID. |
-            | **iOS** | [TestFlight](https://testflight.apple.com/join/5RCKgnJ2) | Join beta via TestFlight. |
+            The Android APK is attached by hand; this workflow builds firmware only.
 
             ### Requirements
-            - Boards, node: XIAO ESP32-S3, ESP32-S3 N16R8 DevKitC, LilyGO T-Dongle-S3, XIAO ESP32-C5, LilyGO T-Dongle-C5, M5StickC, M5StickC PLUS, M5StickC PLUS2
-            - Boards, manager: XIAO ESP32-S3 (recommended), ESP32-S3 N16R8 DevKitC, XIAO ESP32-C3, ESP32 WROOM
-            - BLE-capable phone/computer
-            - GPS/Location for wardriving
-            - The DeFlock layer is off by default. Turning it on sends the map viewport bounding box to a public Overpass mirror (overpass-api.de, falling back to overpass.private.coffee), which discloses the area you are looking at. Detections never leave the phone.
 
-            **Full Changelog**: https://github.com/lukeswitz/oui-spy-unified-blue/compare/v0.6.0...${{ github.ref_name }}
+            - Seeed XIAO ESP32-S3, and a USB-C **data** cable
+            - An Android phone — the app is the only user interface
+            - Location permission for wardriving
+
+            ### Not compatible with OUI-APEX
+
+            The firmware-to-app protocol has diverged. Run OUI-SNITCH firmware
+            with the OUI-SNITCH app only — mixing them is silent, not noisy. See
+            [COMPATIBILITY.md](https://github.com/F0x-tail/oui-snitch/blob/main/COMPATIBILITY.md).
           files: |
             artifacts/**/*.bin
             artifacts/**/*.tar.gz
