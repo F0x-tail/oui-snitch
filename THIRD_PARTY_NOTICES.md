@@ -50,24 +50,3 @@ means to relink, alongside the binary.
 Publishing source only — which is what this repository does — carries no such
 obligation. It becomes live the moment prebuilt `.bin` files are handed out, for
 example through a web flasher.
-
-## Projects studied but not copied
-
-No code from these is present. They are listed because their designs informed
-this one, and because the last entry must stay excluded.
-
-- **MeshCore** (`meshcore-dev/meshcore`), MIT — the BLE pairing model used here
-  follows its approach: LE Secure Connections with bonding and MITM protection,
-  a default passkey the user changes, and connection state gated on the pairing
-  result rather than on the GATT link coming up.
-- **axeoff** (`colonelpanichacks/axeoff`), MIT — duty-equipment radio signatures.
-  Signatures are facts about third-party hardware, not expression.
-- **Sky-Spy** (`colonelpanichacks/Sky-Spy`), no licence — Remote ID signatures,
-  likewise facts. No code taken, and none can be while it is unlicensed.
-- **piglet** (`hamspiced/piglet`), **CC BY-NC-SA 4.0** — reviewed as a
-  comparison for Wi-Fi wardriving. Its licence is not an open-source licence and
-  is incompatible with this one: the NonCommercial condition cannot be imposed
-  downstream through MIT, and ShareAlike would force copyleft onto the combined
-  work. **No code from piglet may enter this repository.** Ideas that are not
-  copyrightable, such as gating a GPS fix on HDOP, may be reimplemented
-  independently.
