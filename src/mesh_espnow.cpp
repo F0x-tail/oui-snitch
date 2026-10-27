@@ -1505,6 +1505,13 @@ void meshEnableEx(const MeshConfig* cfg, bool sendInvite) {
 
     xSemaphoreTake(meshMutex, portMAX_DELAY);
     memcpy((void*)&meshCurrentConfig, cfg, sizeof(MeshConfig));
+    // Hold the config "disabled" until the radio, the key and every peer are
+    // in place. meshIsEnabled() is read from other tasks, and publishing the
+    // config first let them act on a mesh that was still being built — taking
+    // the channel, or pausing BLE for a mesh window that had no peers yet.
+    // Restored at the end of this function; the early returns below leave it
+    // at 0, which is what a mesh that failed to come up should report.
+    meshCurrentConfig.enabled = 0;
 
     MeshStatus st = {};
     st.enabled = 1;
@@ -1596,6 +1603,7 @@ void meshEnableEx(const MeshConfig* cfg, bool sendInvite) {
         }
     }
 
+    meshCurrentConfig.enabled = cfg->enabled;
     Serial.printf("[MESH] Enabled with %d peers\n", cfg->peer_count);
 
 #ifdef OUISPY_ROLE_MANAGER

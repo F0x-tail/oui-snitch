@@ -410,7 +410,10 @@ static bool autoPcapMacRecent(const uint8_t* mac, unsigned long cooldownMs) {
 }
 
 void engineRequestAutoPcap(EngineId src, uint8_t channel, const uint8_t* mac) {
-    if (!autoPcapEnabled) return;
+    // Suppression is the user saying "be quiet here". A capture started now
+    // outlives the quiet zone and is as loud as a buzzer in what it leaves on
+    // the SD card, so it is gated with the audible alerts, not separately.
+    if (!autoPcapEnabled || hwAlertsSuppressed) return;
     switch (src) {
         case ENGINE_DETECTOR:
         case ENGINE_AXON:

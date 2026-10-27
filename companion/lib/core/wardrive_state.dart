@@ -1663,6 +1663,13 @@ class WardriveController extends ChangeNotifier {
       Engine.foxhunter,
     ];
     for (final e in stale) {
+      // Each disable is a round trip to the board, so this loop spans hundreds
+      // of milliseconds. A session started while it runs would have its engines
+      // switched off underneath it by the disables still queued here.
+      if (state != WardriveState.idle) {
+        DebugLog.log('WARDRIVE: stale-disable abandoned — a session started');
+        return;
+      }
       try {
         await _ble.disableEngine(e);
       } catch (err) {

@@ -169,6 +169,7 @@ void setup() {
         }
     }
 
+    melodyInit();
     bleGattInit();
     ignoreListInit();
 
