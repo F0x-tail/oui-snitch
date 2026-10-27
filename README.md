@@ -1,204 +1,310 @@
-<div align="center">
+# OUI-SNITCH
 
-[![Release](https://img.shields.io/github/v/release/lukeswitz/oui-spy-unified-blue?include_prereleases&label=pre-release&color=green)](https://github.com/lukeswitz/oui-spy-unified-blue/releases)
-[![TestFlight](https://img.shields.io/badge/TestFlight-Join-blue.svg?logo=apple)](https://testflight.apple.com/join/5RCKgnJ2)
-![Platforms](https://img.shields.io/badge/iOS%20%7C%20macOS%20%7C%20Android-1BA1E2)
-![Firmware](https://img.shields.io/badge/firmware-ESP32-ff6600)
-[![CodeQL](https://github.com/lukeswitz/oui-spy-unified-blue/actions/workflows/github-code-scanning/codeql/badge.svg)](https://github.com/lukeswitz/oui-spy-unified-blue/actions/workflows/github-code-scanning/codeql)
+**A detection device. It watches the air for surveillance hardware and tells your phone what it found.**
 
-# OUI-APEX
+ESP32 firmware plus an Android/iOS app. It looks for ALPR cameras, Bluetooth
+trackers following you, police duty equipment, drones broadcasting Remote ID
+and devices on your own watchlist — and it can wardrive at the same time.
 
-**"Snoop unto them - as they snoop unto us".**
-
-</div>
-
-ESP32 firmware and a phone app for detecting surveillance hardware, trackers and drones, and for wardriving. One firmware runs every detection engine; the app turns them on and off, maps results, and uploads to WiGLE and WDGWars.
+The thing that makes it different from the projects it grew out of: **every
+engine you enable runs at once.** Most devices in this space give you a menu
+and run one mode at a time. Here, detection and logging run together.
 
 > [!NOTE]
-> Runs the [OUI-SPY ecosystem](https://github.com/colonelpanichacks) engines by colonelpanichacks. **Not affiliated with OUI-SPY.** Beta software.
+> **OUI-SNITCH is a fork of [OUI-APEX](https://github.com/lukeswitz/oui-spy-unified-blue)**,
+> which builds on the OUI-SPY engines by
+> [colonelpanichacks](https://github.com/colonelpanichacks). Not affiliated with
+> either. Beta software — see **Known limits** before you rely on it for anything.
+>
+> The fork has diverged: the firmware-to-app wire protocol is no longer
+> compatible with OUI-APEX, so the two apps and firmwares cannot be mixed.
+> [COMPATIBILITY.md](COMPATIBILITY.md) says exactly where, and what this fork
+> adds.
 
-<img width="610" alt="APEX overview" src="https://github.com/user-attachments/assets/0a798936-51f3-41d2-b103-cdec0e7d9134" />
+---
 
-## Quick start
+## What this document covers
 
-1. Flash a board from the [web flasher](https://lukeswitz.github.io/oui-spy-unified-blue/) (Chrome or Edge, USB). Pick the **NODE** target for your board. Later updates come from the app.
-2. Install the app: [Android / macOS](https://github.com/lukeswitz/oui-spy-unified-blue/releases/latest) or [iOS / macOS TestFlight](https://testflight.apple.com/join/5RCKgnJ2).
-3. Open the app, tap **CONNECT**, pick the board.
+**Hardware v0.1 only** — a single XIAO ESP32-S3 on a breadboard. No PCB, no
+enclosure, no case: one module, a USB cable, and jumper wire for the two
+optional extras. It is the cheapest way into this project and the only version
+that exists today.
 
-On Android set Location to **Allow all the time**, or scanning stops when the screen is off.
+Everything after it is planned, and none of it is documented here:
 
-## Ways to run a board
-
-| Mode | How | What you get |
+| | What | Status |
 |---|---|---|
-| **App** | Phone connected over Bluetooth | Every engine, live feed, map, GPS from the phone, PCAP saved on the phone |
-| **Standalone** | No phone; boards with a screen and buttons | Engines started from the buttons. T-Dongles log to microSD; M5Sticks beep and show hits on screen |
-| **Mesh node** | Board runs under a MANAGER the phone connects to | The manager collects every node's hits; settings from the app reach all nodes |
+| **v0.1** | Single module on a breadboard | **this document** |
+| **v1** | Two modules — S3 + C5 — wired over UART | link firmware not written |
+| **v2** | 2-layer PCB; you solder your own modules | after v1 |
+| **v3** | Assembled board, single USB-C | later |
 
-**Offline scan** (SETTINGS → NODE → HARDWARE) keeps a board scanning after the phone disconnects. Hits buffer to flash and upload on reconnect; the setting survives a reboot.
+---
 
-## Boards
+## Build one
 
-| Board | Bands | Screen / buttons | microSD | Buzzer | Mesh node | Flasher target |
-|---|---|---|---|---|---|---|
-| XIAO ESP32-S3 | 2.4 GHz | – | – | GPIO3 (OUI-SPY board) | yes | `node-xiao_s3` |
-| ESP32-S3 N16R8 DevKitC | 2.4 GHz | – | – | GPIO3 | yes | `node-s3_devkitc` |
-| XIAO ESP32-C5 *(experimental)* | 2.4 + 5 GHz | – | – | GPIO25 | yes | `node-xiao_c5` |
-| LilyGO T-Dongle-S3 | 2.4 GHz | LCD, 1 button, RGB LED | yes | none | yes | `node-tdongle_s3` |
-| LilyGO T-Dongle-C5 *(experimental)* | 2.4 + 5 GHz | LCD, 1 button, RGB LED | yes | none | yes | `node-tdongle_c5` |
-| M5StickC PLUS | 2.4 GHz | LCD, 3 buttons | – | built in | yes | `node-stickc_plus` |
-| M5StickC PLUS2 | 2.4 GHz | LCD, 3 buttons | – | built in | **no** | `node-stickc_plus2` |
-| M5StickC (original) | 2.4 GHz | LCD, 3 buttons | – | none | **no** | `node-stickc` |
+### Parts
 
-Manager boards: XIAO ESP32-S3 (`mgr-xiao_s3`), ESP32-S3 DevKitC (`mgr-s3_devkitc`), XIAO ESP32-C5 (`mgr-xiao_c5`), XIAO ESP32-C3 (`mgr-xiao_c3`), ESP32 WROOM (`mgr-wroom`). A manager does no scanning.
+| Part | Needed? | Notes |
+|---|---|---|
+| **Seeed XIAO ESP32-S3** | yes | The main board. Talks to your phone, runs the engines |
+| **Seeed XIAO ESP32-C5** | no | Not part of v0.1. It runs as its own separate board with 5 GHz, but it is experimental — read *Where this is going* before buying one |
+| Breadboard + jumpers | yes | Any size |
+| USB-C cable | yes | Must be a **data** cable. Charge-only cables are the most common reason a board does not appear |
+| Passive buzzer | optional | GPIO3 on the S3 |
+| NEO-6M / NEO-8M GPS | optional | Lets the board stamp positions without a phone |
+| Android or iOS phone | yes | This is the user interface. There is no screen on the board |
 
-The original M5StickC and the PLUS2 are built without mesh to fit their RAM. They connect straight to the phone or run standalone. On boards with no buzzer the app hides the buzzer settings.
+The only soldering is the pin headers onto the module. The XIAO ESP32-S3 ships
+**without** them, so buy a strip of 0.1" headers at the same time — it is the
+one part people forget and the one that stops you breadboarding anything.
 
-## Engines
+### Wiring
+
+Only two optional things get wired on v0.1:
+
+| | XIAO ESP32-S3 pin |
+|---|---|
+| Buzzer (+) | GPIO3 |
+| GPS module TX → board | GPIO44 |
+| GPS module RX ← board | GPIO43 |
+
+GPS runs at 9600 baud. Ground is shared; the GPS module takes 3V3.
+
+With neither fitted, v0.1 is a XIAO on a USB cable, and that works — the phone
+supplies the position and the alerts.
+
+---
+
+## Flash it
+
+You need [PlatformIO](https://platformio.org/install/cli). Then:
+
+```bash
+pio run -e v3_app_controlled        # XIAO ESP32-S3
+./build_c5.sh                       # XIAO ESP32-C5 (separate toolchain, see below)
+```
+
+C5 builds use the pioarduino platform in their own core directory
+(`~/.platformio-c5`), which is what `build_c5.sh` sets up. They cannot share a
+build directory with the S3.
+
+### Flashing — read this part
+
+**Flash in DIO mode.** Writing the image as QIO produces a board that boot
+loops with `TG0WDT_SYS_RST` and looks bricked. It isn't, but you will lose an
+evening to it.
+
+```bash
+python3 -m esptool --chip esp32s3 --port /dev/ttyACM0 --baud 921600 \
+  write_flash --flash_mode dio --flash_freq 80m --flash_size 8MB \
+  0x0     .pio/build/v3_app_controlled/bootloader.bin \
+  0x8000  .pio/build/v3_app_controlled/partitions.bin \
+  0xe000  ~/.platformio/packages/framework-arduinoespressif32/tools/partitions/boot_app0.bin \
+  0x10000 .pio/build/v3_app_controlled/firmware.bin
+```
+
+Replace `/dev/ttyACM0` with your port. On Linux you may need to be in the
+`dialout` group.
+
+### Check it worked
+
+Open a serial monitor at 115200 and press reset. A healthy board says:
+
+```
+========================================
+  OUI-SPY v3.0 — App-Controlled Mode
+========================================
+[ENGINE] Registered: Detector (id=0)
+...
+[INIT] *** OUI-SPY READY ***
+```
+
+The banner still carries the upstream name; only the repository has been
+renamed so far.
+
+If you see `rst:0x7 (TG0WDT_SYS_RST)` repeating, you flashed QIO. Reflash with
+`--flash_mode dio`.
+
+---
+
+## The app
+
+```bash
+cd companion && flutter pub get && flutter build apk --release
+```
+
+Then `adb install -r build/app/outputs/flutter-apk/app-release.apk`, or build
+`ipa` / `macos` instead.
+
+**On Android, set Location to "Allow all the time."** With "only while using
+the app", scanning stops the moment the screen goes off. This is an Android
+rule, not a choice this project made.
+
+Open the app, tap **CONNECT**, pick your board.
+
+### Pairing — change the passkey
+
+Every board ships with the passkey **123456**, and says so loudly on boot:
+
+```
+  BLE pairing passkey: 123456
+  THIS IS THE DEFAULT. Anyone in range can
+  pair with this board until you change it
+```
+
+Until you change it, anyone within Bluetooth range can pair with your board,
+read what it has detected and turn its radios on and off. Change it under
+**SETTINGS → NODE → PAIRING**; the app shows a warning there while the default
+is in use.
+
+The default exists so a board with no screen and no buttons can be set up at
+all. It is a starting point, not a setting to leave alone.
+
+---
+
+## What it detects
 
 | Engine | Finds |
 |---|---|
-| **Detector** | Your watchlist (MAC, OUI prefix, name, 16-bit BLE service UUID), plus built-in signatures, all off by default: Find My / AirTag following you, Flipper Zero, Wi-Fi deauth floods, directed probes, Pwnagotchi, Meta Ray-Ban / Oakley glasses, Axon / law-enforcement gear |
-| **Flock BLE / Flock WiFi** | Flock Safety ALPR cameras and Raven gunshot sensors. Optional OUI-only Wi-Fi hits |
-| **Sky Spy** | Drones broadcasting FAA Remote ID over BLE and Wi-Fi: ID, position, altitude, speed, pilot position |
-| **Foxhunter** | One target device. Beep rate (or the RSSI meter on boards without a buzzer) rises as you get closer |
-| **UniPwn** | Unitree robots by BLE name (`Go2_`, `G1_`, `H1_`, …) |
-| **Wardrive** | Every Wi-Fi AP and BLE device, GPS-stamped, WiGLE CSV format. 2.4 GHz channels 1–14 by default; C5 boards add 5 GHz including DFS |
+| **Detector** | Your watchlist (MAC, OUI prefix, name, BLE service UUID), plus built-in signatures — all off by default: Find My / AirTag trackers following you, Flipper Zero, Wi-Fi deauth floods, directed probes, Pwnagotchi, Meta Ray-Ban and Oakley glasses |
+| **Axon** | Axon / TASER duty equipment — body cameras and the like, close enough to hear |
+| **Flock WiFi** | Flock Safety ALPR cameras and Raven gunshot sensors, by Wi-Fi fingerprint |
+| **Sky Spy** | Drones broadcasting FAA Remote ID over BLE or Wi-Fi: ID, position, altitude, speed, pilot position |
+| **Foxhunter** | Hunts one device. Beep rate rises as you close in; an on-screen RSSI meter when no buzzer is fitted |
+| **UniPwn** | Unitree robots, by BLE name (`Go2_`, `G1_`, `H1_`, …) |
+| **Wardrive** | Every Wi-Fi AP and BLE device, GPS-stamped, in WiGLE CSV format |
 | **PCAP** | Raw 802.11 or BLE advertising frames to a Wireshark `.pcap` |
 
+Run as many as you like together. Wi-Fi engines share the radio and the sweep,
+which is the whole point of the design.
+
 > [!IMPORTANT]
-> The Flock OUI list comes from upstream FlockYou and matches Ubiquiti, Espressif and other common consumer parts. Check a hit with your own eyes before reporting it anywhere.
+> A hit is a **signal match, not an identification.** The Flock OUI list in
+> particular matches Ubiquiti, Espressif and other ordinary consumer parts.
+> Look with your own eyes before you report anything to anyone.
 
-### Flock confidence
+Flock hits carry a confidence tier — `VERIFIED` (bare-serial name + XUNTONG
+`0x09C8` manufacturer ID + TN serial), `HIGH` (one strong signal), `SUSPECTED`
+(a listed OUI only). Treat `SUSPECTED` as "worth a look", nothing more.
 
-| Tier | Matched |
-|---|---|
-| **VERIFIED** | Bare-serial name + XUNTONG `0x09C8` manufacturer ID + TN serial |
-| **HIGH** | One strong signal: Raven service UUID, Flock BLE name, or a Flock wildcard probe |
-| **SUSPECTED** | A listed OUI only |
+---
 
-The tier shows on feed rows, in the detail sheet, and in DETECTIONS → HISTORY, which can filter by tier.
+## Using it
 
-## App
+The app has four tabs: **HOME · DETECTIONS · MAP · SETTINGS**.
 
-Bottom tabs: **HOME · DETECTIONS · MAP · SETTINGS**.
+- **HOME** — one card per engine, plus the session bar and a status row showing
+  link, GPS fix and node count.
+- **DETECTIONS** — LIVE (every hit, filterable), DEVICES (each device classified
+  by vendor and advertisement data), HISTORY (the stored log). Tap any row to
+  foxhunt it or put it on the map.
+- **MAP** — pick targets and radio, hit START. Sessions save as WiGLE CSV, upload
+  to [WiGLE](https://wigle.net) and [WDGWars](https://wdgwars.pl), and replay later.
+- **SETTINGS** — watchlist, signatures, ignore list, alert sounds, geofences,
+  exports, and the board's own configuration under NODE.
 
-- **Home**: session bar (targets, radio, START / PAUSE / STOP) and one card per engine. Status bar shows link, GPS fix and node count.
-- **Detections**: LIVE (every hit; filter, sort, search, export), DEVICES (each device classified by vendor, Bluetooth data and signatures), HISTORY (stored log, CSV export). Tap a row to foxhunt or map it.
-- **Classification**: OUI vendor categories, Bluetooth SIG company and service IDs, AntiHunter tables, Fieldwatch signatures. Each device gets a class (trackers, cameras, public safety & fleet, drones, glasses, hacking tools, routers, home & office, …), a confidence dot, and its decoded advertisement (Apple Continuity type, manufacturer data, service UUIDs). Class alerts are on by default.
-- **Phone scan**: off by default. Turn on from the DEVICES menu (SCAN WITH THIS PHONE) to have the phone's own Bluetooth listen alongside the board, 8 s every 20 s. The ESP32 / PHONE filter shows which radio saw each device.
-- **Notifications**: title is the matched target (watchlist name, signature, probed SSID); body is device, MAC prefix, RSSI, method.
-- **Watchlist**: import and export as CSV or JSON in SETTINGS → RULES.
-- **Alert sounds**: choose a built-in melody or compose your own for each alert type, and preview it on the board.
-- **Map**: choose targets (WiGLE / Flock / Drone / Detector) and radio (Wi-Fi / BLE / both), then START. Sessions save as WiGLE CSV, upload to [WiGLE](https://wigle.net) and [WDGWars](https://wdgwars.pl), and replay on the map.
-- **Map layers**: *MAPPED ALPRs* scores each Flock hit against cameras already on OpenStreetMap (`ON MAP` within 75 m, `UNMAPPED` beyond 250 m). Turning it on sends the visible map area to `overpass-api.de` (fallback `overpass.private.coffee`). *WDG TERRITORY* shows WDGWars territory for a linked account.
-- **Geofences**: inside a zone the app drops detections from the feed, log and notifications, and the board stops beeping. Radios keep scanning; a T-Dongle still writes to its SD card.
-- **PCAP**: capture Wi-Fi or BLE; pause and resume. Auto-PCAP records 3–120 s whenever an engine fires. SETTINGS → DATA → PCAPS lists saved captures.
-- **SETTINGS**: APP, SCANNING, RULES (watchlist, signatures, ignore list), ALERTS, NODE (HARDWARE, MESH, FIRMWARE), DATA (ACCOUNTS, PCAPS, EXPORT).
-- **iOS**: live counts on the Lock Screen and Dynamic Island during a session.
+**Geofences** are worth setting up early. Inside a zone you have marked, the app
+drops detections from the feed, the log and your notifications, and the board
+stops beeping. The radios keep scanning — it suppresses the noise, not the data.
+Put one around your home before your first long session.
 
-<img width="910" alt="Wardrive map" src="https://github.com/user-attachments/assets/cc0d4cc9-6524-41c7-bb04-9cd01dae58b8" />
+**Offline scan** (SETTINGS → NODE → HARDWARE) keeps the board scanning after the
+phone disconnects. Hits buffer to flash and upload when you reconnect. The
+setting survives a reboot.
 
-## Standalone controls
+### Wardriving
 
-### T-Dongle-S3 / T-Dongle-C5
+Wardrive logs every Wi-Fi AP and BLE device it sees, stamped with position, in
+the CSV format WiGLE accepts.
 
-| Press | Action |
-|---|---|
-| 1 press | Select next mode |
-| 2 presses | Start / stop selected mode |
+The board only logs a device again after the **rediscover interval** has passed
+(SETTINGS → ALERTS, 10 s by default). While you are moving, it shortens that
+automatically, aiming at roughly one sighting per 50 m travelled — what WiGLE
+needs to locate a transmitter is sightings from *different places*, not the same
+one repeated from a parked car. Standing still, you get exactly the interval you
+configured.
 
-Modes: `DETECT FLOCKB FLOCKW FOXHNT SKYSPY UNIPWN WARDRV PCAP`.
+Position comes from your phone unless a GPS module has a fix, in which case the
+module wins. With no fix at all, rows are still logged but cannot be uploaded.
 
-Files go to `/OUISPY` on the card:
+---
 
-| File | Contents |
-|---|---|
-| `det_*.csv` | Every detection, with coordinates when a GPS fix exists |
-| `wigle_*.csv` | Wardrive rows; written only with a GPS fix (phone or GPS module) |
-| `cap_*.pcap` | Packet captures |
+## Where this is going — v1
 
-Filenames use UTC time once GPS supplies it, otherwise a boot counter. The LED glows dim green while an engine runs and flashes the engine's color on a hit; the app's NeoPixel brightness slider sets its level, 0 turns it off.
+v0.1 asks one radio to do everything: Wi-Fi promiscuous capture, BLE scanning
+and the link to your phone, all time-sliced. It works, and that sharing is the
+honest limit of a single module.
 
-### M5StickC / PLUS / PLUS2
+v1 splits the job across two chips. The **S3** talks to your phone and does the
+thinking; the **C5** does nothing but scan — including 5 GHz — so no scanning
+airtime is ever lost to the phone link.
 
-| Button | Press | Action |
-|---|---|---|
-| **A** (front) | tap | Select next mode |
-| **A** | hold | Foxhunt the last alert (or the app's target); hold again to stop |
-| **B** (side) | tap | Start / stop selected mode |
-| **B** | hold | Buzzer on / off (PLUS and PLUS2) |
-| **PWR** | tap | Screen brightness, four steps, last is off |
-| **PWR** | hold | Power off |
+**The link between them is not written yet.** The two chips are meant to talk
+over a wired UART, and that firmware does not exist. Until it does:
 
-Modes: `DETECT FLOCKB FLOCKW FOXHNT SKYSPY UNIPWN`. Wardrive and PCAP need the app on these boards (no SD card).
+- Flash the **S3** and use it on its own. That is v0.1, and it is what
+  everything above describes.
+- A **C5** flashed with the same firmware also runs on its own, with 5 GHz, but
+  it is experimental, and it is a *separate device* — not a second radio for an S3.
 
-### Screen (both)
+ESP-NOW will not stand in for that link. It exists for genuinely separate boards
+spread around — a second unit across the street, not two modules 2 cm apart,
+where it would cost the scanner the exact airtime the split exists to protect.
 
-Top left: selected mode (amber = selected, green = running). Top right: `APP` `MSH` `SD` `GPS` status. Left: unique Wi-Fi and BLE counts. Right: foxhunt target, `CAP` bytes while capturing, or speed. Bottom strip: one icon per mode, lit while running, underlined when selected, hit count below.
+---
 
-Foxhunt picks, in order: the target set in the app, else the last Detector / Flock / Sky Spy / UniPwn alert seen by this board.
+## Known limits
 
-## Mesh
+Read these before trusting the device with anything that matters.
 
-- One MANAGER connects to the phone; up to 6 NODES report to it over ESP-NOW on 2.4 GHz channel 1.
-- Nodes join on their own within about 10 s. Single hop: every node must reach the manager directly, about 200 m line of sight.
-- Default is plaintext broadcast. SETTINGS → NODE → MESH can switch to AES-256-GCM with a shared key.
-- A node silent for 45 s drops off and rejoins when back in range.
-- Buzzer, LED, alert, alert-sound, ignore-list, wardrive-radio and Wi-Fi-band settings set on the manager are pushed to every node.
-- Any mix of node boards works under one manager (e.g. T-Dongle-S3 + T-Dongle-C5 + M5StickC PLUS + XIAO).
-- Each node reports its board to the manager; the app shows it on every node row.
-- Fleet update (SETTINGS → NODE → FIRMWARE) updates every node over Wi-Fi, and each node downloads the image for its own board. Nodes on firmware older than this release do not report a board and take the image for the board picked in the app.
+- **The mesh link is not secure.** ESP-NOW defaults to plaintext broadcast, and
+  the current key exchange has flaws that have not been fixed. Do not treat mesh
+  traffic as private, and do not use it to carry anything you would not shout.
+  The phone↔board Bluetooth link is separate and is encrypted once paired.
+- **The default passkey protects nothing.** See *Pairing* above.
+- **Detections are signal matches.** No engine identifies a device with
+  certainty. Confidence tiers tell you how much evidence there was.
+- **Battery, enclosure and antenna placement are up to you** on v0.1. There is no
+  power management; it runs off USB.
+- **The C5 target is experimental.** Expect rough edges.
 
-## Optional GPS module
+---
 
-A serial GPS (NEO-6M / NEO-8M, 9600 baud) gives the board its own position. A module fix takes priority; with no data for 5 s the board falls back to phone GPS.
+## Build your own version
 
-| GPS | XIAO ESP32-S3 | T-Dongle-S3 | T-Dongle-C5 | M5Stick |
-|---|---|---|---|---|
-| TX → | GPIO44 | GPIO44 | GPIO12 | GPIO33 |
-| RX ← | GPIO43 | GPIO43 | GPIO11 | GPIO32 |
+This is MIT licensed because the point is for the code to be useful to you, in
+whatever you are building — in full, in part, or as the one function you needed.
+Take it. Surveillance-detection tooling gets better when the work is shared.
 
-Other boards: set `-DPIN_GPS_RX=` / `-DPIN_GPS_TX=`.
-
-## Build
-
-```bash
-pio run -e v3_app_controlled                 # node, XIAO ESP32-S3
-pio run -e v3_app_controlled_tdongle_s3      # node, T-Dongle-S3
-pio run -e v3_app_controlled_stickc_plus     # node, M5StickC PLUS (also _stickc, _stickc_plus2)
-./build_c5.sh                                # node, XIAO ESP32-C5
-OUISPY_C5_ENV=v3_app_controlled_tdongle_c5 ./build_c5.sh   # node, T-Dongle-C5
-pio run -e v3_node_manager_s3                # manager, XIAO ESP32-S3 (also _s3_devkitc, _xiao_c3, _wroom)
-OUISPY_C5_ENV=v3_node_manager_c5 ./build_c5.sh             # manager, XIAO ESP32-C5
-```
-
-C5 builds use the pioarduino platform in a separate core dir (`~/.platformio-c5`) via `build_c5.sh`.
-
-```bash
-cd companion && flutter pub get && flutter build apk --release   # or ipa / macos
-```
-
-**Firmware libraries:** [NimBLE-Arduino](https://github.com/h2zero/NimBLE-Arduino), [TinyGPS++](https://github.com/mikalhart/TinyGPSPlus), [Adafruit GFX](https://github.com/adafruit/Adafruit-GFX-Library); ESP-IDF ESP-NOW and mbedTLS.
-**Map tiles:** [CARTO](https://carto.com/basemaps/) vector, [Esri](https://www.esri.com/), [OpenStreetMap](https://www.openstreetmap.org/), [OpenTopoMap](https://opentopomap.org/). Vendor OUIs from [OUI-Master-Database](https://github.com/Ringmast4r/OUI-Master-Database).
+Some vendored files and build-time dependencies carry other terms.
+[THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) lists them, including the LGPL
+condition that attaches if you hand out prebuilt firmware binaries.
 
 ## Credits
 
-- Upstream engines: [Detector](https://github.com/colonelpanichacks/ouispy-detector), [Foxhunter](https://github.com/colonelpanichacks/ouispy-foxhunter), [Flock You](https://github.com/colonelpanichacks/flock-you), [Sky-Spy](https://github.com/colonelpanichacks/Sky-Spy), [UniPwn](https://github.com/colonelpanichacks/Oui-Spy-UniPwn) by **colonelpanichacks**.
-- **Will Greenberg** ([flock-you](https://github.com/wgreenberg/flock-you)): XUNTONG `0x09C8` detection.
-- **@NitekryDPaul / OrdoOuroborous** ([@nitekry](https://github.com/nitekry)): promiscuous Flock OUI set and the addr1 receiver technique.
-- **DeFlockJoplin** ([flock-you](https://github.com/DeflockJoplin/flock-you)): wildcard-probe signature.
-- **OffGridPete** ([Fieldwatch](https://github.com/OffGridPete/Fieldwatch)): device signature catalog and classifier.
-- Company and service IDs: [Bluetooth SIG assigned numbers](https://bitbucket.org/bluetooth-SIG/public).
-- OUI sources: [zmattmanz](https://github.com/zmattmanz), [dougborg/AirHound](https://github.com/dougborg), [VirtuallyScott](https://github.com/VirtuallyScott).
+Upstream engines by **colonelpanichacks**:
+[Detector](https://github.com/colonelpanichacks/ouispy-detector),
+[Foxhunter](https://github.com/colonelpanichacks/ouispy-foxhunter),
+[Flock You](https://github.com/colonelpanichacks/flock-you),
+[Sky-Spy](https://github.com/colonelpanichacks/Sky-Spy),
+[UniPwn](https://github.com/colonelpanichacks/Oui-Spy-UniPwn).
+App and unified firmware from
+[lukeswitz/oui-spy-unified-blue](https://github.com/lukeswitz/oui-spy-unified-blue)
+(OUI-APEX), which OUI-SNITCH forked from.
 
-## Licence
+- **Will Greenberg** ([flock-you](https://github.com/wgreenberg/flock-you)) — XUNTONG `0x09C8` detection
+- **@NitekryDPaul / OrdoOuroborous** ([@nitekry](https://github.com/nitekry)) — promiscuous Flock OUI set, addr1 receiver technique
+- **DeFlockJoplin** ([flock-you](https://github.com/DeflockJoplin/flock-you)) — wildcard-probe signature
+- **OffGridPete** ([Fieldwatch](https://github.com/OffGridPete/Fieldwatch)) — device signature catalog and classifier
+- Company and service IDs from the [Bluetooth SIG assigned numbers](https://bitbucket.org/bluetooth-SIG/public)
+- Vendor OUIs from [OUI-Master-Database](https://github.com/Ringmast4r/OUI-Master-Database),
+  [zmattmanz](https://github.com/zmattmanz), [dougborg/AirHound](https://github.com/dougborg),
+  [VirtuallyScott](https://github.com/VirtuallyScott)
 
-MIT — see [LICENSE](LICENSE). Some vendored files and build-time dependencies
-carry other terms; [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) lists them,
-including the LGPL condition that attaches to handing out prebuilt firmware
-binaries.
-
-## Disclaimer
-
-Security-research and privacy-auditing tool. Follow local law on wireless scanning. Lawful use only.
+Firmware libraries: [NimBLE-Arduino](https://github.com/h2zero/NimBLE-Arduino),
+[TinyGPS++](https://github.com/mikalhart/TinyGPSPlus),
+[Adafruit GFX](https://github.com/adafruit/Adafruit-GFX-Library); ESP-IDF
+ESP-NOW and mbedTLS. Map tiles from [CARTO](https://carto.com/basemaps/),
+[Esri](https://www.esri.com/), [OpenStreetMap](https://www.openstreetmap.org/)
+and [OpenTopoMap](https://opentopomap.org/).
