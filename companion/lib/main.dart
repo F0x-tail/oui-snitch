@@ -17,6 +17,7 @@ import 'package:oui_spy/core/notifications/live_activity_service.dart';
 import 'package:oui_spy/core/notifications/notification_service.dart';
 import 'package:oui_spy/core/oui/oui_lookup_service.dart';
 import 'package:oui_spy/core/prefs.dart';
+import 'package:oui_spy/features/onboarding/permissions_screen.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:uuid/uuid.dart';
 
@@ -44,6 +45,20 @@ void main() async {
   final container = ProviderContainer(
     overrides: [sharedPreferencesProvider.overrideWithValue(prefs)],
   );
+
+  // Ask for permissions before anything starts using them, so the first
+  // thing a new install shows is an explanation rather than three bare
+  // system dialogs. Everything below waits: the services started here all
+  // need the permissions this asks for.
+  if (needsPermissionOnboarding(prefs)) {
+    final done = Completer<void>();
+    runApp(UncontrolledProviderScope(
+      container: container,
+      child: PermissionsOnboardingApp(onDone: done.complete),
+    ));
+    await done.future;
+    await prefs.setBool(kPermissionsOnboardedKey, true);
+  }
 
   // Load OUI vendor database (async, non-blocking)
   container.read(ouiLookupProvider).init();
