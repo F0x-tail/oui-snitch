@@ -39,7 +39,6 @@ hardware that exists.
 | Part | Needed? | Notes |
 |---|---|---|
 | **Seeed XIAO ESP32-S3** | yes | The main board. Talks to your phone, runs the engines |
-| **Seeed XIAO ESP32-C5** | no | A separate board, not a second radio for the S3. Adds 5 GHz, but experimental — read *About the C5 board* before buying one |
 | Breadboard + jumpers | yes | Any size |
 | USB-C cable | yes | Must be a **data** cable. Charge-only cables are the most common reason a board does not appear |
 | Passive buzzer | optional | GPIO3 on the S3 |
@@ -73,12 +72,10 @@ You need [PlatformIO](https://platformio.org/install/cli). Then:
 
 ```bash
 pio run -e v3_app_controlled        # XIAO ESP32-S3
-./build_c5.sh                       # XIAO ESP32-C5 (separate toolchain, see below)
 ```
 
-C5 builds use the pioarduino platform in their own core directory
-(`~/.platformio-c5`), which is what `build_c5.sh` sets up. They cannot share a
-build directory with the S3.
+Other board targets exist in `platformio.ini`. None of them is tested, and
+none is described here.
 
 ### Flashing — read this part
 
@@ -221,23 +218,6 @@ module wins. With no fix at all, rows are still logged but cannot be uploaded.
 
 ---
 
-## About the C5 board
-
-One radio does everything here: Wi-Fi promiscuous capture, BLE scanning and the
-link to your phone, all time-sliced on the same chip. It works, and that sharing
-is the honest limit of a single module.
-
-A **XIAO ESP32-C5** flashed with the same firmware also runs, and adds 5 GHz,
-but treat it as experimental and as a *separate device*. It is not a second
-radio for an S3 — there is no firmware that joins two modules into one unit, so
-two boards on your desk are two detectors, not one with more ears.
-
-ESP-NOW is not that link either. It exists for genuinely separate boards spread
-around — a second unit across the street, not two modules 2 cm apart, where it
-would cost the scanner the exact airtime a split would be meant to protect.
-
----
-
 ## Known limits
 
 Read these before trusting the device with anything that matters.
@@ -251,7 +231,10 @@ Read these before trusting the device with anything that matters.
   certainty. Confidence tiers tell you how much evidence there was.
 - **Battery, enclosure and antenna placement are up to you** on v0.1. There is no
   power management; it runs off USB.
-- **The C5 target is experimental.** Expect rough edges.
+- **One radio does everything.** Wi-Fi promiscuous capture, BLE scanning and
+  the link to your phone are time-sliced on the same chip. It works, and that
+  sharing is the honest limit of a single module: nothing is listening to one
+  band while it is busy with another.
 
 ---
 
