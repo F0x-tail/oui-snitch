@@ -372,7 +372,7 @@ class _DetectionsTabState extends ConsumerState<_DetectionsTab> {
       await file.writeAsString(csv);
       await Share.shareXFiles(
         [XFile(file.path)],
-        subject: 'OUI-SPY Detections Export (${items.length} detections)',
+        subject: 'OUI-SNITCH Detections Export (${items.length} detections)',
         sharePositionOrigin: origin,
       );
     } catch (e) {

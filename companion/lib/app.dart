@@ -141,7 +141,7 @@ class _OuiSpyAppState extends ConsumerState<OuiSpyApp>
     final themeMode = ref.watch(themeModeProvider);
     ref.watch(use24HourTimeProvider); // loads AppTime.use24Hour at startup
     return MaterialApp.router(
-      title: 'OUI-SPY',
+      title: 'OUI-SNITCH',
       theme: AppTheme.lightTheme,
       darkTheme: AppTheme.darkTheme,
       themeMode: themeMode,
@@ -317,7 +317,7 @@ class _AppShellState extends ConsumerState<AppShell> {
       builder: (ctx) => AlertDialog(
         backgroundColor: t.surface,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-        title: Text('Leave OUI-SPY?',
+        title: Text('Leave OUI-SNITCH?',
             style: TextStyle(color: t.textPrimary, fontWeight: FontWeight.w700)),
         content: Text(
           body,

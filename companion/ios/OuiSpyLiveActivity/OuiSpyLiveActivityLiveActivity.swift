@@ -291,7 +291,7 @@ private struct LockScreenView: View {
                 .foregroundColor(engineColor(state.mode))
 
             VStack(alignment: .leading, spacing: 2) {
-                Text("OUI-SPY \(state.displayLabel)")
+                Text("OUI-SNITCH \(state.displayLabel)")
                     .font(.system(size: 12, weight: .semibold))
                     .foregroundColor(.white)
                     .lineLimit(1)

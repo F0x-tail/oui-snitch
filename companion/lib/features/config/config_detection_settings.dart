@@ -139,7 +139,7 @@ class _DetectionSettingsTabState extends ConsumerState<_DetectionSettingsTab> {
         Padding(
           padding: const EdgeInsets.only(bottom: 14, left: 2, right: 2),
           child: Text(
-            'Choose what OUI-SPY watches for. When it finds one you get a notification and a pin on the map.',
+            'Choose what OUI-SNITCH watches for. When it finds one you get a notification and a pin on the map.',
             style: TextStyle(color: t.textDim, fontSize: 12, height: 1.3),
           ),
         ),

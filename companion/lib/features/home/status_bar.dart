@@ -128,7 +128,7 @@ class _StatusBarState extends ConsumerState<StatusBar> {
                 children: [
                   Flexible(
                     child: Text(
-                    state.nodeId.isNotEmpty ? state.nodeId : 'OUI-SPY',
+                    state.nodeId.isNotEmpty ? state.nodeId : 'OUI-SNITCH',
                     overflow: TextOverflow.ellipsis,
                     maxLines: 1,
                     style: TextStyle(

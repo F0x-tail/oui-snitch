@@ -25,7 +25,7 @@ class WigleCsv {
     buffer.writeln(
       'WigleWifi-1.6,'
       'appRelease=$_version,'
-      'model=OUI-SPY,'
+      'model=OUI-SNITCH,'
       'release=$_version,'
       'device=$device,'
       'display=companion,'

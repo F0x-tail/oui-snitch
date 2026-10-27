@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
 import 'package:flutter/material.dart';
 
-/// All scan engines available in the OUI-SPY firmware.
+/// All scan engines available in the OUI-SNITCH firmware.
 enum Engine {
   // Mid-tone hues: vivid on the dark background, still legible on white.
   detector('Detector', 'WiFi + BLE watchlist alerting', Color(0xFF3286E6), 0x01),

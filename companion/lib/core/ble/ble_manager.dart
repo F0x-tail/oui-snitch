@@ -414,7 +414,17 @@ class BleManager {
   bool get isManagerConnected =>
       _role == 'mgr' ||
       (_role.isEmpty &&
-          (_device?.platformName ?? '').toUpperCase().contains('OUI-SPY-MGR'));
+          _nameSaysManager(_device?.platformName ?? ''));
+
+  /// The advertised name was renamed from OUI-SPY to OUI-SNITCH. The old name
+  /// is still accepted so a board that has not been reflashed is recognised.
+  static bool nameIsOurBoard(String name) {
+    final n = name.toUpperCase();
+    return n.contains('OUI-SNITCH') || n.contains('OUI-SPY');
+  }
+
+  static bool _nameSaysManager(String name) =>
+      name.toUpperCase().contains('-MGR');
 
   /// Set while a reconnect is aimed at a board found by role rather than by
   /// address: the node id it must turn out to be, checked once the link is up.
@@ -515,7 +525,7 @@ class BleManager {
 
   // -- Scanning --
 
-  /// Scan for OUI-SPY devices. Results arrive on FlutterBluePlus.onScanResults.
+  /// Scan for our boards. Results arrive on FlutterBluePlus.onScanResults.
   Future<void> startScan({Duration timeout = const Duration(seconds: 10)}) async {
     // Ensure BLE adapter is on
     if (await FlutterBluePlus.adapterState.first != BluetoothAdapterState.on) {
@@ -793,13 +803,13 @@ class BleManager {
     final ouiService = services.firstWhere(
       (s) => s.uuid == GattUuids.service,
       orElse: () {
-        final msg = 'OUI-SPY service not found. Expected=${GattUuids.service} '
+        final msg = 'OUI-SNITCH service not found. Expected=${GattUuids.service} '
             'Found=${services.map((s) => s.uuid.toString()).join(", ")}';
         DebugLog.log('BLE: ERROR $msg');
         throw Exception(msg);
       },
     );
-    DebugLog.log('BLE: OUI-SPY service found');
+    DebugLog.log('BLE: service found');
 
     // Map characteristics
     for (final c in ouiService.characteristics) {
@@ -892,7 +902,7 @@ class BleManager {
       );
       final isMgr = _role == 'mgr' ||
           (_role.isEmpty &&
-              device.platformName.toUpperCase().contains('OUI-SPY-MGR'));
+              _nameSaysManager(device.platformName));
       if (!isMgr && !_offlineScanEnabled && !wardriveSessionActive && !_isReconnect) {
         await _serialWrite(_engineControl!, BleProtocol.encodeDisableAll());
         DebugLog.log('BLE: sent DISABLE_ALL on fresh connect (node)');

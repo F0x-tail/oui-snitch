@@ -115,9 +115,9 @@ void setup() {
     delay(300);
     Serial.println();
     Serial.println("========================================");
-    Serial.println("  OUI-SPY MANAGER (WROOM) — BLE+mesh");
+    Serial.println("  OUI-SNITCH MANAGER (WROOM) — BLE+mesh");
     Serial.println("========================================");
-    Serial.printf("[VERSION] OUI-SPY FW=%s (0x%06X)\n", FW_VERSION, FW_VERSION_NUM);
+    Serial.printf("[VERSION] OUI-SNITCH FW=%s (0x%06X)\n", FW_VERSION, FW_VERSION_NUM);
 
     opsecRandomizeBaseMac();
 

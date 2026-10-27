@@ -105,8 +105,8 @@ Future<bool> _primeLocationPermission(BuildContext context) async {
         context,
         title: 'Location Permission Required',
         body:
-            'OUI-SPY needs location access to tag wardrive detections.\n\n'
-            'Open Settings → OUI-SPY → Location and choose "While Using" or "Always".',
+            'OUI-SNITCH needs location access to tag wardrive detections.\n\n'
+            'Open Settings → OUI-SNITCH → Location and choose "While Using" or "Always".',
         action: 'OPEN SETTINGS',
         onAction: Geolocator.openAppSettings,
       );
@@ -129,7 +129,7 @@ Future<bool> _primeLocationPermission(BuildContext context) async {
         prefKey: 'ios_always_upgrade_dismissed',
         body:
             'iOS only shows "While Using" in the first prompt. For wardriving with screen off, set:\n\n'
-            'Settings → OUI-SPY → Location → Always',
+            'Settings → OUI-SNITCH → Location → Always',
         action: 'OPEN SETTINGS',
         onAction: Geolocator.openAppSettings,
       );
@@ -141,7 +141,7 @@ Future<bool> _primeLocationPermission(BuildContext context) async {
           prefKey: 'android_always_upgrade_dismissed',
           body:
               'For background tracking, Android requires "Allow all the time".\n\n'
-              'Settings → Apps → OUI-SPY → Permissions → Location → Allow all the time',
+              'Settings → Apps → OUI-SNITCH → Permissions → Location → Allow all the time',
           action: 'ALLOW ALL THE TIME',
           onAction: () async {
             if (!(await ph.Permission.locationAlways.request()).isGranted) {

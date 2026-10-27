@@ -61,7 +61,7 @@ class _PcapLibraryScreenState extends ConsumerState<PcapLibraryScreen> {
     final origin = Rect.fromLTWH(s.width / 2 - 1, s.height / 2 - 1, 2, 2);
     await Share.shareXFiles(
       [XFile(f.path, mimeType: 'application/vnd.tcpdump.pcap')],
-      subject: 'OUI-SPY PCAP ($size bytes)',
+      subject: 'OUI-SNITCH PCAP ($size bytes)',
       sharePositionOrigin: origin,
     );
   }

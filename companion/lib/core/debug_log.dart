@@ -15,7 +15,7 @@ class DebugLog {
       final file = File('${dir.path}/oui_spy.log');
       _sink = file.openWrite(mode: FileMode.append);
       _ready = true;
-      log('=== OUI-SPY started ===');
+      log('=== OUI-SNITCH started ===');
     } catch (e) {
       if (kDebugMode) {
         // ignore: avoid_print

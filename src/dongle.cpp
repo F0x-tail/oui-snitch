@@ -533,7 +533,7 @@ static void openCsvFiles(void) {
     snprintf(path, sizeof(path), DONGLE_DIR "/wigle_%04u.csv", (unsigned)s_seq);
     s_wigleCsv = DONGLE_SD.open(path, FILE_WRITE);
     if (s_wigleCsv) {
-        s_wigleCsv.printf("WigleWifi-1.6,appRelease=%s,model=OUI-SPY,release=%s,"
+        s_wigleCsv.printf("WigleWifi-1.6,appRelease=%s,model=OUI-SNITCH,release=%s,"
                           "device=%s,display=firmware,board=%s,brand=colonelpanic,"
                           "star=Sol,body=3,subBody=0\n",
                           FW_VERSION, FW_VERSION, wigleDevice(), DONGLE_WIGLE_BOARD);
@@ -1217,7 +1217,7 @@ void dongleInit(void) {
     s_tftReady = true;
     dongleBacklight(true);
 
-    tftLine(0, "OUI-SPY " FW_VERSION, DGX_CYAN);
+    tftLine(0, "OUI-SNITCH " FW_VERSION, DGX_CYAN);
     tftLine(1, OUISPY_BOARD, DGX_WHITE);
     Serial.printf("[DONGLE] rot=%d w=%d h=%d\n", (int)DONGLE_TFT_ROTATION,
                   (int)s_tft.width(), (int)s_tft.height());

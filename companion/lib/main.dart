@@ -96,7 +96,7 @@ Future<void> _forceCleanBleState() async {
     await Future.delayed(const Duration(milliseconds: 500));
     final connected = FlutterBluePlus.connectedDevices;
     for (final d in connected) {
-      if (d.platformName.contains('OUI-SPY')) continue;
+      if (BleManager.nameIsOurBoard(d.platformName)) continue;
       try {
         await d.disconnect(queue: false);
         DebugLog.log('BLE: force-disconnect on launch ${d.platformName}');
@@ -130,7 +130,7 @@ Future<void> _autoConnect(ProviderContainer container) async {
     BluetoothDevice? connMgr;
     BluetoothDevice? connNode;
     for (final device in connected) {
-      if (!device.platformName.contains('OUI-SPY')) continue;
+      if (!BleManager.nameIsOurBoard(device.platformName)) continue;
       if (device.platformName.toUpperCase().contains('MGR')) {
         connMgr = device;
       } else {
@@ -148,7 +148,7 @@ Future<void> _autoConnect(ProviderContainer container) async {
 
     final lastPrimaryIsManager = prefs.getBool('lastPrimaryIsManager') ?? false;
 
-    DebugLog.log('AUTO: scanning (OUI-SPY service filter, 8s)...');
+    DebugLog.log('AUTO: scanning (OUI-SNITCH service filter, 8s)...');
 
     final completer = Completer<BluetoothDevice?>();
     BluetoothDevice? preferredDevice;
@@ -162,9 +162,9 @@ Future<void> _autoConnect(ProviderContainer container) async {
         final serviceUuids = r.advertisementData.serviceUuids;
 
         // Match by name or by service UUID
-        final nameMatch = name.contains('OUI-SPY') ||
+        final nameMatch = BleManager.nameIsOurBoard(name) ||
             name.contains('OUI') ||
-            advName.contains('OUI-SPY') ||
+            BleManager.nameIsOurBoard(advName) ||
             advName.contains('OUI');
         final uuidMatch = serviceUuids.any(
             (u) => u.toString().endsWith('0a15-4b70-ba00-c010ae1ba01c'));
@@ -235,7 +235,7 @@ Future<void> _autoConnect(ProviderContainer container) async {
       await _onConnected(container, found.remoteId.toString());
       DebugLog.log('AUTO: connected');
     } else {
-      DebugLog.log('AUTO: no OUI-SPY found after scan');
+      DebugLog.log('AUTO: no OUI-SNITCH found after scan');
       container.read(bleManagerProvider).signalAutoReconnect(false);
     }
   } catch (e) {

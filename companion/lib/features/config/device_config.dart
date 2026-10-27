@@ -357,7 +357,7 @@ class _DeviceConfigScreenState extends ConsumerState<DeviceConfigScreen> {
             if (i == 4 && !ref.read(bleManagerProvider).isConnected)
               Padding(
                 padding: const EdgeInsets.fromLTRB(4, 0, 4, 12),
-                child: Text('Connect an OUI-SPY board to change its settings.',
+                child: Text('Connect an OUI-SNITCH board to change its settings.',
                     style: TextStyle(color: t.textDim, fontSize: 12)),
               ),
             for (var s = 0; s < subs!.length; s++)
@@ -606,7 +606,7 @@ class _DeviceConfigScreenState extends ConsumerState<DeviceConfigScreen> {
               ),
               const SizedBox(height: 6),
               Text(
-                'Connect an OUI-SPY node to configure hardware settings.',
+                'Connect an OUI-SNITCH node to configure hardware settings.',
                 textAlign: TextAlign.center,
                 style: TextStyle(color: t.textDim, fontSize: 11),
               ),

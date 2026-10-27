@@ -107,7 +107,7 @@ class ExportScreen extends ConsumerWidget {
       final file = await db.createBackup();
       await Share.shareXFiles(
         [XFile(file.path, mimeType: 'application/x-sqlite3')],
-        subject: 'OUI-SPY Database Backup',
+        subject: 'OUI-SNITCH Database Backup',
         sharePositionOrigin: origin,
       );
     } catch (e) {
@@ -127,7 +127,7 @@ class ExportScreen extends ConsumerWidget {
     final valid = await AppDatabase.validateBackup(file.path);
     if (!valid) {
       messenger.showSnackBar(const SnackBar(
-          content: Text('Not a valid OUI-SPY database backup')));
+          content: Text('Not a valid OUI-SNITCH database backup')));
       return;
     }
     if (!context.mounted) return;
@@ -216,7 +216,7 @@ class ExportScreen extends ConsumerWidget {
     final buf = StringBuffer();
     buf.writeln('<?xml version="1.0" encoding="UTF-8"?>');
     buf.writeln('<kml xmlns="http://www.opengis.net/kml/2.2">');
-    buf.writeln('<Document><name>OUI-SPY Detections</name>');
+    buf.writeln('<Document><name>OUI-SNITCH Detections</name>');
     for (final d in geoDetections) {
       buf.writeln('<Placemark>');
       buf.writeln('  <name>${d.macAddress}</name>');
@@ -238,7 +238,7 @@ class ExportScreen extends ConsumerWidget {
     await file.writeAsString(content);
     await Share.shareXFiles(
       [XFile(file.path)],
-      subject: 'OUI-SPY Export',
+      subject: 'OUI-SNITCH Export',
       sharePositionOrigin: origin,
     );
   }

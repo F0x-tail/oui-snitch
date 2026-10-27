@@ -101,7 +101,7 @@ class _WatchlistPanelState extends ConsumerState<WatchlistPanel> {
     await f.writeAsString(ref.read(watchlistProvider).exportJson());
     await Share.shareXFiles(
       [XFile(f.path, mimeType: 'application/json')],
-      subject: 'OUI-SPY Watchlist',
+      subject: 'OUI-SNITCH Watchlist',
       sharePositionOrigin: origin,
     );
   }

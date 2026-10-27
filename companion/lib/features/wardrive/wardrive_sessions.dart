@@ -628,7 +628,7 @@ class _CompletedSessionBarState extends ConsumerState<_CompletedSessionBar> {
         : const Rect.fromLTWH(0, 0, 100, 100);
     await Share.shareXFiles(
       [XFile(file.path)],
-      subject: 'OUI-SPY WiGLE CSV',
+      subject: 'OUI-SNITCH WiGLE CSV',
       sharePositionOrigin: origin,
     );
   }
@@ -1040,7 +1040,7 @@ class _SessionHistorySheetState extends ConsumerState<_SessionHistorySheet> {
           : const Rect.fromLTWH(0, 0, 100, 100);
       await Share.shareXFiles(
         [XFile(file.path)],
-        subject: 'OUI-SPY WiGLE CSV',
+        subject: 'OUI-SNITCH WiGLE CSV',
         sharePositionOrigin: origin,
       );
     } else {

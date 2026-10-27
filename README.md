@@ -101,15 +101,12 @@ Open a serial monitor at 115200 and press reset. A healthy board says:
 
 ```
 ========================================
-  OUI-SPY v3.0 — App-Controlled Mode
+  OUI-SNITCH — App-Controlled Mode
 ========================================
 [ENGINE] Registered: Detector (id=0)
 ...
-[INIT] *** OUI-SPY READY ***
+[INIT] *** OUI-SNITCH READY ***
 ```
-
-The banner still carries the upstream name; only the repository has been
-renamed so far.
 
 If you see `rst:0x7 (TG0WDT_SYS_RST)` repeating, you flashed QIO. Reflash with
 `--flash_mode dio`.

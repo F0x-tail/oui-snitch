@@ -173,12 +173,12 @@ class GpsProvider {
         intervalDuration: const Duration(seconds: 1),
         // Android's mandatory foreground-service notice for location access.
         // GPS runs whenever connected to the board, not only during a wardrive,
-        // so the old "OUI-SPY Wardriving" wrongly implied a session had started
+        // so the old "OUI-SNITCH Wardriving" wrongly implied a session had started
         // on its own. "Ready" reflects the truth: location is live, so a
         // wardrive would record a track and detections get tagged — but nothing
         // is running until the user starts it.
         foregroundNotificationConfig: const ForegroundNotificationConfig(
-          notificationTitle: 'OUI-SPY',
+          notificationTitle: 'OUI-SNITCH',
           notificationText: 'Location ready for wardriving',
           notificationChannelName: 'Location service',
           enableWakeLock: true,

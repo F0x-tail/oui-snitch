@@ -241,7 +241,7 @@ class _AutoConnectToggleState extends ConsumerState<_AutoConnectToggle> {
       icon: _value ? Icons.bluetooth_connected : Icons.bluetooth_disabled,
       label: 'Auto-connect on launch',
       subtitle: _value
-          ? 'Reconnects to the last OUI-SPY device at startup'
+          ? 'Reconnects to the last OUI-SNITCH device at startup'
           : 'Connect manually from the home screen',
       color: AppTheme.accent,
       value: _value,

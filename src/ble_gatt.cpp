@@ -2414,7 +2414,7 @@ class DeviceInfoCallbacks : public NimBLECharacteristicCallbacks {
         len++;
         uint8_t mac[6];
         opsecFactoryBtMac(mac);
-        len += snprintf(info + len, sizeof(info) - len, "OUISPY-%02X%02X",
+        len += snprintf(info + len, sizeof(info) - len, "OUISNITCH-%02X%02X",
                         mac[4], mac[5]);
         len++;
         len += snprintf(info + len, sizeof(info) - len, "%s", OUISPY_BOARD);
@@ -2478,9 +2478,9 @@ void bleGattInit(void) {
         // factory MAC, so it stayed the same across boots and would have
         // identified the board just as well as the address it replaced.
 #ifdef OUISPY_ROLE_MANAGER
-        snprintf(devName, sizeof(devName), "OUI-SPY-MGR");
+        snprintf(devName, sizeof(devName), "OUI-SNITCH-MGR");
 #else
-        snprintf(devName, sizeof(devName), "OUI-SPY");
+        snprintf(devName, sizeof(devName), "OUI-SNITCH");
 #endif
         NimBLEDevice::init(devName);
         Serial.printf("[BLE] device name: %s\n", devName);
@@ -2526,7 +2526,7 @@ void bleGattInit(void) {
         len++;
         uint8_t mac[6];
         opsecFactoryBtMac(mac);
-        len += snprintf(info + len, sizeof(info) - len, "OUISPY-%02X%02X",
+        len += snprintf(info + len, sizeof(info) - len, "OUISNITCH-%02X%02X",
                         mac[4], mac[5]);
         len++;
         len += snprintf(info + len, sizeof(info) - len, "%s", OUISPY_BOARD);
@@ -2720,7 +2720,7 @@ void bleGattInit(void) {
     if (!adv->start()) {
         Serial.println("[BLE] WARNING: advertising failed to start");
     }
-    Serial.println("[BLE] GATT server started, advertising as OUI-SPY");
+    Serial.println("[BLE] GATT server started, advertising as OUI-SNITCH");
 }
 
 static size_t packDetection(const DetectionEvent* evt, uint8_t* buf) {

@@ -206,8 +206,8 @@ class _ScanScreenState extends ConsumerState<ScanScreen> {
             'devices. Enable it, then tap SCAN again.'
         : permanently
             ? 'Bluetooth scanning permission was denied. Open Settings and '
-                'allow Nearby devices / Location for OUI-SPY, then tap SCAN again.'
-            : 'OUI-SPY needs Bluetooth scanning permission to find your node. '
+                'allow Nearby devices / Location for OUI-SNITCH, then tap SCAN again.'
+            : 'OUI-SNITCH needs Bluetooth scanning permission to find your node. '
                 'Tap SCAN again and allow it.';
     final String actionLabel =
         servicesOff ? 'ENABLE LOCATION' : 'OPEN SETTINGS';
@@ -299,7 +299,7 @@ class _ScanScreenState extends ConsumerState<ScanScreen> {
             _ScanRadar(active: _scanning),
             const SizedBox(height: 24),
             Text(
-              'OUI-SPY',
+              'OUI-SNITCH',
               style: TextStyle(
                 color: t.textPrimary,
                 fontSize: 20,
@@ -363,7 +363,7 @@ class _ScanScreenState extends ConsumerState<ScanScreen> {
                       : (r.device.platformName.isNotEmpty
                           ? r.device.platformName
                           : (r.advertisementData.serviceUuids.contains(GattUuids.service)
-                              ? 'OUI-SPY node'
+                              ? 'OUI-SNITCH node'
                               : '(unnamed)'));
                   return GestureDetector(
                     onTap: _connecting ? null : () => _connectDevice(r),

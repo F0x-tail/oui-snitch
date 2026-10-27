@@ -106,7 +106,7 @@ class _DisconnectedView extends ConsumerWidget {
             _PulsingRadar(active: isConnecting || isReconnecting),
             const SizedBox(height: 28),
             Text(
-              'OUI-SPY',
+              'OUI-SNITCH',
               style: TextStyle(
                 color: t.textPrimary,
                 fontSize: 28,
@@ -119,7 +119,7 @@ class _DisconnectedView extends ConsumerWidget {
               isConnecting
                   ? 'Establishing BLE link...'
                   : isReconnecting
-                      ? 'Searching for your OUI-SPY…'
+                      ? 'Searching for your OUI-SNITCH…'
                       : 'Multi-engine RF intelligence',
               style: TextStyle(
                 color: t.textDim,

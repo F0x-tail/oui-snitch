@@ -185,7 +185,7 @@ class _PcapScreenState extends ConsumerState<PcapScreen> {
     final origin = Rect.fromLTWH(size2.width / 2 - 1, size2.height / 2 - 1, 2, 2);
     await Share.shareXFiles(
       [XFile(f.path, mimeType: 'application/vnd.tcpdump.pcap')],
-      subject: 'OUI-SPY PCAP ($size bytes)',
+      subject: 'OUI-SNITCH PCAP ($size bytes)',
       sharePositionOrigin: origin,
     );
   }
@@ -802,7 +802,7 @@ class _SavedPcapsSectionState extends State<_SavedPcapsSection> {
     final origin = Rect.fromLTWH(size2.width / 2 - 1, size2.height / 2 - 1, 2, 2);
     await Share.shareXFiles(
       [XFile(f.path, mimeType: 'application/vnd.tcpdump.pcap')],
-      subject: 'OUI-SPY PCAP ($size bytes)',
+      subject: 'OUI-SNITCH PCAP ($size bytes)',
       sharePositionOrigin: origin,
     );
   }

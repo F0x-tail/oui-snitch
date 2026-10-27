@@ -318,7 +318,7 @@ class _FeedScreenState extends ConsumerState<FeedScreen> {
                       child: Text(
                         state.isConnected
                             ? 'No detections yet. They show up here as your board finds them.'
-                            : 'Not connected. Connect your OUI-SPY board from Home to see live detections.',
+                            : 'Not connected. Connect your OUI-SNITCH board from Home to see live detections.',
                         textAlign: TextAlign.center,
                         style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: AppTheme.of(context).textDim),
                       ),
@@ -649,7 +649,7 @@ class _FeedScreenState extends ConsumerState<FeedScreen> {
       await file.writeAsString(csv);
       await Share.shareXFiles(
         [XFile(file.path)],
-        subject: 'OUI-SPY Feed Export (${detections.length} detections)',
+        subject: 'OUI-SNITCH Feed Export (${detections.length} detections)',
         sharePositionOrigin: origin,
       );
     } catch (e) {

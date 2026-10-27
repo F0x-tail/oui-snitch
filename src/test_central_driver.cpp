@@ -17,7 +17,7 @@ class ScanCB : public NimBLEAdvertisedDeviceCallbacks {
     void onResult(NimBLEAdvertisedDevice* d) override {
         if (found) return;
         std::string n = d->haveName() ? d->getName() : "";
-        if (n.rfind("OUI-SPY-", 0) == 0 && n.rfind("OUI-SPY-MGR", 0) != 0) {
+        if (n.rfind("OUI-SNITCH", 0) == 0 && n.rfind("OUI-SNITCH-MGR", 0) != 0) {
             target = *d;
             found = true;
             NimBLEDevice::getScan()->stop();
@@ -96,7 +96,7 @@ static void configureNode() {
 void setup() {
     Serial.begin(115200);
     delay(500);
-    Serial.println("\n[DRV] === OUI-SPY offline-scan reconnect test central ===");
+    Serial.println("\n[DRV] === OUI-SNITCH offline-scan reconnect test central ===");
     NimBLEDevice::init("OUISPY-TESTDRV");
     NimBLEDevice::setMTU(247);
     NimBLEDevice::getScan()->setAdvertisedDeviceCallbacks(&scanCb, false);

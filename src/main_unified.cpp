@@ -560,7 +560,8 @@ static void detectionNotifyTask(void* param) {
                 (evt.engine_id == ENGINE_WARDRIVE)
                     ? (evtIsBle ? evt.ext.wardrive.device_name : evt.ext.wardrive.ssid)
                     : "";
-            if (strncmp(evtName, "OUI-SPY", 7) == 0 || meshIsFleetMac(evt.mac)) {
+            if (strncmp(evtName, "OUI-SNITCH", 10) == 0 ||
+                strncmp(evtName, "OUI-SPY", 7) == 0 || meshIsFleetMac(evt.mac)) {
                 continue;
             }
             if (ignoreListMatch(evt.mac, evtSsid, evtIsBle)) {
@@ -1421,10 +1422,10 @@ void setup() {
     delay(200);
 
     Serial.println("\n========================================");
-    Serial.println("  OUI-SPY v3.0 — App-Controlled Mode");
+    Serial.println("  OUI-SNITCH — App-Controlled Mode");
     Serial.println("  No boot selector. BLE GATT only.");
     Serial.println("========================================\n");
-    Serial.printf("[VERSION] OUI-SPY FW=%s (0x%06X)\n", FW_VERSION, FW_VERSION_NUM);
+    Serial.printf("[VERSION] OUI-SNITCH FW=%s (0x%06X)\n", FW_VERSION, FW_VERSION_NUM);
 
     opsecRandomizeBaseMac();
 
@@ -1723,7 +1724,7 @@ void setup() {
         }
     }
 
-    Serial.println("\n[INIT] *** OUI-SPY READY ***");
+    Serial.println("\n[INIT] *** OUI-SNITCH READY ***");
     Serial.println("[INIT] Waiting for phone connection via BLE OR mesh command...");
     Serial.printf("[INIT] Free heap: %d bytes\n", esp_get_free_heap_size());
 }
