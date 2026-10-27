@@ -25,19 +25,10 @@ and run one mode at a time. Here, detection and logging run together.
 
 ## What this document covers
 
-**Hardware v0.1 only** — a single XIAO ESP32-S3 on a breadboard. No PCB, no
+**Hardware v0.1** — a single XIAO ESP32-S3 on a breadboard. No PCB, no
 enclosure, no case: one module, a USB cable, and jumper wire for the two
-optional extras. It is the cheapest way into this project and the only version
-that exists today.
-
-Everything after it is planned, and none of it is documented here:
-
-| | What | Status |
-|---|---|---|
-| **v0.1** | Single module on a breadboard | **this document** |
-| **v1** | Two modules — S3 + C5 — wired over UART | link firmware not written |
-| **v2** | 2-layer PCB; you solder your own modules | after v1 |
-| **v3** | Assembled board, single USB-C | later |
+optional extras. It is the cheapest way into this project, and it is the only
+hardware that exists.
 
 ---
 
@@ -48,7 +39,7 @@ Everything after it is planned, and none of it is documented here:
 | Part | Needed? | Notes |
 |---|---|---|
 | **Seeed XIAO ESP32-S3** | yes | The main board. Talks to your phone, runs the engines |
-| **Seeed XIAO ESP32-C5** | no | Not part of v0.1. It runs as its own separate board with 5 GHz, but it is experimental — read *Where this is going* before buying one |
+| **Seeed XIAO ESP32-C5** | no | A separate board, not a second radio for the S3. Adds 5 GHz, but experimental — read *About the C5 board* before buying one |
 | Breadboard + jumpers | yes | Any size |
 | USB-C cable | yes | Must be a **data** cable. Charge-only cables are the most common reason a board does not appear |
 | Passive buzzer | optional | GPIO3 on the S3 |
@@ -230,27 +221,20 @@ module wins. With no fix at all, rows are still logged but cannot be uploaded.
 
 ---
 
-## Where this is going — v1
+## About the C5 board
 
-v0.1 asks one radio to do everything: Wi-Fi promiscuous capture, BLE scanning
-and the link to your phone, all time-sliced. It works, and that sharing is the
-honest limit of a single module.
+One radio does everything here: Wi-Fi promiscuous capture, BLE scanning and the
+link to your phone, all time-sliced on the same chip. It works, and that sharing
+is the honest limit of a single module.
 
-v1 splits the job across two chips. The **S3** talks to your phone and does the
-thinking; the **C5** does nothing but scan — including 5 GHz — so no scanning
-airtime is ever lost to the phone link.
+A **XIAO ESP32-C5** flashed with the same firmware also runs, and adds 5 GHz,
+but treat it as experimental and as a *separate device*. It is not a second
+radio for an S3 — there is no firmware that joins two modules into one unit, so
+two boards on your desk are two detectors, not one with more ears.
 
-**The link between them is not written yet.** The two chips are meant to talk
-over a wired UART, and that firmware does not exist. Until it does:
-
-- Flash the **S3** and use it on its own. That is v0.1, and it is what
-  everything above describes.
-- A **C5** flashed with the same firmware also runs on its own, with 5 GHz, but
-  it is experimental, and it is a *separate device* — not a second radio for an S3.
-
-ESP-NOW will not stand in for that link. It exists for genuinely separate boards
-spread around — a second unit across the street, not two modules 2 cm apart,
-where it would cost the scanner the exact airtime the split exists to protect.
+ESP-NOW is not that link either. It exists for genuinely separate boards spread
+around — a second unit across the street, not two modules 2 cm apart, where it
+would cost the scanner the exact airtime a split would be meant to protect.
 
 ---
 
