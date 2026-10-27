@@ -67,6 +67,29 @@ static inline bool activeProbeEnabled(void) { return g_activeProbeEnabled; }
   #define OUISPY_BOARD "unknown"
 #endif
 
+// ---------------------------------------------------------------------------
+// WIRE IDENTIFIERS BELOW HAVE DIVERGED FROM UPSTREAM. DO NOT MERGE THEM BACK.
+//
+// The engine IDs, SIG_* bits and METHOD_* numbers in this file are ours. The
+// project this firmware grew from renumbered several of the same identifiers
+// differently, and the two sets disagree:
+//
+//     engine slot 1   upstream: Flock BLE        here: ENGINE_AXON
+//     SIG 0x02        upstream: Flipper only     here: SIG_HACKTOOLS
+//     SIG 0x10        upstream: Pwnagotchi       here: SIG_MESH
+//     METHOD_DET 10   upstream: Amazon           here: METHOD_DET_EVILTWIN
+//
+// These are separate lines in separate places, so a merge resolves all of them
+// silently and the result compiles. It is simply wrong afterwards: a board and
+// an app that disagree about 0x10 will report Meshtastic traffic as a
+// Pwnagotchi, with nothing anywhere to indicate a fault.
+//
+// So: port features across by hand, never by merge, and when adding an
+// identifier here take the next free value in THIS file without regard for
+// what upstream did with it. Compatibility was given up deliberately; it is
+// not something a future change can quietly restore.
+// ---------------------------------------------------------------------------
+
 enum EngineId : uint8_t {
     ENGINE_DETECTOR   = 0,  // bitmask 0x01
     // Slot 1 previously held the Flock BLE engine, removed when the community
