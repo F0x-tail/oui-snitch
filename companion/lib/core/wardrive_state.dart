@@ -664,7 +664,6 @@ class WardriveController extends ChangeNotifier {
   Timer? _statsTimer;
   bool _inExclusion = false;
   bool get inExclusion => _inExclusion;
-  Set<Engine> _pausedByExclusion = {};
   bool _autoPcapPausedByExclusion = false;
 
   bool get isRunning => state == WardriveState.running;
@@ -953,6 +952,16 @@ class WardriveController extends ChangeNotifier {
     final cached = _gps.lastPosition;
     if (cached != null) {
       currentPosition = cached;
+    }
+
+    // A session can be started from inside an exclusion zone. The position
+    // stream only reports transitions, so without this the radios come up and
+    // stay up until the user crosses the boundary outwards.
+    final startFix = currentPosition;
+    _inExclusion = startFix != null &&
+        _geofenceFilter.isExcludedNullable(startFix.latitude, startFix.longitude);
+    if (_inExclusion) {
+      DebugLog.log('WARDRIVE: started inside an exclusion zone — radios held off');
     }
 
     _preSessionEngines = await _readRunningEngines();
@@ -1531,12 +1540,14 @@ class WardriveController extends ChangeNotifier {
       await Future.delayed(const Duration(milliseconds: 80));
     }
     for (final engine in engineList) {
-      if (state == WardriveState.idle) return;
+      // Each engine is a round trip, so entering a zone part-way through this
+      // loop would otherwise keep switching radios on behind the pause.
+      if (state == WardriveState.idle || _inExclusion) return;
       if (engine == Engine.wardrive) {
         await _ble.sendEngineConfig(engine, _wardriveConfigPayload);
         await Future.delayed(const Duration(milliseconds: 100));
       }
-      if (state == WardriveState.idle) return;
+      if (state == WardriveState.idle || _inExclusion) return;
       await _ble.enableEngine(engine, radio: radioBitmask);
       if (engine.isWifi) {
         await _awaitEngineUp(engine, const Duration(milliseconds: 500));
@@ -2166,16 +2177,18 @@ class WardriveController extends ChangeNotifier {
     _inExclusion = excluded;
     if (excluded) {
       DebugLog.log('WARDRIVE: entered exclusion zone — pausing radios');
-      _pausedByExclusion = Set<Engine>.from(activeEngines);
-      for (final e in _pausedByExclusion) {
+      // Disable the whole fleet rather than the set the app believes is
+      // running. activeEngines is the app's picture of the board, and a zone
+      // is exactly the place not to trust a picture that can be stale: an
+      // engine missing from it would keep transmitting.
+      for (final e in _fleetEngines) {
         _ble.disableEngine(e);
       }
       _autoPcapPausedByExclusion = _ble.latestPcapStats.autoEnabled;
       if (_autoPcapPausedByExclusion) _ble.setAutoPcap(false);
     } else {
       DebugLog.log('WARDRIVE: exited exclusion zone — restoring radios');
-      _enableEnginesSequentially(_pausedByExclusion.toList());
-      _pausedByExclusion = {};
+      _enableEnginesSequentially(_fleetEngines);
       if (_autoPcapPausedByExclusion) {
         _ble.setAutoPcap(true);
         _autoPcapPausedByExclusion = false;
