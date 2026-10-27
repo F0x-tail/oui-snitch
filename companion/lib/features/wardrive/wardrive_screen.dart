@@ -1231,25 +1231,62 @@ class _WardriveScreenState extends ConsumerState<WardriveScreen> with WidgetsBin
     final engineMix = <Map<Engine, int>>[];
     final sumLat = <double>[];
     final sumLon = <double>[];
-    final cellToIdx = <int, int>{};
+    final cellToIdx = <int, List<int>>{};
+    // Grid as a broad phase only, not as the clustering itself.
+    //
+    // Snapping each point to its cell and calling that a cluster meant two
+    // points a metre apart but either side of a cell boundary never merged —
+    // so a dense street came out as several half-clusters with loose markers
+    // between them, which is what reads on screen as "not clustering".
+    //
+    // Instead each point joins the nearest existing cluster within
+    // bucketRadiusM, found by looking at the 3x3 cells around it. Cells are
+    // two radii across and a cluster is registered in the cell of the point
+    // that seeded it, so its centre can never drift far enough for a candidate
+    // within range to fall outside that neighbourhood — the 3x3 scan misses
+    // nothing a full search would find.
+    int cellKey(int gx, int gy) => (gx & 0x3FFFFFF) << 26 | (gy & 0x3FFFFFF);
     final clusterIdxOf = <int>[]; // parallel to clusterable
+    final radiusSqM = bucketRadiusM * bucketRadiusM;
     for (final d in clusterable) {
-      final gx = (d.latitude! * 111320.0 / cellM).floor();
-      final gy = (d.longitude! * 111320.0 * cosMean / cellM).floor();
-      final key = (gx & 0x3FFFFFF) << 26 | (gy & 0x3FFFFFF);
-      var idx = cellToIdx[key];
-      if (idx == null) {
+      final lat = d.latitude!;
+      final lon = d.longitude!;
+      final gx = (lat * 111320.0 / cellM).floor();
+      final gy = (lon * 111320.0 * cosMean / cellM).floor();
+
+      int? best;
+      var bestSqM = double.infinity;
+      for (var dx = -1; dx <= 1; dx++) {
+        for (var dy = -1; dy <= 1; dy++) {
+          final near = cellToIdx[cellKey(gx + dx, gy + dy)];
+          if (near == null) continue;
+          for (final ci in near) {
+            final mx = (lat - centers[ci].latitude) * 111320.0;
+            final my = (lon - centers[ci].longitude) * 111320.0 * cosMean;
+            final sq = mx * mx + my * my;
+            if (sq < bestSqM) {
+              bestSqM = sq;
+              best = ci;
+            }
+          }
+        }
+      }
+
+      int idx;
+      if (best != null && bestSqM <= radiusSqM) {
+        idx = best;
+      } else {
         idx = centers.length;
-        cellToIdx[key] = idx;
-        centers.add(LatLng(d.latitude!, d.longitude!));
+        (cellToIdx[cellKey(gx, gy)] ??= <int>[]).add(idx);
+        centers.add(LatLng(lat, lon));
         counts.add(0);
         engineMix.add(<Engine, int>{});
         sumLat.add(0);
         sumLon.add(0);
       }
       counts[idx] = counts[idx] + 1;
-      sumLat[idx] = sumLat[idx] + d.latitude!;
-      sumLon[idx] = sumLon[idx] + d.longitude!;
+      sumLat[idx] = sumLat[idx] + lat;
+      sumLon[idx] = sumLon[idx] + lon;
       engineMix[idx][d.engine] = (engineMix[idx][d.engine] ?? 0) + 1;
       clusterIdxOf.add(idx);
     }
@@ -1276,6 +1313,11 @@ class _WardriveScreenState extends ConsumerState<WardriveScreen> with WidgetsBin
     for (var i = 0; i < clusterable.length; i += heatStride) {
       final d = clusterable[i];
       final ci = clusterIdxOf[i];
+      // Only points that cluster with nothing get their own blob. Drawing one
+      // per detection as well as the cluster dot left every clustered point
+      // visible underneath its own cluster, so clustering changed the colour
+      // of the map without ever visibly reducing it to markers.
+      if (counts[ci] > 1) continue;
       final densityTint = _percentileBlend(
           wt.engineColor(d.engine), counts[ci], p50, p90, p99);
       heat.add(CircleMarker(

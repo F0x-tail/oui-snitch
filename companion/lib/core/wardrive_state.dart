@@ -148,6 +148,43 @@ Set<Engine> enginesFromMask(int mask) {
 /// Success is "nothing left running but what we were asked to preserve", not
 /// "nothing running at all" — the latter reads a deliberately preserved engine
 /// as a failed teardown.
+/// Whether a coordinate is usable for plotting. Null island and the poles are
+/// what a device reports when it has no fix, not somewhere it has been.
+bool plottableCoord(double? lat, double? lon) {
+  if (lat == null || lon == null) return false;
+  if (!lat.isFinite || !lon.isFinite) return false;
+  if (lat == 0.0 && lon == 0.0) return false;
+  if (lat.abs() > 89.5) return false;
+  return true;
+}
+
+/// Of two sightings of the same device, which one's position should be plotted.
+///
+/// The map shows one marker per device, so repeat sightings have to collapse to
+/// a single point, and something must decide which. The strongest sighting
+/// wins: RSSI falls off with distance, so the loudest sample is the one taken
+/// nearest the transmitter. It also keeps the marker's position and its
+/// reported signal drawn from the *same* sample, which neither previous rule
+/// did.
+///
+/// A sighting with no usable fix never wins, however loud — otherwise driving
+/// through a GPS shadow would move a device to nowhere.
+///
+/// Deliberately not an average of the sightings. For a stationary transmitter
+/// the mean is dragged toward wherever the most samples were taken, which is
+/// wherever traffic was slowest, not where the device is. For a moving one —
+/// a tracker in someone's bag, a randomised MAC — the mean is a point the
+/// device never occupied, and nothing in the data says which case applies.
+bool sightingWinsPlot(
+  double? candLat, double? candLon, int candRssi,
+  double? curLat, double? curLon, int curRssi,
+) {
+  final candFix = plottableCoord(candLat, candLon);
+  if (!candFix) return false;
+  if (!plottableCoord(curLat, curLon)) return true;
+  return candRssi > curRssi;
+}
+
 /// The targets a wardrive actually runs with, given what the user selected.
 ///
 /// A wardrive with nothing selected is not an error: an unfiltered run that
@@ -1291,10 +1328,14 @@ class WardriveController extends ChangeNotifier {
       final key = '${det.macAddress}|${det.engine.name}';
       final existing = _dedupedByMac[key];
       if (existing != null) {
-        _dedupedByMac[key] = existing.copyWith(
-          count: existing.count + 1,
-          rssi: det.rssi > existing.rssi ? det.rssi : existing.rssi,
-        );
+        // Replay used to keep the first sighting's position while the live
+        // path kept the latest, so the same device sat in two different places
+        // depending on whether you were watching the run or reopening it.
+        final base = sightingWinsPlot(det.latitude, det.longitude, det.rssi,
+                existing.latitude, existing.longitude, existing.rssi)
+            ? det
+            : existing;
+        _dedupedByMac[key] = base.copyWith(count: existing.count + 1);
       } else {
         _dedupedByMac[key] = det;
       }
@@ -2046,9 +2087,20 @@ class WardriveController extends ChangeNotifier {
               : existing.wardrive!.deviceName,
         );
       }
-      final updated = detection.copyWith(
+      // Base the merged record on whichever sighting owns the plotted
+      // position, so position and RSSI come from one sample. Taking the new
+      // detection unconditionally, as this did, walked a device along the road
+      // behind us as weaker and weaker sightings arrived.
+      final base = sightingWinsPlot(detection.latitude, detection.longitude,
+              detection.rssi, existing.latitude, existing.longitude, existing.rssi)
+          ? detection
+          : existing;
+      final updated = base.copyWith(
         count: existing.count + 1,
-        rssi: detection.rssi > existing.rssi ? detection.rssi : existing.rssi,
+        deviceName: detection.deviceName.isNotEmpty
+            ? detection.deviceName
+            : existing.deviceName,
+        appTimestamp: detection.appTimestamp,
         wardrive: mergedWardrive,
       );
       _dedupedByMac[key] = updated;
