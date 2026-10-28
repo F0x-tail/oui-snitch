@@ -210,7 +210,7 @@ class _ScanScreenState extends ConsumerState<ScanScreen> {
             : 'OUI-SNITCH needs Bluetooth scanning permission to find your node. '
                 'Tap SCAN again and allow it.';
     final String actionLabel =
-        servicesOff ? 'ENABLE LOCATION' : 'OPEN SETTINGS';
+        servicesOff ? 'Enable location' : 'Open settings';
     final bool showAction = servicesOff || permanently;
 
     showDialog<void>(
@@ -228,7 +228,7 @@ class _ScanScreenState extends ConsumerState<ScanScreen> {
         actions: [
           TextButton(
             onPressed: () => Navigator.of(ctx).pop(),
-            child: Text('LATER', style: TextStyle(color: t.textDim)),
+            child: Text('Later', style: TextStyle(color: t.textDim)),
           ),
           if (showAction)
             TextButton(
@@ -241,7 +241,7 @@ class _ScanScreenState extends ConsumerState<ScanScreen> {
                 }
               },
               child: Text(actionLabel,
-                  style: const TextStyle(color: AppTheme.accent)),
+                  style: TextStyle(color: AppTheme.accent)),
             ),
         ],
       ),
@@ -273,7 +273,7 @@ class _ScanScreenState extends ConsumerState<ScanScreen> {
     return Scaffold(
       backgroundColor: t.background,
       appBar: AppBar(
-        title: const Text('CONNECT'),
+        title: const Text('Connect'),
         leading: IconButton(icon: const Icon(Icons.arrow_back), onPressed: () => context.go('/home')),
       ),
       body: SizedBox(
@@ -290,7 +290,7 @@ class _ScanScreenState extends ConsumerState<ScanScreen> {
                   color: AppTheme.error.withValues(alpha: 0.1),
                   borderRadius: BorderRadius.circular(10),
                 ),
-                child: Text(_error!, style: const TextStyle(color: AppTheme.error, fontSize: 11, fontFamily: 'monospace')),
+                child: Text(_error!, style: TextStyle(color: AppTheme.error, fontSize: 12,)),
               ),
             ),
 
@@ -304,8 +304,6 @@ class _ScanScreenState extends ConsumerState<ScanScreen> {
                 color: t.textPrimary,
                 fontSize: 20,
                 fontWeight: FontWeight.w700,
-                letterSpacing: 2,
-                fontFamily: 'monospace',
               ),
             ),
             const SizedBox(height: 8),
@@ -318,13 +316,13 @@ class _ScanScreenState extends ConsumerState<ScanScreen> {
               onPressed: _scanning ? null : _startScan,
               style: OutlinedButton.styleFrom(
                 foregroundColor: AppTheme.accent,
-                side: const BorderSide(color: AppTheme.accent),
+                side: BorderSide(color: AppTheme.accent),
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
                 padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 10),
               ),
               child: Text(
-                _scanning ? 'SCANNING...' : 'Scan for devices',
-                style: const TextStyle(fontFamily: 'monospace', fontSize: 13, fontWeight: FontWeight.w600, letterSpacing: 0.5),
+                _scanning ? 'Scanning...' : 'Scan for devices',
+                style: const TextStyle( fontSize: 13, fontWeight: FontWeight.w600),
               ),
             ),
             const Spacer(flex: 2),
@@ -334,14 +332,14 @@ class _ScanScreenState extends ConsumerState<ScanScreen> {
               child: Row(
                 children: [
                   Text(
-                    '${sorted.length} FOUND',
-                    style: TextStyle(color: t.textDim, fontSize: 10, fontWeight: FontWeight.w600, letterSpacing: 0.8, fontFamily: 'monospace'),
+                    '${sorted.length} found',
+                    style: TextStyle(color: t.textDim, fontSize: 12, fontWeight: FontWeight.w600, fontFamily: AppTheme.monoFamily),
                   ),
                   const Spacer(),
                   if (!_scanning)
                     GestureDetector(
                       onTap: _startScan,
-                      child: Text('RESCAN', style: TextStyle(color: AppTheme.accent, fontSize: 10, fontWeight: FontWeight.w600, letterSpacing: 0.8, fontFamily: 'monospace')),
+                      child: Text('Rescan', style: TextStyle(color: AppTheme.accent, fontSize: 12, fontWeight: FontWeight.w600,)),
                     ),
                   if (_scanning)
                     SizedBox(width: 12, height: 12, child: CircularProgressIndicator(color: AppTheme.accent, strokeWidth: 1.5)),
@@ -393,7 +391,7 @@ class _ScanScreenState extends ConsumerState<ScanScreen> {
                               borderRadius: BorderRadius.circular(6),
                             ),
                             child: isThisConnecting
-                                ? const Center(child: SizedBox(width: 14, height: 14, child: CircularProgressIndicator(color: AppTheme.accent, strokeWidth: 2)))
+                                ? Center(child: SizedBox(width: 14, height: 14, child: CircularProgressIndicator(color: AppTheme.accent, strokeWidth: 2)))
                                 : Icon(Icons.bluetooth, color: isOtherConnecting ? t.textDim : AppTheme.accent, size: 18),
                           ),
                           const SizedBox(width: 12),
@@ -406,7 +404,6 @@ class _ScanScreenState extends ConsumerState<ScanScreen> {
                                   color: isOtherConnecting ? t.textDim : t.textPrimary,
                                   fontSize: 14,
                                   fontWeight: FontWeight.w600,
-                                  fontFamily: 'monospace',
                                 ),
                               ),
                               const SizedBox(height: 2),
@@ -420,14 +417,14 @@ class _ScanScreenState extends ConsumerState<ScanScreen> {
                                         color: AppTheme.accent.withValues(alpha: 0.08),
                                         borderRadius: BorderRadius.circular(3),
                                       ),
-                                      child: Text('MGR', style: TextStyle(color: AppTheme.accent, fontSize: 9, fontWeight: FontWeight.w700, letterSpacing: 0.3)),
+                                      child: Text('Manager', style: TextStyle(color: AppTheme.accent, fontSize: 12, fontWeight: FontWeight.w700)),
                                     ),
                                   Text(
-                                    isThisConnecting ? 'CONNECTING...' : id,
+                                    isThisConnecting ? 'Connecting...' : id,
                                     style: TextStyle(
                                       color: isThisConnecting ? AppTheme.accent : t.textDim,
-                                      fontSize: 10,
-                                      fontFamily: 'monospace',
+                                      fontSize: 12,
+                                      fontFamily: AppTheme.monoFamily,
                                     ),
                                   ),
                                 ],
@@ -501,7 +498,6 @@ class _ScanRadarState extends State<_ScanRadar> with SingleTickerProviderStateMi
                 decoration: BoxDecoration(
                   shape: BoxShape.circle,
                   color: AppTheme.accent,
-                  boxShadow: [BoxShadow(color: AppTheme.accent.withValues(alpha: 0.4), blurRadius: 12)],
                 ),
               ),
             ],

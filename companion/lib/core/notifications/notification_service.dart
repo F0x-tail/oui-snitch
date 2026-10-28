@@ -125,7 +125,7 @@ class NotificationService extends ChangeNotifier {
 
   Future<void> init() async {
     if (!_initialized) {
-      const androidSettings = AndroidInitializationSettings('@mipmap/ic_launcher');
+      const androidSettings = AndroidInitializationSettings('@drawable/ic_notification');
       const darwinSettings = DarwinInitializationSettings(
         requestAlertPermission: true,
         requestBadgePermission: true,

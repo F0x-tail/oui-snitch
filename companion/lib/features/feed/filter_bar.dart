@@ -4,12 +4,12 @@ import 'package:oui_spy/core/models/engine.dart';
 enum RadioFilter { ble, wifi }
 
 enum FilterPreset {
-  all('ALL', null, null),
+  all('All', null, null),
   ble('BLE', _bleEngines, RadioFilter.ble),
-  wifi('WIFI', _wifiEngines, RadioFilter.wifi),
-  flock('FLOCK', _flockEngines, null),
-  drones('DRONES', _droneEngines, null),
-  alerts('ALERTS', _alertEngines, null);
+  wifi('Wi-Fi', _wifiEngines, RadioFilter.wifi),
+  flock('Flock', _flockEngines, null),
+  drones('Drones', _droneEngines, null),
+  alerts('Alerts', _alertEngines, null);
 
   const FilterPreset(this.label, this.engines, this.radio);
   final String label;

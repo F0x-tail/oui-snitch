@@ -111,7 +111,6 @@ class _DisconnectedView extends ConsumerWidget {
                 color: t.textPrimary,
                 fontSize: 28,
                 fontWeight: FontWeight.w200,
-                letterSpacing: 8,
               ),
             ),
             const SizedBox(height: 6),
@@ -124,7 +123,6 @@ class _DisconnectedView extends ConsumerWidget {
               style: TextStyle(
                 color: t.textDim,
                 fontSize: 12,
-                letterSpacing: 1,
               ),
               textAlign: TextAlign.center,
             ),
@@ -140,8 +138,8 @@ class _DisconnectedView extends ConsumerWidget {
                       ref.read(bleManagerProvider).disconnect(),
                   icon: const Icon(Icons.close, size: 14),
                   label: const Text(
-                    'CANCEL',
-                    style: TextStyle(letterSpacing: 2, fontSize: 12),
+                    'Cancel',
+                    style: TextStyle(fontSize: 12),
                   ),
                   style: OutlinedButton.styleFrom(
                     foregroundColor: AppTheme.error,
@@ -162,12 +160,12 @@ class _DisconnectedView extends ConsumerWidget {
                   onPressed: () => context.push('/onboarding'),
                   icon: const Icon(Icons.bluetooth, size: 16),
                   label: const Text(
-                    'CONNECT',
-                    style: TextStyle(letterSpacing: 2, fontSize: 13),
+                    'Connect',
+                    style: TextStyle(fontSize: 13),
                   ),
                   style: OutlinedButton.styleFrom(
                     foregroundColor: AppTheme.accent,
-                    side: const BorderSide(color: AppTheme.accent),
+                    side: BorderSide(color: AppTheme.accent),
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(10),
                     ),
@@ -189,7 +187,7 @@ class _DisconnectedView extends ConsumerWidget {
                     color: AppTheme.accent.withValues(alpha: 0.25),
                   ),
                 ),
-                child: const Row(
+                child: Row(
                   children: [
                     SizedBox(
                       width: 14,
@@ -201,12 +199,11 @@ class _DisconnectedView extends ConsumerWidget {
                     ),
                     SizedBox(width: 8),
                     Text(
-                      'RECONNECTING…',
+                      'Reconnecting…',
                       style: TextStyle(
                         color: AppTheme.accent,
-                        fontSize: 10,
+                        fontSize: 12,
                         fontWeight: FontWeight.w600,
-                        letterSpacing: 1,
                       ),
                     ),
                   ],
@@ -221,8 +218,8 @@ class _DisconnectedView extends ConsumerWidget {
                       ref.read(bleManagerProvider).disconnect(),
                   icon: const Icon(Icons.close, size: 14),
                   label: const Text(
-                    'STOP RECONNECT',
-                    style: TextStyle(letterSpacing: 2, fontSize: 12),
+                    'Stop reconnect',
+                    style: TextStyle(fontSize: 12),
                   ),
                   style: OutlinedButton.styleFrom(
                     foregroundColor: AppTheme.error,
@@ -358,12 +355,11 @@ class _ConnectingIndicator extends StatelessWidget {
         ),
         const SizedBox(height: 10),
         Text(
-          'LINKING',
+          'Linking',
           style: TextStyle(
             color: AppTheme.accent.withValues(alpha: 0.5),
-            fontSize: 10,
+            fontSize: 12,
             fontWeight: FontWeight.w600,
-            letterSpacing: 3,
           ),
         ),
       ],
@@ -398,7 +394,7 @@ class _EnginePreviewRow extends StatelessWidget {
                 engine.label,
                 style: TextStyle(
                   color: engine.color.withValues(alpha: 0.8),
-                  fontSize: 11,
+                  fontSize: 12,
                   fontWeight: FontWeight.w600,
                 ),
               ),
@@ -406,7 +402,7 @@ class _EnginePreviewRow extends StatelessWidget {
                 engine.description,
                 style: TextStyle(
                   color: t.textDim,
-                  fontSize: 9,
+                  fontSize: 12,
                 ),
               ),
             ],
@@ -442,7 +438,7 @@ class _ConnectedView extends ConsumerWidget {
           _SummaryStrip(state: state),
           SizedBox(height: pad),
 
-          _SectionLabel(label: 'RECORDING', color: Engine.wardrive.color),
+          _SectionLabel(label: 'Recording', color: Engine.wardrive.color),
           const SizedBox(height: 6),
           // Tiles are the only control now. The wardrive tile starts/stops the
           // session that produces a WiGLE CSV; the chips + start/stop bar that
@@ -454,7 +450,7 @@ class _ConnectedView extends ConsumerWidget {
 
           SizedBox(height: pad),
 
-          _SectionLabel(label: 'SAFETY', color: AppTheme.axon),
+          _SectionLabel(label: 'Safety', color: AppTheme.axon),
           const SizedBox(height: 6),
           // Two different findings, so two tiles: a municipal ALPR camera on a
           // pole, and duty equipment worn by someone close enough to hear.
@@ -477,7 +473,7 @@ class _ConnectedView extends ConsumerWidget {
 
           SizedBox(height: pad),
 
-          _SectionLabel(label: 'TRACKING', color: AppTheme.detector),
+          _SectionLabel(label: 'Tracking', color: AppTheme.detector),
           const SizedBox(height: 6),
           SizedBox(
             height: _mediumCardHeight(context),
@@ -497,7 +493,7 @@ class _ConnectedView extends ConsumerWidget {
 
           SizedBox(height: pad),
 
-          _SectionLabel(label: 'SPECIALTY', color: AppTheme.foxhunter),
+          _SectionLabel(label: 'Specialty', color: AppTheme.foxhunter),
           const SizedBox(height: 6),
           _sizedCard(Engine.foxhunter, CardSize.compact, state, wd),
           const SizedBox(height: 6),
@@ -569,9 +565,8 @@ class _SectionLabel extends StatelessWidget {
           label,
           style: TextStyle(
             color: t.textSecondary,
-            fontSize: 10,
+            fontSize: 12,
             fontWeight: FontWeight.w700,
-            letterSpacing: 2,
           ),
         ),
       ],
@@ -618,19 +613,19 @@ class _SummaryStrip extends ConsumerWidget {
         children: [
           Expanded(child: _StatItem(
             value: '${state.totalDetections}',
-            label: 'UNIQUE',
+            label: 'Unique',
             color: AppTheme.accent,
           )),
           _divider(t),
           Expanded(child: _StatItem(
             value: '$activeCount/${Engine.values.length}',
-            label: 'ENGINES',
+            label: 'Engines',
             color: activeCount > 0 ? AppTheme.success : t.textDim,
           )),
           _divider(t),
           Expanded(child: _StatItem(
             value: '${state.totalRate}',
-            label: '/MIN',
+            label: '/min',
             color: state.totalRate > 0 ? AppTheme.warning : t.textDim,
           )),
           if (state.isManagerConnected) ...[
@@ -642,7 +637,7 @@ class _SummaryStrip extends ConsumerWidget {
                   .length;
               return InkWell(
                 onTap: () {
-                  ref.read(configSectionRequestProvider.notifier).state = 'NODE';
+                  ref.read(configSectionRequestProvider.notifier).state = 'Node';
                   context.go('/config');
                 },
                 borderRadius: BorderRadius.circular(6),
@@ -651,8 +646,8 @@ class _SummaryStrip extends ConsumerWidget {
                       const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
                   child: _StatItem(
                     icon: Icons.hub,
-                    value: state.meshEnabled ? '$nodeCount' : 'OFF',
-                    label: 'NODES',
+                    value: state.meshEnabled ? '$nodeCount' : 'Off',
+                    label: 'Nodes',
                     color: state.meshEnabled
                         ? (nodeCount > 0
                             ? AppTheme.success
@@ -711,7 +706,7 @@ class _StatItem extends StatelessWidget {
                 color: color,
                 fontSize: 22,
                 fontWeight: FontWeight.w500,
-                fontFamily: 'monospace',
+                fontFamily: AppTheme.monoFamily,
                 height: 1,
               ),
             ),
@@ -722,9 +717,8 @@ class _StatItem extends StatelessWidget {
           label,
           style: TextStyle(
             color: t.textSecondary,
-            fontSize: 10,
+            fontSize: 12,
             fontWeight: FontWeight.w600,
-            letterSpacing: 1.5,
           ),
         ),
       ],
@@ -758,12 +752,11 @@ class _RecentActivity extends StatelessWidget {
               ),
               const SizedBox(width: 6),
               Text(
-                'RECENT',
+                'Recent',
                 style: TextStyle(
                   color: t.textSecondary,
-                  fontSize: 10,
+                  fontSize: 12,
                   fontWeight: FontWeight.w700,
-                  letterSpacing: 2,
                 ),
               ),
             ],
@@ -817,7 +810,7 @@ class _RecentActivity extends StatelessWidget {
                       style: TextStyle(
                         color: t.textPrimary,
                         fontSize: 12,
-                        fontFamily: 'monospace',
+                        fontFamily: AppTheme.monoFamily,
                         fontWeight: FontWeight.w500,
                       ),
                     ),
@@ -841,7 +834,7 @@ class _RecentActivity extends StatelessWidget {
                       style: TextStyle(
                         color: _rssiColor(det.rssi),
                         fontSize: 12,
-                        fontFamily: 'monospace',
+                        fontFamily: AppTheme.monoFamily,
                         fontWeight: FontWeight.w500,
                       ),
                     ),
@@ -850,8 +843,8 @@ class _RecentActivity extends StatelessWidget {
                       ageStr,
                       style: TextStyle(
                         color: t.textSecondary,
-                        fontSize: 11,
-                        fontFamily: 'monospace',
+                        fontSize: 12,
+                        fontFamily: AppTheme.monoFamily,
                       ),
                     ),
                   ],
@@ -1003,7 +996,6 @@ class _SpoolBanner extends StatelessWidget {
                 color: t.textPrimary,
                 fontSize: 13,
                 fontWeight: FontWeight.w600,
-                letterSpacing: 0.2,
               ),
             ),
           ),
@@ -1056,7 +1048,7 @@ class _WardriveAccountsStrip extends ConsumerWidget {
       child: GestureDetector(
         behavior: HitTestBehavior.opaque,
         onTap: () {
-          ProviderScope.containerOf(context, listen: false).read(configSectionRequestProvider.notifier).state = 'DATA';
+          ProviderScope.containerOf(context, listen: false).read(configSectionRequestProvider.notifier).state = 'Data';
           context.go('/config');
         },
         child: Container(
@@ -1082,22 +1074,20 @@ class _WardriveAccountsStrip extends ConsumerWidget {
                   ),
                   const SizedBox(width: 6),
                   Text(
-                    'WARDRIVE ACCOUNTS',
+                    'Wardrive accounts',
                     style: TextStyle(
                       color: t.textSecondary,
-                      fontSize: 10,
+                      fontSize: 12,
                       fontWeight: FontWeight.w700,
-                      letterSpacing: 2,
                     ),
                   ),
                   const Spacer(),
                   Text(
-                    'FULL STATS',
+                    'Full stats',
                     style: TextStyle(
                       color: AppTheme.wdgwars.withValues(alpha: 0.9),
-                      fontSize: 9,
+                      fontSize: 12,
                       fontWeight: FontWeight.w700,
-                      letterSpacing: 1,
                     ),
                   ),
                   Icon(Icons.chevron_right, size: 16,
@@ -1157,8 +1147,7 @@ class _AccountMiniRow extends StatelessWidget {
               detail,
               style: TextStyle(
                 color: t.textDim,
-                fontSize: 11,
-                fontFamily: 'monospace',
+                fontSize: 12,
               ),
               overflow: TextOverflow.ellipsis,
               textAlign: TextAlign.right,

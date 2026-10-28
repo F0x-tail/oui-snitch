@@ -159,13 +159,13 @@ class PcapStats {
   }
 
   String get stateLabel => switch (state) {
-        0 => 'IDLE',
-        1 => 'CAPTURING',
-        2 => 'FULL',
-        3 => 'ERROR',
-        4 => 'PAUSED',
-        _ => 'UNKNOWN',
+        0 => 'Idle',
+        1 => 'Capturing',
+        2 => 'Full',
+        3 => 'Error',
+        4 => 'Paused',
+        _ => 'Unknown',
       };
 
-  String get modeLabel => mode == 1 ? 'BLE LL' : 'WIFI 802.11';
+  String get modeLabel => mode == 1 ? 'BLE link layer' : 'Wi-Fi 802.11';
 }

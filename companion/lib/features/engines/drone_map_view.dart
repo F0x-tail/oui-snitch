@@ -210,13 +210,6 @@ class _SelfDot extends StatelessWidget {
         shape: BoxShape.circle,
         color: AppTheme.gpsGood,
         border: Border.all(color: Colors.white, width: 2),
-        boxShadow: [
-          BoxShadow(
-            color: AppTheme.gpsGood.withValues(alpha: 0.6),
-            blurRadius: 8,
-            spreadRadius: 1,
-          ),
-        ],
       ),
     );
   }

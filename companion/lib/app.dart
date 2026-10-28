@@ -147,7 +147,10 @@ class _OuiSpyAppState extends ConsumerState<OuiSpyApp>
       themeMode: themeMode,
       routerConfig: router,
       debugShowCheckedModeBanner: false,
-      builder: (context, child) => _GlobalPcapBannerOverlay(child: child ?? const SizedBox.shrink()),
+      builder: (context, child) {
+        AppTheme.syncBrightness(context);
+        return _GlobalPcapBannerOverlay(child: child ?? const SizedBox.shrink());
+      },
     );
   }
 }
@@ -174,7 +177,7 @@ class _GlobalPcapBannerOverlay extends ConsumerWidget {
                 child: SafeArea(
                   top: false,
                   child: Material(
-                    color: const Color(0xFF1E2A28),
+                    color: AppTheme.of(context).surfaceLight,
                     elevation: 6,
                     borderRadius: BorderRadius.circular(10),
                     child: InkWell(
@@ -184,7 +187,7 @@ class _GlobalPcapBannerOverlay extends ConsumerWidget {
                         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
                         child: Row(
                           children: [
-                            const Icon(Icons.fiber_manual_record, color: Color(0xFF4AFFCC), size: 12),
+                            Icon(Icons.fiber_manual_record, color: AppTheme.error, size: 12),
                             const SizedBox(width: 10),
                             Expanded(
                               child: Text(
@@ -193,22 +196,21 @@ class _GlobalPcapBannerOverlay extends ConsumerWidget {
                                       ? ' @${s.sourceNodeId}'
                                       : '';
                                   if (s.isAutoTriggered) {
-                                    return 'AUTO-PCAP$nodeTag ${s.mode == 1 ? "BLE" : "WiFi"} · ${s.autoTriggerEngineName.toUpperCase()} ${s.autoTriggerMacStr} — ${(s.autoRemainingMs / 1000).ceil()}s left, ${_humanBytes(s.bytesWritten)}';
+                                    return 'AUTO-PCAP$nodeTag ${s.mode == 1 ? "BLE" : "WiFi"} · ${s.autoTriggerEngineName} ${s.autoTriggerMacStr} — ${(s.autoRemainingMs / 1000).ceil()}s left, ${_humanBytes(s.bytesWritten)}';
                                   }
                                   if (s.autoRemainingMs > 0) {
                                     return 'AUTO-PCAP$nodeTag ${s.mode == 1 ? "BLE" : "WiFi"} — ${(s.autoRemainingMs / 1000).ceil()}s left, ${_humanBytes(s.bytesWritten)}';
                                   }
                                   return 'PCAP ${s.mode == 1 ? "BLE" : "WiFi"} — ${s.uptimeMs ~/ 1000}s, ${_humanBytes(s.bytesWritten)}';
                                 }(),
-                                style: const TextStyle(
-                                  color: Color(0xFF4AFFCC),
-                                  fontSize: 12,
-                                  fontWeight: FontWeight.w700,
-                                  letterSpacing: 1.2,
+                                style: TextStyle(
+                                  color: AppTheme.of(context).textPrimary,
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.w600,
                                 ),
                               ),
                             ),
-                            const Icon(Icons.open_in_new, color: Colors.white70, size: 14),
+                            Icon(Icons.open_in_new, color: AppTheme.of(context).textSecondary, size: 16),
                           ],
                         ),
                       ),
@@ -326,7 +328,7 @@ class _AppShellState extends ConsumerState<AppShell> {
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),
-            child: Text('STAY', style: TextStyle(color: t.textDim)),
+            child: Text('Stay', style: TextStyle(color: t.textDim)),
           ),
           FilledButton(
             style: FilledButton.styleFrom(
@@ -334,7 +336,7 @@ class _AppShellState extends ConsumerState<AppShell> {
               foregroundColor: Colors.white,
             ),
             onPressed: () => Navigator.pop(ctx, true),
-            child: const Text('EXIT'),
+            child: const Text('Exit'),
           ),
         ],
       ),

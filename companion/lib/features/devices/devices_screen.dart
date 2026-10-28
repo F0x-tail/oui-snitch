@@ -26,31 +26,23 @@ Color confidenceColor(Confidence c) => switch (c) {
   Confidence.low => AppTheme.gpsNone,
 };
 
-const _classColors = <SignatureClass, Color>{
-  SignatureClass.finder: Color(0xFFE66B9B),
-  SignatureClass.beacon: AppTheme.wardrive,
-  SignatureClass.signage: Color(0xFF8890A8),
-  SignatureClass.wearable: AppTheme.skySpy,
-  SignatureClass.surveillance: AppTheme.error,
-  SignatureClass.drone: AppTheme.warning,
-  SignatureClass.hacking: AppTheme.uniPwn,
-  SignatureClass.bodyworn: AppTheme.flockWifi,
-  SignatureClass.lawEnforcement: Color(0xFF3B82F6),
-  SignatureClass.vehicle: Color(0xFF84CC16),
-  SignatureClass.glasses: AppTheme.wdgwars,
-  SignatureClass.audio: AppTheme.flockBle,
-  SignatureClass.camera: Color(0xFFF97316),
-  SignatureClass.thermostat: AppTheme.foxhunter,
-  SignatureClass.lock: Color(0xFFEAB308),
-  SignatureClass.health: Color(0xFFEC4899),
-  SignatureClass.home: AppTheme.wdgwarsAlt,
-  SignatureClass.isp: Color(0xFF06B6D4),
-  SignatureClass.mesh: Color(0xFF14B8A6),
-  SignatureClass.phone: AppTheme.accent,
-  SignatureClass.other: AppTheme.textDim,
+/// Two tones only: classes that can watch or follow you, and everything else.
+/// The class name is always printed next to it, so colour is never the only cue.
+const _watchingClasses = {
+  SignatureClass.finder,
+  SignatureClass.surveillance,
+  SignatureClass.drone,
+  SignatureClass.hacking,
+  SignatureClass.bodyworn,
+  SignatureClass.lawEnforcement,
+  SignatureClass.camera,
 };
 
-Color classColor(SignatureClass k) => _classColors[k] ?? AppTheme.textDim;
+Color classColor(SignatureClass k) => k == SignatureClass.other
+    ? AppTheme.gpsNone
+    : _watchingClasses.contains(k)
+        ? AppTheme.warning
+        : AppTheme.accent;
 
 Color rssiColor(int rssi) => rssi >= -60
     ? AppTheme.success
@@ -89,9 +81,9 @@ class _DevicesScreenState extends ConsumerState<DevicesScreen> {
       (_class != null || _unclassifiedOnly ? 1 : 0);
 
   static String _sourceLabel(String? s) => switch (s) {
-    'esp32' => 'NODE',
-    'phone' => 'PHONE',
-    _ => 'ALL',
+    'esp32' => 'Node',
+    'phone' => 'Phone',
+    _ => 'All',
   };
 
   Future<bool> _ensurePhoneScan(BuildContext ctx) async {
@@ -108,11 +100,11 @@ class _DevicesScreenState extends ConsumerState<DevicesScreen> {
         actions: [
           TextButton(
             onPressed: () => Navigator.of(d).pop(false),
-            child: const Text('NOT NOW'),
+            child: const Text('Not now'),
           ),
           TextButton(
             onPressed: () => Navigator.of(d).pop(true),
-            child: const Text('SCAN'),
+            child: const Text('Scan'),
           ),
         ],
       ),
@@ -140,7 +132,7 @@ class _DevicesScreenState extends ConsumerState<DevicesScreen> {
           final t = AppTheme.of(ctx);
           final gap = barGap(ctx);
           return CommandSheet(
-            title: 'FILTER',
+            title: 'Filter',
             trailing: _filterCount == 0
                 ? null
                 : TextButton(
@@ -151,7 +143,7 @@ class _DevicesScreenState extends ConsumerState<DevicesScreen> {
                       _unclassifiedOnly = false;
                     }),
                     child: Text(
-                      'RESET',
+                      'Reset',
                       style: barLabelStyle(ctx, AppTheme.accent),
                     ),
                   ),
@@ -159,7 +151,7 @@ class _DevicesScreenState extends ConsumerState<DevicesScreen> {
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
                 CommandSheetGroup(
-                  label: 'HEARD BY',
+                  label: 'Heard by',
                   child: Wrap(
                     spacing: gap,
                     runSpacing: gap,
@@ -184,7 +176,7 @@ class _DevicesScreenState extends ConsumerState<DevicesScreen> {
                   ),
                 ),
                 CommandSheetGroup(
-                  label: 'RADIO',
+                  label: 'Radio',
                   child: Wrap(
                     spacing: gap,
                     runSpacing: gap,
@@ -196,8 +188,8 @@ class _DevicesScreenState extends ConsumerState<DevicesScreen> {
                       ])
                         CommandChip(
                           label: r == null
-                              ? 'ALL'
-                              : (r == RadioKind.ble ? 'BLE' : 'WIFI'),
+                              ? 'All'
+                              : (r == RadioKind.ble ? 'BLE' : 'Wi-Fi'),
                           selected: _radio == r,
                           color: r == null
                               ? kPillAll
@@ -208,13 +200,13 @@ class _DevicesScreenState extends ConsumerState<DevicesScreen> {
                   ),
                 ),
                 CommandSheetGroup(
-                  label: 'CLASS',
+                  label: 'Class',
                   child: Wrap(
                     spacing: gap,
                     runSpacing: gap,
                     children: [
                       CommandChip(
-                        label: 'ALL',
+                        label: 'All',
                         selected: _class == null && !_unclassifiedOnly,
                         color: AppTheme.accent,
                         onTap: () => apply(() {
@@ -225,7 +217,7 @@ class _DevicesScreenState extends ConsumerState<DevicesScreen> {
                       for (final k in SignatureClass.values)
                         if ((counts[k] ?? 0) > 0)
                           CommandChip(
-                            label: k.label.toUpperCase(),
+                            label: k.label,
                             count: counts[k],
                             selected: _class == k,
                             color: classColor(k),
@@ -236,7 +228,7 @@ class _DevicesScreenState extends ConsumerState<DevicesScreen> {
                           ),
                       if (unclassified > 0)
                         CommandChip(
-                          label: 'UNCLASSIFIED',
+                          label: 'Unclassified',
                           count: unclassified,
                           selected: _unclassifiedOnly,
                           color: t.textDim,
@@ -257,9 +249,9 @@ class _DevicesScreenState extends ConsumerState<DevicesScreen> {
   }
 
   static String _sortLabel(DeviceSort s) => switch (s) {
-    DeviceSort.recent => 'TIME',
+    DeviceSort.recent => 'Time',
     DeviceSort.rssi => 'RSSI',
-    DeviceSort.confidence => 'CONF',
+    DeviceSort.confidence => 'Confidence',
   };
 
   Future<void> _openSortSheet() => showSortSheet<DeviceSort>(
@@ -283,7 +275,7 @@ class _DevicesScreenState extends ConsumerState<DevicesScreen> {
     return showCommandSheet<void>(
       context: context,
       builder: (ctx) => CommandSheet(
-        title: 'ACTIONS',
+        title: 'Actions',
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
@@ -293,7 +285,7 @@ class _DevicesScreenState extends ConsumerState<DevicesScreen> {
             // sensor; phone Bluetooth is only used to connect to it.
             CommandSheetTile(
               icon: Icons.delete_sweep,
-              label: 'CLEAR LIST',
+              label: 'Clear list',
               subtitle: 'Forget every device on this tab',
               color: AppTheme.error,
               onTap: () {
@@ -337,7 +329,7 @@ class _DevicesScreenState extends ConsumerState<DevicesScreen> {
     final content = Column(
           children: [
             CommandHeader(
-              title: 'DEVICES',
+              title: 'Devices',
               count: _filterCount > 0 ? '${shown.length}/${all.length}' : '${all.length}',
               actions: [
                 CommandBarAction(
@@ -360,7 +352,7 @@ class _DevicesScreenState extends ConsumerState<DevicesScreen> {
               chips: [
                           if (_radio != null)
                             CommandActiveChip(
-                              label: _radio == RadioKind.ble ? 'BLE' : 'WIFI',
+                              label: _radio == RadioKind.ble ? 'BLE' : 'Wi-Fi',
                               color: AppTheme.accent,
                               onClear: () => setState(() => _radio = null),
                             ),
@@ -373,8 +365,8 @@ class _DevicesScreenState extends ConsumerState<DevicesScreen> {
                           if (_class != null || _unclassifiedOnly)
                             CommandActiveChip(
                               label: _unclassifiedOnly
-                                  ? 'UNCLASSIFIED'
-                                  : _class!.label.toUpperCase(),
+                                  ? 'Unclassified'
+                                  : _class!.label,
                               color: AppTheme.accent,
                               onClear: () => setState(() {
                                 _class = null;
@@ -390,7 +382,7 @@ class _DevicesScreenState extends ConsumerState<DevicesScreen> {
               child: shown.isEmpty
                   ? CommandEmptyState(
                       icon: Icons.devices_other,
-                      title: 'NO DEVICES',
+                      title: 'No devices',
                       message: reg.ready
                           ? 'Devices heard by the connected node or this phone appear here, grouped by signature class.'
                           : 'Loading signature catalog.',
@@ -583,17 +575,17 @@ class _DeviceRow extends ConsumerWidget {
                         spacing: gap * 0.6,
                         runSpacing: gap * 0.6,
                         children: [
-                          for (final k in kinds) tag(k.label.toUpperCase(), classColor(k)),
-                          if (kinds.isEmpty) tag('UNCLASSIFIED', t.textDim),
-                          tag(ble ? 'BLE' : 'WIFI', ble ? kPillBle : kPillWifi),
+                          for (final k in kinds) tag(k.label, classColor(k)),
+                          if (kinds.isEmpty) tag('Unclassified', t.textDim),
+                          tag(ble ? 'BLE' : 'Wi-Fi', ble ? kPillBle : kPillWifi),
                           if (authMeta != null)
                             tag(authMeta.$1, authMeta.$2, icon: auth == 0 ? Icons.lock_open : Icons.lock),
-                          if (!ble && o.channel > 0) tag('CH ${o.channel}', t.textSecondary),
-                          if (o.hiddenSsid) tag('HIDDEN', AppTheme.warning),
-                          if (o.randomized) tag('RANDOM MAC', t.textDim),
+                          if (!ble && o.channel > 0) tag('Ch ${o.channel}', t.textSecondary),
+                          if (o.hiddenSsid) tag('Hidden', AppTheme.warning),
+                          if (o.randomized) tag('Random MAC', t.textDim),
                           for (final f in live)
-                            tag(f.display.toUpperCase(), f.emphasis ? AppTheme.error : AppTheme.accent),
-                          if (withYou) tag('WITH YOU', AppTheme.error, icon: Icons.directions_walk),
+                            tag(f.display, f.emphasis ? AppTheme.error : AppTheme.accent),
+                          if (withYou) tag('With you', AppTheme.error, icon: Icons.directions_walk),
                         ],
                       ),
                     ],
@@ -609,7 +601,7 @@ class _DeviceRow extends ConsumerWidget {
                       '${o.rssi}',
                       style: text.titleMedium?.copyWith(
                         color: rssiColor(o.rssi),
-                        fontFamily: 'monospace',
+                        fontFamily: AppTheme.monoFamily,
                         fontWeight: FontWeight.w700,
                       ),
                     ),
@@ -688,7 +680,7 @@ class DeviceDetailSheet extends ConsumerWidget {
       ),
     );
     return CommandSheet(
-      title: 'DEVICE',
+      title: 'Device',
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
@@ -704,7 +696,7 @@ class DeviceDetailSheet extends ConsumerWidget {
           SizedBox(height: gap),
           CommandSheetTile(
             icon: Icons.map,
-            label: 'SHOW ON MAP',
+            label: 'Show on map',
             subtitle: o.gpsTrail.isEmpty
                 ? 'No GPS fix for this device yet'
                 : null,
@@ -714,14 +706,14 @@ class DeviceDetailSheet extends ConsumerWidget {
           if (canFoxhunt)
             CommandSheetTile(
               icon: Icons.gps_fixed,
-              label: 'FOXHUNT',
+              label: 'Foxhunt',
               subtitle: connected ? null : 'Node disconnected',
               color: AppTheme.foxhunter,
               onTap: connected ? () => _foxhunt(context, ref) : null,
             ),
           SizedBox(height: gap),
           CommandSheetGroup(
-            label: 'IDENTITY',
+            label: 'Identity',
             child: Column(
               children: [
                 if (o.mac.isNotEmpty) kv('Address', o.mac),
@@ -760,7 +752,7 @@ class DeviceDetailSheet extends ConsumerWidget {
           ),
           if (device.signatures.isNotEmpty)
             CommandSheetGroup(
-              label: 'SIGNATURES',
+              label: 'Signatures',
               child: Column(
                 children: [
                   for (final s in device.signatures)
@@ -776,7 +768,7 @@ class DeviceDetailSheet extends ConsumerWidget {
             ),
           if (decoded.isNotEmpty)
             CommandSheetGroup(
-              label: 'DECODED',
+              label: 'Decoded',
               child: Column(
                 children: [
                   for (final f in decoded) kv(f.label, f.note.isEmpty ? f.display : '${f.display}\n${f.note}'),
@@ -785,14 +777,14 @@ class DeviceDetailSheet extends ConsumerWidget {
             ),
           if (fields.isNotEmpty)
             CommandSheetGroup(
-              label: 'ADVERTISEMENT',
+              label: 'Advertisement',
               child: Column(
                 children: [for (final f in fields) kv(f.label, f.value)],
               ),
             ),
           if (o.serviceUuids.isNotEmpty)
             CommandSheetGroup(
-              label: 'SERVICES',
+              label: 'Services',
               child: Column(
                 children: [
                   for (final u in o.serviceUuids)

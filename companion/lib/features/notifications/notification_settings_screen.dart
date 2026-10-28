@@ -33,7 +33,7 @@ class NotificationSettingsBody extends ConsumerWidget {
             ),
             child: Row(
               children: [
-                const Icon(Icons.warning_amber, color: AppTheme.warning, size: 18),
+                Icon(Icons.warning_amber, color: AppTheme.warning, size: 18),
                 const SizedBox(width: 8),
                 Expanded(
                   child: Text(
@@ -43,26 +43,26 @@ class NotificationSettingsBody extends ConsumerWidget {
                 ),
                 TextButton(
                   onPressed: () => notif.init(),
-                  child: const Text('RETRY', style: TextStyle(
-                    color: AppTheme.accent, fontSize: 11, fontWeight: FontWeight.w700,
+                  child: Text('Retry', style: TextStyle(
+                    color: AppTheme.accent, fontSize: 12, fontWeight: FontWeight.w700,
                   )),
                 ),
               ],
             ),
           ),
 
-        const ConfigSectionHeader(label: 'FOXHUNT'),
+        const ConfigSectionHeader(label: 'Foxhunt'),
         ConfigToggleRow(
           icon: Icons.gps_fixed,
           label: 'Foxhunt Proximity',
           subtitle: 'Alert when target signal crosses thresholds',
-          color: const Color(0xFF4AFF8A),
+          color: AppTheme.success,
           value: notif.foxhuntEnabled,
           onChanged: notif.setFoxhuntEnabled,
         ),
 
         const SizedBox(height: 16),
-        const ConfigSectionHeader(label: 'WARDRIVE'),
+        const ConfigSectionHeader(label: 'Wardrive'),
         ConfigToggleRow(
           icon: Icons.emoji_events,
           label: 'Milestone Alerts',
@@ -73,7 +73,7 @@ class NotificationSettingsBody extends ConsumerWidget {
         ),
 
         const SizedBox(height: 16),
-        const ConfigSectionHeader(label: 'SILENCE THESE'),
+        const ConfigSectionHeader(label: 'Silence these'),
         // Per-method muting. The firmware groups probe requests and evil-twin
         // beacons under one signature bit, so switching the signature off to
         // stop probe spam would also stop rogue-AP detection. These mute the
@@ -91,7 +91,7 @@ class NotificationSettingsBody extends ConsumerWidget {
           ),
 
         const SizedBox(height: 16),
-        const ConfigSectionHeader(label: 'BEHAVIOR'),
+        const ConfigSectionHeader(label: 'Behavior'),
         ConfigSliderRow(
           icon: Icons.filter_alt,
           label: 'Alert filter',
@@ -124,7 +124,7 @@ class NotificationSettingsBody extends ConsumerWidget {
         ),
 
         const SizedBox(height: 16),
-        const ConfigSectionHeader(label: 'OUTPUT'),
+        const ConfigSectionHeader(label: 'Output'),
         ConfigToggleRow(
           icon: Icons.volume_up,
           label: 'Sound',

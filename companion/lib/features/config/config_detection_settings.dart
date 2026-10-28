@@ -14,7 +14,7 @@ class _WatchItem {
 }
 
 const _watchGroups = <(String, List<_WatchItem>)>[
-  ('SURVEILLANCE', [
+  ('Surveillance', [
     _WatchItem('Surveillance cameras', 'Ring, Wyze, Nest, Arlo, Hikvision, Flock and other cameras', Icons.videocam,
         bits: sigCamera, classes: {SignatureClass.surveillance, SignatureClass.camera}, flock: true),
     _WatchItem('Police & public safety', 'Axon body cams and Tasers, police and fleet vehicle routers', Icons.local_police,
@@ -22,37 +22,37 @@ const _watchGroups = <(String, List<_WatchItem>)>[
     _WatchItem('Drones', 'Drones and drone controllers, including Remote ID', Icons.flight,
         classes: {SignatureClass.drone}, drone: true),
   ]),
-  ('TRACKERS & WEARABLES', [
+  ('Trackers & wearables', [
     _WatchItem('Trackers', 'AirTags and other tags that could be following you', Icons.track_changes,
         bits: sigTracker, classes: {SignatureClass.finder}),
     _WatchItem('Smart glasses', 'Ray-Ban and Oakley Meta camera glasses', Icons.visibility,
         bits: sigGlasses, classes: {SignatureClass.glasses}),
   ]),
-  ('HACKING & ATTACKS', [
+  ('Hacking & attacks', [
     _WatchItem('Hacking tools', 'Flipper Zero, Pwnagotchi and other pentest gear', Icons.bug_report,
         bits: sigHacktools, classes: {SignatureClass.hacking}),
     _WatchItem('Wi-Fi deauth attacks', 'Someone knocking devices off Wi-Fi', Icons.wifi_off, bits: sigDeauth),
     _WatchItem('Probes & rogue APs', 'Phones calling out for saved Wi-Fi names, plus evil-twin and KARMA access points. Noisy in busy areas', Icons.wifi_find,
         bits: sigProbe),
   ]),
-  ('MESH RADIOS', [
+  ('Mesh radios', [
     _WatchItem('Mesh nodes', 'Meshtastic and MeshCore radios', Icons.hub, bits: sigMesh),
   ]),
 ];
 
 const _moreGroups = <(String, List<SignatureClass>)>[
-  ('PERSONAL', [
+  ('Personal', [
     SignatureClass.wearable,
     SignatureClass.health,
     SignatureClass.audio,
     SignatureClass.phone,
   ]),
-  ('HOME', [
+  ('Home', [
     SignatureClass.home,
     SignatureClass.thermostat,
     SignatureClass.lock,
   ]),
-  ('VEHICLES & INFRASTRUCTURE', [
+  ('Vehicles & infrastructure', [
     SignatureClass.vehicle,
     SignatureClass.isp,
     SignatureClass.mesh,
@@ -164,7 +164,7 @@ class _DetectionSettingsTabState extends ConsumerState<_DetectionSettingsTab> {
           onTap: () => _pushPage(context, 'More device types', const _MoreTypesPage()),
         ),
         const SizedBox(height: 20),
-        const ConfigSectionHeader(label: 'YOUR LISTS'),
+        const ConfigSectionHeader(label: 'Your lists'),
         ConfigActionRow(
           icon: Icons.list_alt,
           label: 'Watchlist',
@@ -189,7 +189,7 @@ class _DetectionSettingsTabState extends ConsumerState<_DetectionSettingsTab> {
         // which is what made "engines all off but still notifying" possible.
         // The board is the sensor; the phone is the display.
         const SizedBox(height: 20),
-        const ConfigSectionHeader(label: 'PRIVACY SCREEN'),
+        const ConfigSectionHeader(label: 'Privacy screen'),
         ConfigToggleRow(
           icon: ref.watch(privacyModeProvider)
               ? Icons.visibility_off

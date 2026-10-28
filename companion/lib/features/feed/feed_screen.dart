@@ -25,10 +25,10 @@ import 'package:share_plus/share_plus.dart';
 
 
 enum FeedMetric {
-  time('TIME'),
+  time('Time'),
   rssi('RSSI'),
-  count('COUNT'),
-  name('NAME'),
+  count('Count'),
+  name('Name'),
   channel('CH');
 
   const FeedMetric(this.label);
@@ -127,13 +127,13 @@ class _FeedScreenState extends ConsumerState<FeedScreen> {
       if (p == FilterPreset.all) continue;
       if (p.matches(_activeFilters, _activeRadio)) return p.label;
     }
-    if (_activeFilters.isEmpty) return 'NO ENGINES';
-    return '${_activeFilters.length} ENGINES';
+    if (_activeFilters.isEmpty) return 'No engines';
+    return '${_activeFilters.length} engines';
   }
 
   String _nodeLabel(String Function(String) labelForNode) {
-    if (_selectedNode == null) return 'ALL';
-    if (_selectedNode!.isEmpty) return 'LOCAL';
+    if (_selectedNode == null) return 'All';
+    if (_selectedNode!.isEmpty) return 'Local';
     return labelForNode(_selectedNode!);
   }
 
@@ -360,7 +360,7 @@ class _FeedScreenState extends ConsumerState<FeedScreen> {
         ),
       if (_searchQuery.trim().isNotEmpty)
         Text(
-          _dbSearching ? 'HISTORY…' : 'ALL HISTORY',
+          _dbSearching ? 'History…' : 'All history',
           style: barLabelStyle(context, _dbSearching ? t.textDim : AppTheme.accent, bold: false),
         ),
     ];
@@ -382,7 +382,7 @@ class _FeedScreenState extends ConsumerState<FeedScreen> {
           final t = AppTheme.of(ctx);
           final gap = barGap(ctx);
           return CommandSheet(
-            title: 'FILTER',
+            title: 'Filter',
             trailing: _activeFilterCount == 0
                 ? null
                 : TextButton(
@@ -390,14 +390,14 @@ class _FeedScreenState extends ConsumerState<FeedScreen> {
                       _resetEngineFilters();
                       setState(() => _selectedNode = null);
                     }),
-                    child: Text('RESET',
+                    child: Text('Reset',
                         style: barLabelStyle(ctx, AppTheme.accent)),
                   ),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
                 CommandSheetGroup(
-                  label: 'PRESET',
+                  label: 'Preset',
                   child: Wrap(
                     spacing: gap,
                     runSpacing: gap,
@@ -425,14 +425,14 @@ class _FeedScreenState extends ConsumerState<FeedScreen> {
                 ),
                 if (sourceNodes.isNotEmpty)
                   CommandSheetGroup(
-                    label: 'SOURCE',
+                    label: 'Source',
                     child: Wrap(
                       spacing: gap,
                       runSpacing: gap,
                       children: [
                         for (final (i, (id, label)) in <(String?, String)>[
-                          (null, 'ALL'),
-                          ('', 'LOCAL'),
+                          (null, 'All'),
+                          ('', 'Local'),
                           ...sourceNodes.map((n) => (n, labelForNode(n))),
                         ].indexed)
                           CommandChip(
@@ -446,7 +446,7 @@ class _FeedScreenState extends ConsumerState<FeedScreen> {
                     ),
                   ),
                 CommandSheetGroup(
-                  label: 'ENGINES',
+                  label: 'Engines',
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
@@ -457,7 +457,7 @@ class _FeedScreenState extends ConsumerState<FeedScreen> {
                                   _activeFilters = Engine.values.toSet();
                                   _activeRadio = null;
                                 })),
-                            child: Text('ALL',
+                            child: Text('All',
                                 style: barLabelStyle(ctx, AppTheme.accent)),
                           ),
                           TextButton(
@@ -465,7 +465,7 @@ class _FeedScreenState extends ConsumerState<FeedScreen> {
                                   _activeFilters = <Engine>{};
                                   _activeRadio = null;
                                 })),
-                            child: Text('NONE',
+                            child: Text('None',
                                 style: barLabelStyle(ctx, t.textDim)),
                           ),
                         ],
@@ -493,9 +493,8 @@ class _FeedScreenState extends ConsumerState<FeedScreen> {
                               SizedBox(width: gap),
                               Flexible(
                                 child: Text(
-                                  engine.label.toUpperCase(),
-                                  style: barLabelStyle(ctx, t.textPrimary)
-                                      .copyWith(letterSpacing: 1),
+                                  engine.label,
+                                  style: barLabelStyle(ctx, t.textPrimary),
                                 ),
                               ),
                             ],
@@ -553,13 +552,13 @@ class _FeedScreenState extends ConsumerState<FeedScreen> {
     return showCommandSheet<void>(
       context: context,
       builder: (ctx) => CommandSheet(
-        title: 'ACTIONS',
+        title: 'Actions',
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             CommandSheetTile(
               icon: _showStats ? Icons.analytics : Icons.analytics_outlined,
-              label: _showStats ? 'HIDE STATS' : 'SHOW STATS',
+              label: _showStats ? 'Hide stats' : 'Show stats',
               subtitle: 'Summary header above the feed',
               color: _showStats ? AppTheme.accent : null,
               onTap: () {
@@ -569,7 +568,7 @@ class _FeedScreenState extends ConsumerState<FeedScreen> {
             ),
             CommandSheetTile(
               icon: _searchOpen ? Icons.search_off : Icons.search,
-              label: _searchOpen ? 'CLOSE SEARCH' : 'SEARCH',
+              label: _searchOpen ? 'Close search' : 'Search',
               subtitle: 'MAC, name, method, node',
               onTap: () {
                 Navigator.pop(ctx);
@@ -579,7 +578,7 @@ class _FeedScreenState extends ConsumerState<FeedScreen> {
             const Divider(height: 1),
             CommandSheetTile(
               icon: Icons.ios_share,
-              label: 'EXPORT CSV',
+              label: 'Export CSV',
               subtitle: 'Full stored history, current filters',
               onTap: () {
                 Navigator.pop(ctx);
@@ -588,7 +587,7 @@ class _FeedScreenState extends ConsumerState<FeedScreen> {
             ),
             CommandSheetTile(
               icon: Icons.delete_sweep,
-              label: 'CLEAR FEED',
+              label: 'Clear feed',
               subtitle: '${state.recentDetections.length} detections held',
               color: AppTheme.error,
               onTap: state.recentDetections.isEmpty
@@ -611,10 +610,10 @@ class _FeedScreenState extends ConsumerState<FeedScreen> {
         title: const Text('Clear feed?'),
         content: const Text('Clears all detections from the feed and resets counts.'),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('CANCEL')),
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
           TextButton(
             onPressed: () => Navigator.pop(ctx, true),
-            child: const Text('CLEAR', style: TextStyle(color: AppTheme.error)),
+            child: Text('Clear', style: TextStyle(color: AppTheme.error)),
           ),
         ],
       ),

@@ -57,7 +57,7 @@ class _WigleCredentialsSectionState
             'Lookups ask whether an access point is recorded where you are '
             'seeing it, to corroborate a suspected evil twin. Always manual — '
             'the free WiGLE budget is only a handful of queries a day.',
-            style: TextStyle(color: t.textDim, fontSize: 11, height: 1.4),
+            style: TextStyle(color: t.textDim, fontSize: 12, height: 1.4),
           ),
         ),
       ],

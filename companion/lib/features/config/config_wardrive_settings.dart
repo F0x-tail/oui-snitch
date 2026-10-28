@@ -113,7 +113,7 @@ class _TimingRow extends StatelessWidget {
                 borderRadius: BorderRadius.circular(6),
                 border: Border.all(color: AppTheme.accent.withValues(alpha: 0.2)),
               ),
-              child: const Icon(Icons.remove, size: 16, color: AppTheme.accent),
+              child: Icon(Icons.remove, size: 16, color: AppTheme.accent),
             ),
           ),
           Container(
@@ -121,9 +121,9 @@ class _TimingRow extends StatelessWidget {
             alignment: Alignment.center,
             child: Text(
               '$value$suffix',
-              style: const TextStyle(
+              style: TextStyle(
                 color: AppTheme.accent, fontSize: 12,
-                fontFamily: 'monospace', fontWeight: FontWeight.w700,
+                fontFamily: AppTheme.monoFamily, fontWeight: FontWeight.w700,
               ),
             ),
           ),
@@ -137,7 +137,7 @@ class _TimingRow extends StatelessWidget {
                 borderRadius: BorderRadius.circular(6),
                 border: Border.all(color: AppTheme.accent.withValues(alpha: 0.2)),
               ),
-              child: const Icon(Icons.add, size: 16, color: AppTheme.accent),
+              child: Icon(Icons.add, size: 16, color: AppTheme.accent),
             ),
           ),
         ],
@@ -316,12 +316,11 @@ class _WigleSectionState extends ConsumerState<_WigleSection> {
       children: [
         Row(
           children: [
-            const Icon(Icons.language, size: 16, color: AppTheme.warning),
+            Icon(Icons.language, size: 16, color: AppTheme.warning),
             const SizedBox(width: 6),
             Text(
-              'WIGLE',
+              'WiGLE',
               style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                    letterSpacing: 2,
                     color: t.textDim,
                   ),
             ),
@@ -337,12 +336,11 @@ class _WigleSectionState extends ConsumerState<_WigleSection> {
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    const Icon(Icons.check_circle, size: 10, color: AppTheme.success),
+                    Icon(Icons.check_circle, size: 10, color: AppTheme.success),
                     const SizedBox(width: 4),
-                    Text('LINKED', style: TextStyle(
-                      color: AppTheme.success, fontSize: 8,
-                      fontWeight: FontWeight.w700, letterSpacing: 0.5,
-                    )),
+                    Text('Linked', style: TextStyle(
+                      color: AppTheme.success, fontSize: 12,
+                      fontWeight: FontWeight.w700)),
                   ],
                 ),
               ),
@@ -355,7 +353,7 @@ class _WigleSectionState extends ConsumerState<_WigleSection> {
           if (wigle.rateLimited) ...[
             const SizedBox(height: 8),
             Text(WigleApi.rateLimitMessage,
-                style: const TextStyle(color: AppTheme.error, fontSize: 11)),
+                style: TextStyle(color: AppTheme.error, fontSize: 12)),
           ],
           const SizedBox(height: 10),
           Row(
@@ -364,7 +362,7 @@ class _WigleSectionState extends ConsumerState<_WigleSection> {
                 child: OutlinedButton.icon(
                   onPressed: () => ref.read(wigleProvider).refreshStats(),
                   icon: const Icon(Icons.refresh, size: 14),
-                  label: const Text('REFRESH', style: TextStyle(fontSize: 10, letterSpacing: 1)),
+                  label: const Text('Refresh', style: TextStyle(fontSize: 12)),
                   style: OutlinedButton.styleFrom(
                     foregroundColor: AppTheme.accent,
                     side: BorderSide(color: AppTheme.accent.withValues(alpha: 0.3)),
@@ -377,7 +375,7 @@ class _WigleSectionState extends ConsumerState<_WigleSection> {
                 child: OutlinedButton.icon(
                   onPressed: () => _confirmLogout(context),
                   icon: const Icon(Icons.logout, size: 14),
-                  label: const Text('UNLINK', style: TextStyle(fontSize: 10, letterSpacing: 1)),
+                  label: const Text('Unlink', style: TextStyle(fontSize: 12)),
                   style: OutlinedButton.styleFrom(
                     foregroundColor: AppTheme.error,
                     side: BorderSide(color: AppTheme.error.withValues(alpha: 0.3)),
@@ -411,7 +409,7 @@ class _WigleSectionState extends ConsumerState<_WigleSection> {
                 const SizedBox(height: 4),
                 Text(
                   'Get your API Name and Token from wigle.net/account',
-                  style: TextStyle(color: t.textDim, fontSize: 10),
+                  style: TextStyle(color: t.textDim, fontSize: 12),
                 ),
                 const SizedBox(height: 12),
                 TextField(
@@ -433,7 +431,7 @@ class _WigleSectionState extends ConsumerState<_WigleSection> {
                     ),
                     focusedBorder: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(6),
-                      borderSide: const BorderSide(color: AppTheme.accent),
+                      borderSide: BorderSide(color: AppTheme.accent),
                     ),
                   ),
                 ),
@@ -465,7 +463,7 @@ class _WigleSectionState extends ConsumerState<_WigleSection> {
                     ),
                     focusedBorder: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(6),
-                      borderSide: const BorderSide(color: AppTheme.accent),
+                      borderSide: BorderSide(color: AppTheme.accent),
                     ),
                   ),
                 ),
@@ -481,8 +479,8 @@ class _WigleSectionState extends ConsumerState<_WigleSection> {
                           )
                         : const Icon(Icons.rocket_launch, size: 16),
                     label: Text(
-                      _testing || wigle.isLoading ? 'TESTING...' : 'TEST & LINK',
-                      style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w700, letterSpacing: 1),
+                      _testing || wigle.isLoading ? 'Testing…' : 'Test & link',
+                      style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700),
                     ),
                     style: ElevatedButton.styleFrom(
                       backgroundColor: AppTheme.accent,
@@ -503,12 +501,12 @@ class _WigleSectionState extends ConsumerState<_WigleSection> {
                     ),
                     child: Row(
                       children: [
-                        const Icon(Icons.error_outline, size: 14, color: AppTheme.error),
+                        Icon(Icons.error_outline, size: 14, color: AppTheme.error),
                         const SizedBox(width: 6),
                         Expanded(
                           child: Text(
                             wigle.error!,
-                            style: const TextStyle(color: AppTheme.error, fontSize: 10),
+                            style: TextStyle(color: AppTheme.error, fontSize: 12),
                           ),
                         ),
                       ],
@@ -563,7 +561,7 @@ class _WigleSectionState extends ConsumerState<_WigleSection> {
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx),
-            child: const Text('CANCEL'),
+            child: const Text('Cancel'),
           ),
           ElevatedButton(
             onPressed: () {
@@ -571,7 +569,7 @@ class _WigleSectionState extends ConsumerState<_WigleSection> {
               ref.read(wigleProvider).logout();
             },
             style: ElevatedButton.styleFrom(backgroundColor: AppTheme.error),
-            child: const Text('UNLINK'),
+            child: const Text('Unlink'),
           ),
         ],
       ),
@@ -597,10 +595,10 @@ class _WigleStatsCard extends StatelessWidget {
         ),
         child: Row(
           children: [
-            const SizedBox(width: 14, height: 14,
+            SizedBox(width: 14, height: 14,
               child: CircularProgressIndicator(strokeWidth: 1.5, color: AppTheme.accent)),
             const SizedBox(width: 8),
-            Text('Loading stats...', style: TextStyle(color: t.textDim, fontSize: 11)),
+            Text('Loading stats...', style: TextStyle(color: t.textDim, fontSize: 12)),
           ],
         ),
       );
@@ -638,11 +636,11 @@ class _WigleStatsCard extends StatelessWidget {
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    const Icon(Icons.emoji_events, size: 12, color: AppTheme.accent),
+                    Icon(Icons.emoji_events, size: 12, color: AppTheme.accent),
                     const SizedBox(width: 4),
-                    Text('#${s.rank}', style: const TextStyle(
+                    Text('#${s.rank}', style: TextStyle(
                       color: AppTheme.accent, fontSize: 12,
-                      fontWeight: FontWeight.w700, fontFamily: 'monospace',
+                      fontWeight: FontWeight.w700, fontFamily: AppTheme.monoFamily,
                     )),
                   ],
                 ),
@@ -660,7 +658,7 @@ class _WigleStatsCard extends StatelessWidget {
               _WigleStat(
                 icon: Icons.bluetooth, label: 'BT',
                 value: _formatCount(s.discoveredBt),
-                color: const Color(0xFF4A9EFF),
+                color: AppTheme.info,
               ),
               _WigleStat(
                 icon: Icons.cell_tower, label: 'Cell',
@@ -707,13 +705,12 @@ class _WigleStat extends StatelessWidget {
           Icon(icon, size: 14, color: color),
           const SizedBox(height: 2),
           Text(value, style: TextStyle(
-            color: t.textPrimary, fontSize: 11,
-            fontWeight: FontWeight.w700, fontFamily: 'monospace',
+            color: t.textPrimary, fontSize: 12,
+            fontWeight: FontWeight.w700, fontFamily: AppTheme.monoFamily,
           )),
           Text(label, style: TextStyle(
-            color: t.textDim, fontSize: 8,
-            fontWeight: FontWeight.w600, letterSpacing: 0.5,
-          )),
+            color: t.textDim, fontSize: 12,
+            fontWeight: FontWeight.w600)),
         ],
       ),
     );
@@ -758,36 +755,23 @@ class _WdgwarsSectionState extends ConsumerState<_WdgwarsSection> {
     return Container(
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [
-            AppTheme.wdgwars.withValues(alpha: 0.07),
-            AppTheme.wdgwarsAlt.withValues(alpha: 0.04),
-          ],
-        ),
+        color: t.surface,
         borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: AppTheme.wdgwars.withValues(alpha: 0.35)),
+        border: Border.all(color: t.border),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
             children: [
-              const Icon(Icons.sports_esports, size: 16, color: AppTheme.wdgwars),
+              Icon(Icons.sports_esports, size: 16, color: AppTheme.wdgwars),
               const SizedBox(width: 6),
-              ShaderMask(
-                shaderCallback: (r) => const LinearGradient(
-                  colors: [AppTheme.wdgwars, AppTheme.wdgwarsAlt],
-                ).createShader(r),
-                child: const Text(
-                  'WDGWARS',
-                  style: TextStyle(
-                    color: Colors.white,
-                    fontSize: 12,
-                    fontWeight: FontWeight.w800,
-                    letterSpacing: 2,
-                  ),
+              Text(
+                'WDGWARS',
+                style: TextStyle(
+                  color: t.textPrimary,
+                  fontSize: 14,
+                  fontWeight: FontWeight.w700,
                 ),
               ),
               const Spacer(),
@@ -799,15 +783,14 @@ class _WdgwarsSectionState extends ConsumerState<_WdgwarsSection> {
                     borderRadius: BorderRadius.circular(4),
                     border: Border.all(color: AppTheme.wdgwars.withValues(alpha: 0.4)),
                   ),
-                  child: const Row(
+                  child: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
                       Icon(Icons.check_circle, size: 10, color: AppTheme.wdgwars),
                       SizedBox(width: 4),
-                      Text('LINKED', style: TextStyle(
-                        color: AppTheme.wdgwars, fontSize: 8,
-                        fontWeight: FontWeight.w700, letterSpacing: 0.5,
-                      )),
+                      Text('Linked', style: TextStyle(
+                        color: AppTheme.wdgwars, fontSize: 12,
+                        fontWeight: FontWeight.w700)),
                     ],
                   ),
                 ),
@@ -827,7 +810,7 @@ class _WdgwarsSectionState extends ConsumerState<_WdgwarsSection> {
                       _loadFlockCams();
                     },
                     icon: const Icon(Icons.refresh, size: 14),
-                    label: const Text('REFRESH', style: TextStyle(fontSize: 10, letterSpacing: 1)),
+                    label: const Text('Refresh', style: TextStyle(fontSize: 12)),
                     style: OutlinedButton.styleFrom(
                       foregroundColor: AppTheme.wdgwarsAlt,
                       side: BorderSide(color: AppTheme.wdgwarsAlt.withValues(alpha: 0.35)),
@@ -840,7 +823,7 @@ class _WdgwarsSectionState extends ConsumerState<_WdgwarsSection> {
                   child: OutlinedButton.icon(
                     onPressed: () => _confirmLogout(context),
                     icon: const Icon(Icons.logout, size: 14),
-                    label: const Text('UNLINK', style: TextStyle(fontSize: 10, letterSpacing: 1)),
+                    label: const Text('Unlink', style: TextStyle(fontSize: 12)),
                     style: OutlinedButton.styleFrom(
                       foregroundColor: AppTheme.error,
                       side: BorderSide(color: AppTheme.error.withValues(alpha: 0.3)),
@@ -853,7 +836,7 @@ class _WdgwarsSectionState extends ConsumerState<_WdgwarsSection> {
           ] else ...[
             Row(
               children: [
-                const Icon(Icons.key, size: 14, color: AppTheme.wdgwars),
+                Icon(Icons.key, size: 14, color: AppTheme.wdgwars),
                 const SizedBox(width: 6),
                 Text('API Key', style: TextStyle(
                   color: t.textPrimary, fontSize: 12, fontWeight: FontWeight.w600,
@@ -863,17 +846,17 @@ class _WdgwarsSectionState extends ConsumerState<_WdgwarsSection> {
             const SizedBox(height: 4),
             Text(
               'Register at wdgwars.pl and generate a 64-char API key in your profile.',
-              style: TextStyle(color: t.textDim, fontSize: 10),
+              style: TextStyle(color: t.textDim, fontSize: 12),
             ),
             const SizedBox(height: 12),
             TextField(
               controller: _keyController,
               obscureText: _obscureKey,
-              style: TextStyle(color: t.textPrimary, fontSize: 13, fontFamily: 'monospace'),
+              style: TextStyle(color: t.textPrimary, fontSize: 13,),
               decoration: InputDecoration(
                 labelText: 'X-API-Key',
                 labelStyle: TextStyle(color: t.textDim, fontSize: 12),
-                prefixIcon: const Icon(Icons.vpn_key_outlined, size: 16, color: AppTheme.wdgwars),
+                prefixIcon: Icon(Icons.vpn_key_outlined, size: 16, color: AppTheme.wdgwars),
                 suffixIcon: IconButton(
                   icon: Icon(
                     _obscureKey ? Icons.visibility_off : Icons.visibility,
@@ -893,7 +876,7 @@ class _WdgwarsSectionState extends ConsumerState<_WdgwarsSection> {
                 ),
                 focusedBorder: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(6),
-                  borderSide: const BorderSide(color: AppTheme.wdgwars),
+                  borderSide: BorderSide(color: AppTheme.wdgwars),
                 ),
               ),
             ),
@@ -909,12 +892,12 @@ class _WdgwarsSectionState extends ConsumerState<_WdgwarsSection> {
                       )
                     : const Icon(Icons.rocket_launch, size: 16),
                 label: Text(
-                  _testing || w.isLoading ? 'TESTING...' : 'TEST & LINK',
-                  style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w700, letterSpacing: 1),
+                  _testing || w.isLoading ? 'Testing…' : 'Test & link',
+                  style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700),
                 ),
                 style: ElevatedButton.styleFrom(
                   backgroundColor: AppTheme.wdgwars,
-                  foregroundColor: const Color(0xFF0D1117),
+                  foregroundColor: AppTheme.onAccent,
                   padding: const EdgeInsets.symmetric(vertical: 10),
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
                 ),
@@ -931,12 +914,12 @@ class _WdgwarsSectionState extends ConsumerState<_WdgwarsSection> {
                 ),
                 child: Row(
                   children: [
-                    const Icon(Icons.error_outline, size: 14, color: AppTheme.error),
+                    Icon(Icons.error_outline, size: 14, color: AppTheme.error),
                     const SizedBox(width: 6),
                     Expanded(
                       child: Text(
                         w.error!,
-                        style: const TextStyle(color: AppTheme.error, fontSize: 10),
+                        style: TextStyle(color: AppTheme.error, fontSize: 12),
                       ),
                     ),
                   ],
@@ -968,7 +951,7 @@ class _WdgwarsSectionState extends ConsumerState<_WdgwarsSection> {
             backgroundColor: AppTheme.wdgwars,
             content: Text('Linked as ${stats?.username ?? 'player'} '
                 '(${stats?.total ?? 0} devices)',
-                style: const TextStyle(color: Color(0xFF0D1117))),
+                style: TextStyle(color: AppTheme.onAccent)),
           ),
         );
       }
@@ -989,7 +972,7 @@ class _WdgwarsSectionState extends ConsumerState<_WdgwarsSection> {
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx),
-            child: const Text('CANCEL'),
+            child: const Text('Cancel'),
           ),
           ElevatedButton(
             onPressed: () {
@@ -997,7 +980,7 @@ class _WdgwarsSectionState extends ConsumerState<_WdgwarsSection> {
               ref.read(wdgwarsProvider).logout();
             },
             style: ElevatedButton.styleFrom(backgroundColor: AppTheme.error),
-            child: const Text('UNLINK'),
+            child: const Text('Unlink'),
           ),
         ],
       ),
@@ -1024,10 +1007,10 @@ class _WdgwarsStatsCard extends StatelessWidget {
         ),
         child: Row(
           children: [
-            const SizedBox(width: 14, height: 14,
+            SizedBox(width: 14, height: 14,
               child: CircularProgressIndicator(strokeWidth: 1.5, color: AppTheme.wdgwars)),
             const SizedBox(width: 8),
-            Text('Loading stats...', style: TextStyle(color: t.textDim, fontSize: 11)),
+            Text('Loading stats...', style: TextStyle(color: t.textDim, fontSize: 12)),
           ],
         ),
       );
@@ -1044,7 +1027,7 @@ class _WdgwarsStatsCard extends StatelessWidget {
         children: [
           Row(
             children: [
-              const Icon(Icons.account_circle, size: 20, color: AppTheme.wdgwars),
+              Icon(Icons.account_circle, size: 20, color: AppTheme.wdgwars),
               const SizedBox(width: 8),
               Expanded(
                 child: Text(
@@ -1065,11 +1048,11 @@ class _WdgwarsStatsCard extends StatelessWidget {
                   child: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      const Icon(Icons.emoji_events, size: 12, color: AppTheme.wdgwars),
+                      Icon(Icons.emoji_events, size: 12, color: AppTheme.wdgwars),
                       const SizedBox(width: 4),
-                      Text('#${s.rank}', style: const TextStyle(
+                      Text('#${s.rank}', style: TextStyle(
                         color: AppTheme.wdgwars, fontSize: 12,
-                        fontWeight: FontWeight.w700, fontFamily: 'monospace',
+                        fontWeight: FontWeight.w700, fontFamily: AppTheme.monoFamily,
                       )),
                     ],
                   ),
@@ -1087,15 +1070,15 @@ class _WdgwarsStatsCard extends StatelessWidget {
                   child: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      const Icon(Icons.groups, size: 12, color: AppTheme.wdgwarsAlt),
+                      Icon(Icons.groups, size: 12, color: AppTheme.wdgwarsAlt),
                       const SizedBox(width: 4),
                       Text(
                         s.gangRole.isEmpty
                             ? s.gang
-                            : '${s.gang} · ${s.gangRole.toUpperCase()}',
-                        style: const TextStyle(
+                            : '${s.gang} · ${s.gangRole}',
+                        style: TextStyle(
                           color: AppTheme.wdgwarsAlt,
-                          fontSize: 10,
+                          fontSize: 12,
                           fontWeight: FontWeight.w700,
                         ),
                       ),
@@ -1117,7 +1100,7 @@ class _WdgwarsStatsCard extends StatelessWidget {
               ),
               _WigleStat(
                 icon: Icons.flight, label: 'Air',
-                value: _fmt(s.aircraft), color: const Color(0xFFc4b5fd),
+                value: _fmt(s.aircraft), color: AppTheme.info,
               ),
               _WigleStat(
                 icon: Icons.hub, label: 'Mesh',
@@ -1142,7 +1125,7 @@ class _WdgwarsStatsCard extends StatelessWidget {
               ),
               _WigleStat(
                 icon: Icons.shield, label: 'Reinforced',
-                value: _fmt(s.reinforced), color: const Color(0xFFc4b5fd),
+                value: _fmt(s.reinforced), color: AppTheme.info,
               ),
               _WigleStat(
                 icon: Icons.toll, label: 'Credits',
@@ -1166,14 +1149,13 @@ class _WdgwarsStatsCard extends StatelessWidget {
                   ),
                   child: Column(
                     children: [
-                      Text(_fmt(s.total), style: const TextStyle(
+                      Text(_fmt(s.total), style: TextStyle(
                         color: AppTheme.wdgwars, fontSize: 18,
-                        fontWeight: FontWeight.w700, fontFamily: 'monospace',
+                        fontWeight: FontWeight.w700, fontFamily: AppTheme.monoFamily,
                       )),
-                      Text('TOTAL DEVICES', style: TextStyle(
-                        color: t.textDim, fontSize: 8,
-                        fontWeight: FontWeight.w600, letterSpacing: 1,
-                      )),
+                      Text('Total devices', style: TextStyle(
+                        color: t.textDim, fontSize: 12,
+                        fontWeight: FontWeight.w600)),
                     ],
                   ),
                 ),
@@ -1189,14 +1171,13 @@ class _WdgwarsStatsCard extends StatelessWidget {
                     ),
                     child: Column(
                       children: [
-                        Text(_fmt(flockCams!), style: const TextStyle(
+                        Text(_fmt(flockCams!), style: TextStyle(
                           color: AppTheme.flockWifi, fontSize: 18,
-                          fontWeight: FontWeight.w700, fontFamily: 'monospace',
+                          fontWeight: FontWeight.w700, fontFamily: AppTheme.monoFamily,
                         )),
-                        Text('FLOCK CAMS (LOCAL)', style: TextStyle(
-                          color: t.textDim, fontSize: 8,
-                          fontWeight: FontWeight.w600, letterSpacing: 1,
-                        )),
+                        Text('Flock cams (local)', style: TextStyle(
+                          color: t.textDim, fontSize: 12,
+                          fontWeight: FontWeight.w600)),
                       ],
                     ),
                   ),
@@ -1217,15 +1198,14 @@ class _WdgwarsStatsCard extends StatelessWidget {
                     children: [
                       Icon(Icons.speed, size: 11, color: barColor),
                       const SizedBox(width: 4),
-                      Text('DAILY NEW-AP QUOTA', style: TextStyle(
-                        color: t.textDim, fontSize: 8,
-                        fontWeight: FontWeight.w600, letterSpacing: 1,
-                      )),
+                      Text('Daily new-AP quota', style: TextStyle(
+                        color: t.textDim, fontSize: 12,
+                        fontWeight: FontWeight.w600)),
                       const Spacer(),
                       Text('${_fmt(s.dailyRemaining)} / ${_fmt(s.dailyCap)} left',
                           style: TextStyle(
-                            color: barColor, fontSize: 9,
-                            fontWeight: FontWeight.w700, fontFamily: 'monospace',
+                            color: barColor, fontSize: 12,
+                            fontWeight: FontWeight.w700, fontFamily: AppTheme.monoFamily,
                           )),
                     ],
                   ),
@@ -1256,7 +1236,7 @@ class _WdgwarsStatsCard extends StatelessWidget {
               padding: const EdgeInsets.only(top: 8),
               child: Text(
                 meta.join('  ·  '),
-                style: TextStyle(color: t.textDim, fontSize: 9, letterSpacing: 0.5),
+                style: TextStyle(color: t.textDim, fontSize: 12),
               ),
             );
           }),

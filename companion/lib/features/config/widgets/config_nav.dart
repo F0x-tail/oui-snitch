@@ -8,10 +8,10 @@ class ConfigSection {
 }
 
 const kConfigSections = <ConfigSection>[
-  ConfigSection('APP', Icons.tune),
-  ConfigSection('SCANNING', Icons.radar),
-  ConfigSection('DETECTION', Icons.track_changes),
-  ConfigSection('ALERTS', Icons.notifications_active),
-  ConfigSection('NODE', Icons.memory),
-  ConfigSection('DATA', Icons.storage),
+  ConfigSection('App', Icons.tune),
+  ConfigSection('Scanning', Icons.radar),
+  ConfigSection('Detection', Icons.track_changes),
+  ConfigSection('Alerts', Icons.notifications_active),
+  ConfigSection('Node', Icons.memory),
+  ConfigSection('Data', Icons.storage),
 ];

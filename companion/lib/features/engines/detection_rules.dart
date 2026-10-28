@@ -31,9 +31,9 @@ class _WatchlistPanelState extends ConsumerState<WatchlistPanel> {
         children: [
           Row(
             children: [
-              const Text(
-                'WATCHLIST',
-                style: TextStyle(color: AppTheme.detector, fontSize: 10, fontWeight: FontWeight.w700, letterSpacing: 2),
+              Text(
+                'Watchlist',
+                style: TextStyle(color: AppTheme.detector, fontSize: 12, fontWeight: FontWeight.w700),
               ),
               const Spacer(),
               IconButton(icon: const Icon(Icons.add), tooltip: 'Add target', onPressed: _showEditDialog),
@@ -127,7 +127,7 @@ class _WatchlistPanelState extends ConsumerState<WatchlistPanel> {
                 segments: [
                   for (final m in WatchlistMatchType.values)
                     if (m != WatchlistMatchType.name)
-                      ButtonSegment(value: m, label: Text(m.label, style: const TextStyle(fontSize: 11))),
+                      ButtonSegment(value: m, label: Text(m.label, style: const TextStyle(fontSize: 12))),
                 ],
                 selected: {type},
                 showSelectedIcon: false,
@@ -139,7 +139,7 @@ class _WatchlistPanelState extends ConsumerState<WatchlistPanel> {
               const SizedBox(height: 8),
               TextField(
                 controller: idController,
-                style: TextStyle(color: t.textPrimary, fontFamily: 'monospace'),
+                style: TextStyle(color: t.textPrimary,),
                 decoration: InputDecoration(
                   hintText: switch (type) {
                     WatchlistMatchType.oui => 'AA:BB:CC',
@@ -172,7 +172,7 @@ class _WatchlistPanelState extends ConsumerState<WatchlistPanel> {
             ],
           ),
           actions: [
-            TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('CANCEL')),
+            TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
             ElevatedButton(
               onPressed: () {
                 final parsed = parseWatchlistImport(
@@ -195,7 +195,7 @@ class _WatchlistPanelState extends ConsumerState<WatchlistPanel> {
                 }
                 Navigator.pop(ctx);
               },
-              child: Text(existing == null ? 'ADD' : 'SAVE'),
+              child: Text(existing == null ? 'ADD' : 'Save'),
             ),
           ],
         ),
@@ -221,9 +221,9 @@ class SignaturesPanel extends ConsumerWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text(
-            'SIGNATURES',
-            style: TextStyle(color: AppTheme.detector, fontSize: 10, fontWeight: FontWeight.w700, letterSpacing: 2),
+          Text(
+            'Signatures',
+            style: TextStyle(color: AppTheme.detector, fontSize: 12, fontWeight: FontWeight.w700),
           ),
           const SizedBox(height: 8),
           Row(
@@ -258,7 +258,7 @@ class SignaturesPanel extends ConsumerWidget {
                                 maxLines: 2,
                                 overflow: TextOverflow.ellipsis,
                                 textAlign: TextAlign.center,
-                                style: TextStyle(fontSize: 9, height: 1.1, color: c, fontWeight: FontWeight.w600),
+                                style: TextStyle(fontSize: 12, height: 1.1, color: c, fontWeight: FontWeight.w600),
                               ),
                             ],
                           ),
@@ -302,11 +302,11 @@ class _WatchlistChip extends StatelessWidget {
               const SizedBox(width: 4),
               Text(
                 entry.identifier.toUpperCase(),
-                style: const TextStyle(color: AppTheme.detector, fontSize: 11, fontFamily: 'monospace'),
+                style: TextStyle(color: AppTheme.detector, fontSize: 12, fontFamily: AppTheme.monoFamily),
               ),
               if (entry.description.isNotEmpty) ...[
                 const SizedBox(width: 4),
-                Text(entry.description, style: TextStyle(color: t.textDim, fontSize: 9)),
+                Text(entry.description, style: TextStyle(color: t.textDim, fontSize: 12)),
               ],
               const SizedBox(width: 4),
               GestureDetector(onTap: onDelete, child: Icon(Icons.close, size: 12, color: t.textDim)),

@@ -98,6 +98,10 @@ class PermissionsOnboardingApp extends ConsumerWidget {
       darkTheme: AppTheme.darkTheme,
       themeMode: ref.watch(themeModeProvider),
       debugShowCheckedModeBanner: false,
+      builder: (context, child) {
+        AppTheme.syncBrightness(context);
+        return child ?? const SizedBox.shrink();
+      },
       home: PermissionsScreen(onDone: onDone),
     );
   }

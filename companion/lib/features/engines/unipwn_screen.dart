@@ -70,7 +70,7 @@ class _UnipwnScreenState extends ConsumerState<UnipwnScreen> {
     return Scaffold(
       backgroundColor: t.background,
       appBar: AppBar(
-        title: const Text('UNIPWN'),
+        title: const Text('UniPwn'),
         actions: [
           Transform.scale(
             scale: 0.7,
@@ -151,13 +151,13 @@ class _UnipwnScreenState extends ConsumerState<UnipwnScreen> {
                               Text(
                                 r.macAddress.length >= 8 ? r.macAddress.substring(0, 8) : r.macAddress,
                                 style: TextStyle(
-                                  color: t.textDim, fontSize: 10, fontFamily: 'monospace',
+                                  color: t.textDim, fontSize: 12, fontFamily: AppTheme.monoFamily,
                                 ),
                               ),
                               Text(
                                 '${r.rssi} dBm',
                                 style: TextStyle(
-                                  color: t.textDim, fontSize: 10, fontFamily: 'monospace',
+                                  color: t.textDim, fontSize: 12, fontFamily: AppTheme.monoFamily,
                                 ),
                               ),
                             ],
@@ -182,37 +182,35 @@ class _UnipwnScreenState extends ConsumerState<UnipwnScreen> {
                     padding: const EdgeInsets.all(16),
                     children: [
                       Text(
-                        'TARGET: ${_selectedTarget!.toUpperCase()}',
-                        style: const TextStyle(
+                        'Target: ${_selectedTarget!.toUpperCase()}',
+                        style: TextStyle(
                           color: AppTheme.uniPwn,
                           fontSize: 12,
-                          fontFamily: 'monospace',
-                          letterSpacing: 1,
                         ),
                       ),
                       const SizedBox(height: 16),
                       _ExploitButton(
-                        label: 'ENABLE SSH',
+                        label: 'Enable SSH',
                         icon: Icons.terminal,
                         onTap: () => _sendCommand(0),
                       ),
                       _ExploitButton(
-                        label: 'CHANGE ROOT PASSWORD',
+                        label: 'Change root password',
                         icon: Icons.key,
                         onTap: () => _sendCommand(1),
                       ),
                       _ExploitButton(
-                        label: 'GET SERIAL NUMBER',
+                        label: 'Get serial number',
                         icon: Icons.numbers,
                         onTap: () => _sendCommand(2),
                       ),
                       _ExploitButton(
-                        label: 'GET SYSTEM INFO',
+                        label: 'Get system info',
                         icon: Icons.info_outline,
                         onTap: () => _sendCommand(4),
                       ),
                       _ExploitButton(
-                        label: 'REBOOT',
+                        label: 'Reboot',
                         icon: Icons.restart_alt,
                         color: AppTheme.warning,
                         onTap: () => _sendCommand(3),
@@ -226,12 +224,12 @@ class _UnipwnScreenState extends ConsumerState<UnipwnScreen> {
                               controller: _customCmdController,
                               style: TextStyle(
                                 color: t.textPrimary,
-                                fontFamily: 'monospace',
+                                fontFamily: AppTheme.monoFamily,
                                 fontSize: 13,
                               ),
                               decoration: const InputDecoration(
                                 hintText: 'Custom shell command',
-                                labelText: 'CUSTOM CMD',
+                                labelText: 'Custom command',
                               ),
                             ),
                           ),
@@ -241,7 +239,7 @@ class _UnipwnScreenState extends ConsumerState<UnipwnScreen> {
                             style: ElevatedButton.styleFrom(
                               backgroundColor: AppTheme.error,
                             ),
-                            child: const Text('EXEC'),
+                            child: const Text('Exec'),
                           ),
                         ],
                       ),
@@ -292,8 +290,8 @@ class _UnipwnNodePicker extends ConsumerWidget {
         children: [
           Icon(Icons.memory, color: t.textDim, size: 18),
           const SizedBox(width: 8),
-          Text('EXEC NODE',
-              style: TextStyle(color: t.textDim, fontSize: 11, letterSpacing: 1.5)),
+          Text('Exec node',
+              style: TextStyle(color: t.textDim, fontSize: 12)),
           const SizedBox(width: 8),
           Expanded(
             child: DropdownButton<String>(
@@ -323,15 +321,16 @@ class _ExploitButton extends StatelessWidget {
     required this.label,
     required this.icon,
     required this.onTap,
-    this.color = AppTheme.uniPwn,
+    this.color,
   });
   final String label;
   final IconData icon;
   final VoidCallback onTap;
-  final Color color;
+  final Color? color;
 
   @override
   Widget build(BuildContext context) {
+    final color = this.color ?? AppTheme.uniPwn;
     return Padding(
       padding: const EdgeInsets.only(bottom: 8),
       child: OutlinedButton(
@@ -345,7 +344,7 @@ class _ExploitButton extends StatelessWidget {
           children: [
             Icon(icon, size: 18),
             const SizedBox(width: 12),
-            Text(label, style: const TextStyle(letterSpacing: 1, fontSize: 12)),
+            Text(label, style: const TextStyle(fontSize: 12)),
           ],
         ),
       ),

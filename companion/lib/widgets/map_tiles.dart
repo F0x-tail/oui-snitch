@@ -90,7 +90,7 @@ Widget mapAttribution(MapStyle style) {
           overflow: TextOverflow.ellipsis,
           textDirection: TextDirection.ltr,
           style: const TextStyle(
-            fontSize: 8,
+            fontSize: 12,
             height: 1.2,
             color: Color(0xFFB0B5C8),
             decoration: TextDecoration.none,

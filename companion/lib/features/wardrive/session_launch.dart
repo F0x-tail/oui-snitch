@@ -107,7 +107,7 @@ Future<bool> _primeLocationPermission(BuildContext context) async {
         body:
             'OUI-SNITCH needs location access to tag wardrive detections.\n\n'
             'Open Settings → OUI-SNITCH → Location and choose "While Using" or "Always".',
-        action: 'OPEN SETTINGS',
+        action: 'Open settings',
         onAction: Geolocator.openAppSettings,
       );
       return false;
@@ -130,7 +130,7 @@ Future<bool> _primeLocationPermission(BuildContext context) async {
         body:
             'iOS only shows "While Using" in the first prompt. For wardriving with screen off, set:\n\n'
             'Settings → OUI-SNITCH → Location → Always',
-        action: 'OPEN SETTINGS',
+        action: 'Open settings',
         onAction: Geolocator.openAppSettings,
       );
     } else if (Platform.isAndroid) {
@@ -142,7 +142,7 @@ Future<bool> _primeLocationPermission(BuildContext context) async {
           body:
               'For background tracking, Android requires "Allow all the time".\n\n'
               'Settings → Apps → OUI-SNITCH → Permissions → Location → Allow all the time',
-          action: 'ALLOW ALL THE TIME',
+          action: 'Allow all the time',
           onAction: () async {
             if (!(await ph.Permission.locationAlways.request()).isGranted) {
               await ph.openAppSettings();
@@ -219,7 +219,7 @@ Future<void> _settingsDialog(
         TextButton(
           onPressed: () => Navigator.of(ctx).pop(),
           child: Text(
-            action == null ? 'OK' : 'LATER',
+            action == null ? 'OK' : 'Later',
             style: TextStyle(
               color: action == null ? AppTheme.accent : t.textDim,
             ),
@@ -231,7 +231,7 @@ Future<void> _settingsDialog(
               Navigator.of(ctx).pop();
               await onAction?.call();
             },
-            child: Text(action, style: const TextStyle(color: AppTheme.accent)),
+            child: Text(action, style: TextStyle(color: AppTheme.accent)),
           ),
       ],
     ),
@@ -261,7 +261,7 @@ Future<void> _alwaysUpgradeDialog(
             await p.setBool(prefKey, true);
             if (ctx.mounted) Navigator.of(ctx).pop();
           },
-          child: Text("DON'T ASK AGAIN", style: TextStyle(color: t.textDim)),
+          child: Text("Don't ask again", style: TextStyle(color: t.textDim)),
         ),
       ),
     ],
@@ -289,9 +289,10 @@ class _RadioRolePopupState extends State<RadioRolePopup> {
     for (final n in widget.nodes) n: widget.initial[n] ?? 0x03,
   };
 
-  static const _wifiColor = Color(0xFF6B8AFF);
-  static const _bleColor = Color(0xFF9B6BFF);
-  static const _bothColor = Color(0xFF5AE6D6);
+  // One tint; the Wi-Fi, Bluetooth and both icons tell the roles apart.
+  static Color get _wifiColor => AppTheme.accent;
+  static Color get _bleColor => AppTheme.accent;
+  static Color get _bothColor => AppTheme.accent;
 
   static Color _radioColor(int mask) => switch (mask & 0x03) {
     0x01 => _wifiColor,
@@ -300,9 +301,9 @@ class _RadioRolePopupState extends State<RadioRolePopup> {
   };
 
   static String _maskLabel(int mask) => switch (mask & 0x03) {
-    0x01 => 'WIFI',
+    0x01 => 'Wi-Fi',
     0x02 => 'BLE',
-    _ => 'BOTH',
+    _ => 'Both',
   };
 
   @override
@@ -313,19 +314,18 @@ class _RadioRolePopupState extends State<RadioRolePopup> {
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
       title: Row(
         children: [
-          const Icon(
+          Icon(
             Icons.settings_input_antenna,
             color: AppTheme.accent,
             size: 18,
           ),
           const SizedBox(width: 8),
           Text(
-            'NODE RADIOS',
+            'Node radios',
             style: TextStyle(
               color: t.textPrimary,
               fontSize: 15,
               fontWeight: FontWeight.w700,
-              letterSpacing: 1,
             ),
           ),
         ],
@@ -367,12 +367,6 @@ class _RadioRolePopupState extends State<RadioRolePopup> {
                           decoration: BoxDecoration(
                             color: selColor,
                             shape: BoxShape.circle,
-                            boxShadow: [
-                              BoxShadow(
-                                color: selColor.withValues(alpha: 0.6),
-                                blurRadius: 6,
-                              ),
-                            ],
                           ),
                         ),
                         Expanded(
@@ -390,9 +384,8 @@ class _RadioRolePopupState extends State<RadioRolePopup> {
                           _maskLabel(mask),
                           style: TextStyle(
                             color: selColor,
-                            fontSize: 11,
+                            fontSize: 12,
                             fontWeight: FontWeight.w700,
-                            letterSpacing: 1,
                           ),
                         ),
                       ],
@@ -407,7 +400,7 @@ class _RadioRolePopupState extends State<RadioRolePopup> {
                           tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                           textStyle: WidgetStateProperty.all(
                             const TextStyle(
-                              fontSize: 11,
+                              fontSize: 12,
                               fontWeight: FontWeight.w600,
                             ),
                           ),
@@ -420,7 +413,7 @@ class _RadioRolePopupState extends State<RadioRolePopup> {
                             BorderSide(color: selColor.withValues(alpha: 0.45)),
                           ),
                         ),
-                        segments: const [
+                        segments: [
                           ButtonSegment(
                             value: 0x01,
                             icon: Icon(Icons.wifi, size: 15, color: _wifiColor),
@@ -460,7 +453,7 @@ class _RadioRolePopupState extends State<RadioRolePopup> {
       actions: [
         TextButton(
           onPressed: () => Navigator.pop(context),
-          child: Text('CANCEL', style: TextStyle(color: t.textDim)),
+          child: Text('Cancel', style: TextStyle(color: t.textDim)),
         ),
         FilledButton(
           style: FilledButton.styleFrom(
@@ -468,7 +461,7 @@ class _RadioRolePopupState extends State<RadioRolePopup> {
             foregroundColor: AppTheme.background,
           ),
           onPressed: () => Navigator.pop(context, _roles),
-          child: const Text('START'),
+          child: const Text('Start'),
         ),
       ],
     );

@@ -3,9 +3,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-/// Theme mode state — persisted to SharedPreferences.
+/// Theme mode state — persisted to SharedPreferences. Follows the phone's
+/// light/dark setting until the user picks one.
 class ThemeModeNotifier extends StateNotifier<ThemeMode> {
-  ThemeModeNotifier() : super(ThemeMode.dark) {
+  ThemeModeNotifier() : super(ThemeMode.system) {
     _load();
   }
 
@@ -13,24 +14,17 @@ class ThemeModeNotifier extends StateNotifier<ThemeMode> {
 
   Future<void> _load() async {
     final prefs = await SharedPreferences.getInstance();
-    final value = prefs.getString(_key);
-    if (value == 'light') {
-      state = ThemeMode.light;
-    } else {
-      state = ThemeMode.dark;
-    }
-  }
-
-  Future<void> toggle() async {
-    state = state == ThemeMode.dark ? ThemeMode.light : ThemeMode.dark;
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setString(_key, state == ThemeMode.light ? 'light' : 'dark');
+    state = switch (prefs.getString(_key)) {
+      'light' => ThemeMode.light,
+      'dark' => ThemeMode.dark,
+      _ => ThemeMode.system,
+    };
   }
 
   Future<void> setMode(ThemeMode mode) async {
     state = mode;
     final prefs = await SharedPreferences.getInstance();
-    await prefs.setString(_key, mode == ThemeMode.light ? 'light' : 'dark');
+    await prefs.setString(_key, mode.name);
   }
 }
 
@@ -210,49 +204,80 @@ final mapStyleProvider =
 class AppTheme {
   const AppTheme._();
 
-  static const background = Color(0xFF08090E);
-  static const surface = Color(0xFF0F1117);
-  static const surfaceLight = Color(0xFF161822);
-  static const border = Color(0xFF232736);
-  static const textPrimary = Color(0xFFF0F1F5);
-  static const textSecondary = Color(0xFFB0B5C8);
-  static const textDim = Color(0xFF8890A8);
-  static const accent = Color(0xFF6B8AFF);
-  static const error = Color(0xFFE65A6B);
-  static const success = Color(0xFF5AE6A1);
-  static const warning = Color(0xFFE6A85A);
+  /// Status and accent colours differ between light and dark so text in them
+  /// keeps at least 4.5:1 contrast on either background. They read the
+  /// brightness the app last built with, which [syncBrightness] keeps current.
+  static Brightness _brightness = Brightness.dark;
+  static bool get _light => _brightness == Brightness.light;
 
-  // Engine colors — muted neon, same saturation/lightness family
-  static const detector = Color(0xFF6B8AFF);
-  static const axon = Color(0xFF9B6BFF);
-  /// Slot 1's colour under its former name. Kept because much of the UI uses
-  /// it as the generic "this row is BLE" purple rather than as an engine
-  /// colour, and those call sites are not about slot 1 at all.
-  static const flockBle = axon;
-  static const flockWifi = Color(0xFFE66B9B);
-  static const foxhunter = Color(0xFF5AE6A1);
-  static const skySpy = Color(0xFF5AE6D6);
-  static const uniPwn = Color(0xFFE65A6B);
-  static const wardrive = Color(0xFFE6895A);
+  /// Called from the app's root builder. Widgets that read these colours
+  /// without depending on the theme would keep the old ones after the phone
+  /// switches between light and dark, so a change marks the whole tree for
+  /// one rebuild.
+  static void syncBrightness(BuildContext context) {
+    final b = Theme.of(context).brightness;
+    if (b == _brightness) return;
+    _brightness = b;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      void mark(Element e) {
+        e.markNeedsBuild();
+        e.visitChildren(mark);
+      }
+      WidgetsBinding.instance.rootElement?.visitChildren(mark);
+    });
+  }
+
+  static const background = Color(0xFF15171A);
+  static const surface = Color(0xFF1C1F23);
+  static const surfaceLight = Color(0xFF252A2F);
+  static const border = Color(0xFF33383F);
+  static const textPrimary = Color(0xFFECEAE6);
+  static const textSecondary = Color(0xFFBAB8B2);
+  static const textDim = Color(0xFF96948E);
+
+  static Color get accent => _light ? const Color(0xFF3D6B66) : const Color(0xFF8DBDB5);
+  static Color get success => _light ? const Color(0xFF1A7155) : const Color(0xFF6CC4A4);
+  static Color get warning => _light ? const Color(0xFF8A5A00) : const Color(0xFFE2B65E);
+  static Color get error => _light ? const Color(0xFFB5441E) : const Color(0xFFF08C6E);
+  static Color get info => _light ? const Color(0xFF2B6497) : const Color(0xFF8DB4DE);
+
+  /// Text and icons drawn on an [accent] fill.
+  static Color get onAccent => _light ? Colors.white : background;
+
+  // Engines share one tint and are told apart by their icons. The map is the
+  // exception: there colour is the only cue, so it uses [Engine.mapColor].
+  static Color get detector => accent;
+  static Color get axon => accent;
+  /// Slot 1's colour under its former name, kept for the call sites that use
+  /// it as a generic "this row is BLE" colour rather than as an engine colour.
+  static Color get flockBle => accent;
+  static Color get flockWifi => accent;
+  static Color get foxhunter => accent;
+  static Color get skySpy => accent;
+  static Color get uniPwn => accent;
+  static Color get wardrive => accent;
 
   // Upload targets
-  static const wigle = Color(0xFFE6A85A);
-  static const wdgwars = Color(0xFF00E5FF);
-  static const wdgwarsAlt = Color(0xFFA855F7);
+  static Color get wigle => accent;
+  static Color get wdgwars => accent;
+  static Color get wdgwarsAlt => info;
 
   // GPS quality colors
-  static const gpsGood = Color(0xFF5AE6A1);
-  static const gpsFair = Color(0xFFE6A85A);
-  static const gpsPoor = Color(0xFFE65A6B);
-  static const gpsNone = Color(0xFF8890A8);
+  static Color get gpsGood => success;
+  static Color get gpsFair => warning;
+  static Color get gpsPoor => error;
+  static Color get gpsNone => _light ? _lightTextDim : textDim;
 
-  static const _lightBackground = Color(0xFFF2F3F8);
+  static const _lightBackground = Color(0xFFF7F6F3);
   static const _lightSurface = Color(0xFFFFFFFF);
-  static const _lightSurfaceLight = Color(0xFFEBECF2);
-  static const _lightBorder = Color(0xFFB0B6C6);
-  static const _lightTextPrimary = Color(0xFF151720);
-  static const _lightTextSecondary = Color(0xFF4C5165);
-  static const _lightTextDim = Color(0xFF6B7186);
+  static const _lightSurfaceLight = Color(0xFFECEBE6);
+  static const _lightBorder = Color(0xFFCFCDC7);
+  static const _lightTextPrimary = Color(0xFF1E2022);
+  static const _lightTextSecondary = Color(0xFF474A4F);
+  static const _lightTextDim = Color(0xFF5E6166);
+
+  static const fontFamily = 'AtkinsonHyperlegible';
+  static const monoFamily = 'AtkinsonHyperlegibleMono';
 
   static ResolvedTheme of(BuildContext context) {
     final brightness = Theme.of(context).brightness;
@@ -291,19 +316,26 @@ class AppTheme {
     final ts = isDark ? textSecondary : _lightTextSecondary;
     final td = isDark ? textDim : _lightTextDim;
 
+    // Built for one fixed brightness, so it spells out the colours instead of
+    // using the getters, which follow whichever brightness is current.
+    final ac = isDark ? const Color(0xFF8DBDB5) : const Color(0xFF3D6B66);
+    final err = isDark ? const Color(0xFFF08C6E) : const Color(0xFFB5441E);
+    final onAc = isDark ? bg : Colors.white;
+
     return ThemeData(
       brightness: brightness,
+      fontFamily: fontFamily,
       scaffoldBackgroundColor: bg,
       colorScheme: ColorScheme(
         brightness: brightness,
         surface: sf,
         onSurface: tp,
-        primary: accent,
-        onPrimary: isDark ? bg : Colors.white,
+        primary: ac,
+        onPrimary: onAc,
         secondary: ts,
         onSecondary: tp,
-        error: error,
-        onError: Colors.white,
+        error: err,
+        onError: onAc,
       ),
       appBarTheme: AppBarTheme(
         backgroundColor: bg,
@@ -314,12 +346,11 @@ class AppTheme {
           color: tp,
           fontSize: 18,
           fontWeight: FontWeight.w600,
-          letterSpacing: 0.5,
         ),
       ),
       cardTheme: CardThemeData(
         color: sf,
-        elevation: isDark ? 0 : 1,
+        elevation: 0,
         shape: RoundedRectangleBorder(
           borderRadius: const BorderRadius.all(Radius.circular(10)),
           side: BorderSide(color: bd, width: 0.5),
@@ -329,7 +360,7 @@ class AppTheme {
       textTheme: TextTheme(
         headlineLarge: TextStyle(
           color: tp, fontSize: 24,
-          fontWeight: FontWeight.w700, letterSpacing: 0.5,
+          fontWeight: FontWeight.w700,
         ),
         headlineMedium: TextStyle(
           color: tp, fontSize: 20, fontWeight: FontWeight.w600,
@@ -344,16 +375,16 @@ class AppTheme {
           color: ts, fontSize: 13, fontWeight: FontWeight.w400,
         ),
         bodySmall: TextStyle(
-          color: td, fontSize: 11,
-          fontWeight: FontWeight.w400, fontFamily: 'monospace',
+          color: td, fontSize: 12,
+          fontWeight: FontWeight.w400,
         ),
         labelLarge: TextStyle(
           color: tp, fontSize: 14,
-          fontWeight: FontWeight.w600, letterSpacing: 0.5,
+          fontWeight: FontWeight.w600,
         ),
         labelSmall: TextStyle(
-          color: ts, fontSize: 10,
-          fontWeight: FontWeight.w500, letterSpacing: 1.0,
+          color: ts, fontSize: 12,
+          fontWeight: FontWeight.w500,
         ),
       ),
       iconTheme: IconThemeData(color: ts, size: 20),
@@ -362,12 +393,12 @@ class AppTheme {
       ),
       switchTheme: SwitchThemeData(
         thumbColor: WidgetStateProperty.resolveWith((states) {
-          if (states.contains(WidgetState.selected)) return accent;
+          if (states.contains(WidgetState.selected)) return ac;
           return td;
         }),
         trackColor: WidgetStateProperty.resolveWith((states) {
           if (states.contains(WidgetState.selected)) {
-            return accent.withValues(alpha: 0.3);
+            return ac.withValues(alpha: 0.3);
           }
           return bd;
         }),
@@ -376,29 +407,29 @@ class AppTheme {
         style: ButtonStyle(
           visualDensity: VisualDensity.compact,
           backgroundColor: WidgetStateProperty.resolveWith(
-            (s) => s.contains(WidgetState.selected) ? accent.withValues(alpha: 0.18) : sf,
+            (s) => s.contains(WidgetState.selected) ? ac.withValues(alpha: 0.18) : sf,
           ),
           foregroundColor: WidgetStateProperty.resolveWith(
-            (s) => s.contains(WidgetState.selected) ? accent : ts,
+            (s) => s.contains(WidgetState.selected) ? ac : ts,
           ),
           side: WidgetStateProperty.resolveWith(
-            (s) => BorderSide(color: s.contains(WidgetState.selected) ? accent : bd),
+            (s) => BorderSide(color: s.contains(WidgetState.selected) ? ac : bd),
           ),
           textStyle: const WidgetStatePropertyAll(
-            TextStyle(fontSize: 11, fontWeight: FontWeight.w700, letterSpacing: 1),
+            TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
           ),
           shape: WidgetStatePropertyAll(RoundedRectangleBorder(borderRadius: BorderRadius.circular(10))),
         ),
       ),
       bottomNavigationBarTheme: BottomNavigationBarThemeData(
         backgroundColor: isDark ? bg : sf,
-        selectedItemColor: accent,
+        selectedItemColor: ac,
         unselectedItemColor: td,
         type: BottomNavigationBarType.fixed,
         elevation: 0,
         selectedLabelStyle:
-            const TextStyle(fontSize: 10, fontWeight: FontWeight.w500),
-        unselectedLabelStyle: const TextStyle(fontSize: 10),
+            const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
+        unselectedLabelStyle: const TextStyle(fontSize: 12),
       ),
       inputDecorationTheme: InputDecorationTheme(
         filled: true,
@@ -413,7 +444,7 @@ class AppTheme {
         ),
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(10),
-          borderSide: const BorderSide(color: accent),
+          borderSide: BorderSide(color: ac),
         ),
         contentPadding:
             const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
@@ -422,14 +453,14 @@ class AppTheme {
       ),
       elevatedButtonTheme: ElevatedButtonThemeData(
         style: ElevatedButton.styleFrom(
-          backgroundColor: accent,
-          foregroundColor: isDark ? bg : Colors.white,
+          backgroundColor: ac,
+          foregroundColor: onAc,
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(10),
           ),
           padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
           textStyle: const TextStyle(
-            fontSize: 14, fontWeight: FontWeight.w600, letterSpacing: 0.5,
+            fontSize: 14, fontWeight: FontWeight.w600,
           ),
         ),
       ),

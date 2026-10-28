@@ -22,7 +22,7 @@ class FeedStatsHeader extends ConsumerWidget {
     final items = <Widget>[];
     if (topVendors.isNotEmpty) {
       items.add(_Section(
-        label: 'VENDORS',
+        label: 'Vendors',
         icon: Icons.router,
         color: AppTheme.accent,
         entries: topVendors,
@@ -31,7 +31,7 @@ class FeedStatsHeader extends ConsumerWidget {
     }
     if (topFlock.isNotEmpty) {
       items.add(_Section(
-        label: 'FLOCK',
+        label: 'Flock',
         icon: Icons.videocam,
         color: Engine.flockWifi.color,
         entries: topFlock,
@@ -169,9 +169,8 @@ class _Section extends StatelessWidget {
           label,
           style: TextStyle(
             color: color,
-            fontSize: 9,
+            fontSize: 12,
             fontWeight: FontWeight.w700,
-            letterSpacing: 1.2,
           ),
         ),
         const SizedBox(width: 8),
@@ -190,9 +189,8 @@ class _Section extends StatelessWidget {
             entries[i].label,
             style: TextStyle(
               color: t.textPrimary,
-              fontSize: 10,
+              fontSize: 12,
               fontWeight: FontWeight.w500,
-              fontFamily: 'monospace',
             ),
           ),
           const SizedBox(width: 4),
@@ -200,9 +198,9 @@ class _Section extends StatelessWidget {
             '${entries[i].count}',
             style: TextStyle(
               color: color,
-              fontSize: 10,
+              fontSize: 12,
               fontWeight: FontWeight.w700,
-              fontFamily: 'monospace',
+              fontFamily: AppTheme.monoFamily,
             ),
           ),
         ],

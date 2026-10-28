@@ -21,9 +21,8 @@ class _IgnoreListTab extends ConsumerWidget {
               Icon(Icons.shield_outlined, size: 14, color: AppTheme.accent),
               const SizedBox(width: 6),
               Text(
-                'IGNORE LIST',
+                'Ignore list',
                 style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                      letterSpacing: 2,
                       color: t.textDim,
                     ),
               ),
@@ -31,8 +30,8 @@ class _IgnoreListTab extends ConsumerWidget {
               Text(
                 '${entries.where((e) => e.enabled).length} active',
                 style: TextStyle(
-                  color: t.textDim, fontSize: 10,
-                  fontFamily: 'monospace',
+                  color: t.textDim, fontSize: 12,
+                  fontFamily: AppTheme.monoFamily,
                 ),
               ),
               const SizedBox(width: 8),
@@ -45,7 +44,7 @@ class _IgnoreListTab extends ConsumerWidget {
                     borderRadius: BorderRadius.circular(10),
                     border: Border.all(color: AppTheme.accent.withValues(alpha: 0.3)),
                   ),
-                  child: const Icon(Icons.add, size: 18, color: AppTheme.accent),
+                  child: Icon(Icons.add, size: 18, color: AppTheme.accent),
                 ),
               ),
             ],
@@ -56,7 +55,7 @@ class _IgnoreListTab extends ConsumerWidget {
           child: Text(
             'Matching devices are silently excluded from the feed, '
             'CSV exports, database logging, and alerts.',
-            style: TextStyle(color: t.textDim, fontSize: 11),
+            style: TextStyle(color: t.textDim, fontSize: 12),
           ),
         ),
         const Divider(height: 1),
@@ -70,15 +69,14 @@ class _IgnoreListTab extends ConsumerWidget {
                     children: [
                       Icon(Icons.shield_outlined, size: 36, color: t.textDim),
                       const SizedBox(height: 12),
-                      Text('NO ENTRIES', style: TextStyle(
+                      Text('No entries', style: TextStyle(
                         color: t.textDim, fontSize: 12,
-                        fontWeight: FontWeight.w700, letterSpacing: 2,
-                      )),
+                        fontWeight: FontWeight.w700)),
                       const SizedBox(height: 6),
                       Text(
                         'Tap + to add SSIDs, MACs, or OUIs\nthat should never be logged.',
                         textAlign: TextAlign.center,
-                        style: TextStyle(color: t.textDim, fontSize: 11),
+                        style: TextStyle(color: t.textDim, fontSize: 12),
                       ),
                     ],
                   ),
@@ -121,10 +119,9 @@ class _IgnoreListTab extends ConsumerWidget {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   // Type selector
-                  Text('MATCH TYPE', style: TextStyle(
-                    color: t.textDim, fontSize: 10,
-                    fontWeight: FontWeight.w700, letterSpacing: 1,
-                  )),
+                  Text('Match type', style: TextStyle(
+                    color: t.textDim, fontSize: 12,
+                    fontWeight: FontWeight.w700)),
                   const SizedBox(height: 6),
                   Row(
                     children: IgnoreType.values.map((type) {
@@ -151,8 +148,7 @@ class _IgnoreListTab extends ConsumerWidget {
                             child: Center(
                               child: Text(type.label, style: TextStyle(
                                 color: isSelected ? AppTheme.accent : t.textSecondary,
-                                fontSize: 11, fontWeight: FontWeight.w700,
-                                letterSpacing: 0.5,
+                                fontSize: 12, fontWeight: FontWeight.w700,
                               )),
                             ),
                           ),
@@ -194,10 +190,9 @@ class _IgnoreListTab extends ConsumerWidget {
                   const SizedBox(height: 14),
 
                   // Scope selector
-                  Text('APPLIES TO', style: TextStyle(
-                    color: t.textDim, fontSize: 10,
-                    fontWeight: FontWeight.w700, letterSpacing: 1,
-                  )),
+                  Text('Applies to', style: TextStyle(
+                    color: t.textDim, fontSize: 12,
+                    fontWeight: FontWeight.w700)),
                   const SizedBox(height: 6),
                   Row(
                     children: IgnoreScope.values.map((scope) {
@@ -224,7 +219,7 @@ class _IgnoreListTab extends ConsumerWidget {
                             child: Center(
                               child: Text(scope.label, style: TextStyle(
                                 color: isSelected ? AppTheme.accent : t.textSecondary,
-                                fontSize: 10, fontWeight: FontWeight.w600,
+                                fontSize: 12, fontWeight: FontWeight.w600,
                               )),
                             ),
                           ),
@@ -238,7 +233,7 @@ class _IgnoreListTab extends ConsumerWidget {
             actions: [
               TextButton(
                 onPressed: () => Navigator.pop(ctx),
-                child: const Text('CANCEL'),
+                child: const Text('Cancel'),
               ),
               ElevatedButton(
                 onPressed: () {
@@ -280,7 +275,7 @@ class _IgnoreEntryTile extends ConsumerWidget {
 
     final Color scopeColor = switch (entry.scope) {
       IgnoreScope.wifi => AppTheme.wardrive,
-      IgnoreScope.ble => const Color(0xFF4A9EFF),
+      IgnoreScope.ble => AppTheme.info,
       IgnoreScope.both => AppTheme.accent,
     };
 
@@ -295,7 +290,7 @@ class _IgnoreEntryTile extends ConsumerWidget {
           color: AppTheme.error.withValues(alpha: 0.15),
           borderRadius: BorderRadius.circular(10),
         ),
-        child: const Icon(Icons.delete_outline, color: AppTheme.error, size: 20),
+        child: Icon(Icons.delete_outline, color: AppTheme.error, size: 20),
       ),
       onDismissed: (_) => ref.read(ignoreListProvider).remove(entry),
       child: Container(
@@ -360,8 +355,7 @@ class _IgnoreEntryTile extends ConsumerWidget {
                           entry.type.label,
                           style: TextStyle(
                             color: isEnabled ? AppTheme.accent : t.textDim,
-                            fontSize: 8, fontWeight: FontWeight.w700,
-                            letterSpacing: 0.5,
+                            fontSize: 12, fontWeight: FontWeight.w700,
                           ),
                         ),
                       ),
@@ -378,7 +372,7 @@ class _IgnoreEntryTile extends ConsumerWidget {
                           entry.scope.label,
                           style: TextStyle(
                             color: isEnabled ? scopeColor : t.textDim,
-                            fontSize: 8, fontWeight: FontWeight.w700,
+                            fontSize: 12, fontWeight: FontWeight.w700,
                           ),
                         ),
                       ),
@@ -387,7 +381,7 @@ class _IgnoreEntryTile extends ConsumerWidget {
                         Expanded(
                           child: Text(
                             entry.label,
-                            style: TextStyle(color: t.textDim, fontSize: 10),
+                            style: TextStyle(color: t.textDim, fontSize: 12),
                             overflow: TextOverflow.ellipsis,
                           ),
                         ),

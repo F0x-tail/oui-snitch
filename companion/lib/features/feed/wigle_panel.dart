@@ -80,18 +80,17 @@ class _WiglePanelState extends ConsumerState<WiglePanel> {
               Icon(Icons.travel_explore, size: 15, color: t.textDim),
               const SizedBox(width: 6),
               Text(
-                'WIGLE',
+                'WiGLE',
                 style: TextStyle(
                   color: t.textDim,
-                  fontSize: 10,
+                  fontSize: 12,
                   fontWeight: FontWeight.w700,
-                  letterSpacing: 1.1,
                 ),
               ),
               const Spacer(),
               Text(
                 svc.budgetLabel,
-                style: TextStyle(color: t.textDim, fontSize: 9),
+                style: TextStyle(color: t.textDim, fontSize: 12),
               ),
             ],
           ),
@@ -99,7 +98,7 @@ class _WiglePanelState extends ConsumerState<WiglePanel> {
           if (!svc.hasCredentials)
             Text(
               'Sign in to WiGLE under Config → Wardrive to enable lookups.',
-              style: TextStyle(color: t.textDim, fontSize: 11, height: 1.4),
+              style: TextStyle(color: t.textDim, fontSize: 12, height: 1.4),
             )
           else if (_result != null) ...[
             Text(
@@ -113,14 +112,14 @@ class _WiglePanelState extends ConsumerState<WiglePanel> {
             const SizedBox(height: 4),
             Text(
               _result!.interpretation,
-              style: TextStyle(color: t.textSecondary, fontSize: 11, height: 1.4),
+              style: TextStyle(color: t.textSecondary, fontSize: 12, height: 1.4),
             ),
             if (_result!.ssid != null && _result!.ssid!.isNotEmpty) ...[
               const SizedBox(height: 6),
               Text(
                 'WiGLE records this BSSID as "${_result!.ssid}"'
                 '${_result!.lastSeen != null ? ', last seen ${_result!.lastSeen}' : ''}.',
-                style: TextStyle(color: t.textDim, fontSize: 11, height: 1.4),
+                style: TextStyle(color: t.textDim, fontSize: 12, height: 1.4),
               ),
             ],
           ] else if (_ranOnce) ...[
@@ -128,13 +127,13 @@ class _WiglePanelState extends ConsumerState<WiglePanel> {
               svc.exhausted
                   ? 'Daily WiGLE limit reached. It resets at 00:00 US/Pacific.'
                   : svc.lastError ?? 'No answer from WiGLE.',
-              style: TextStyle(color: AppTheme.warning, fontSize: 11, height: 1.4),
+              style: TextStyle(color: AppTheme.warning, fontSize: 12, height: 1.4),
             ),
           ] else
             Text(
               'Ask WiGLE whether this access point is recorded at this '
               'location. Costs one query from a small daily budget.',
-              style: TextStyle(color: t.textDim, fontSize: 11, height: 1.4),
+              style: TextStyle(color: t.textDim, fontSize: 12, height: 1.4),
             ),
           if (svc.hasCredentials && !svc.exhausted) ...[
             const SizedBox(height: 8),

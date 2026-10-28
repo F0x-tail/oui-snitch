@@ -247,7 +247,7 @@ class _OtaProgressStepperState extends State<OtaProgressStepper>
                 minHeight: 5,
                 backgroundColor: t.border,
                 valueColor:
-                    const AlwaysStoppedAnimation<Color>(AppTheme.accent),
+                    AlwaysStoppedAnimation<Color>(AppTheme.accent),
               ),
             )
           else if (m.activeIndex >= 0 && !m.complete)
@@ -257,7 +257,7 @@ class _OtaProgressStepperState extends State<OtaProgressStepper>
                 minHeight: 5,
                 backgroundColor: t.border,
                 valueColor:
-                    const AlwaysStoppedAnimation<Color>(AppTheme.accent),
+                    AlwaysStoppedAnimation<Color>(AppTheme.accent),
               ),
             ),
           if (m.detail.isNotEmpty)
@@ -274,16 +274,16 @@ class _OtaProgressStepperState extends State<OtaProgressStepper>
                             : (m.complete
                                 ? AppTheme.success
                                 : t.textSecondary),
-                        fontSize: 11,
+                        fontSize: 12,
                       ),
                     ),
                   ),
                   if (hasBar)
                     Text(
                       '${(m.fraction * 100).toStringAsFixed(0)}%',
-                      style: const TextStyle(
+                      style: TextStyle(
                         color: AppTheme.accent,
-                        fontSize: 11,
+                        fontSize: 12,
                         fontWeight: FontWeight.w700,
                       ),
                     ),
@@ -343,17 +343,9 @@ class _OtaProgressStepperState extends State<OtaProgressStepper>
             ? AnimatedBuilder(
                 animation: _pulse,
                 builder: (context, child) {
-                  final glow = 0.25 + 0.45 * _pulse.value;
                   return Container(
                     decoration: BoxDecoration(
                       shape: BoxShape.circle,
-                      boxShadow: [
-                        BoxShadow(
-                          color: AppTheme.accent.withValues(alpha: glow),
-                          blurRadius: 4 + 8 * _pulse.value,
-                          spreadRadius: 1 + 2 * _pulse.value,
-                        ),
-                      ],
                     ),
                     child: child,
                   );
@@ -370,7 +362,7 @@ class _OtaProgressStepperState extends State<OtaProgressStepper>
                 : (done
                     ? AppTheme.success
                     : (active ? AppTheme.accent : t.textDim)),
-            fontSize: 9,
+            fontSize: 12,
             fontWeight: active ? FontWeight.w700 : FontWeight.w400,
           ),
         ),

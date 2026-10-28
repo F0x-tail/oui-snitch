@@ -44,7 +44,7 @@ class _OuiDatabaseSectionState extends ConsumerState<_OuiDatabaseSection> {
       children: [
         Text(
           'MAC vendor lookup database (Ringmast4r/OUI-Master-Database)',
-          style: TextStyle(color: t.textDim, fontSize: 11),
+          style: TextStyle(color: t.textDim, fontSize: 12),
         ),
         const SizedBox(height: 12),
         Row(
@@ -59,7 +59,7 @@ class _OuiDatabaseSectionState extends ConsumerState<_OuiDatabaseSection> {
               const SizedBox(width: 8),
               Text(
                 'updated ${_formatDate(oui.lastUpdated!)}',
-                style: TextStyle(color: t.textDim, fontSize: 10),
+                style: TextStyle(color: t.textDim, fontSize: 12),
               ),
             ],
           ],
@@ -78,20 +78,20 @@ class _OuiDatabaseSectionState extends ConsumerState<_OuiDatabaseSection> {
               mainAxisSize: MainAxisSize.min,
               children: [
                 if (_updating)
-                  const SizedBox(
+                  SizedBox(
                     width: 12, height: 12,
                     child: CircularProgressIndicator(
                       strokeWidth: 1.5, color: AppTheme.accent,
                     ),
                   )
                 else
-                  const Icon(Icons.refresh, size: 14, color: AppTheme.accent),
+                  Icon(Icons.refresh, size: 14, color: AppTheme.accent),
                 const SizedBox(width: 6),
                 Text(
                   _updating ? 'Checking...' : 'Check for Update',
-                  style: const TextStyle(
+                  style: TextStyle(
                     color: AppTheme.accent,
-                    fontSize: 11,
+                    fontSize: 12,
                     fontWeight: FontWeight.w600,
                   ),
                 ),
@@ -101,7 +101,7 @@ class _OuiDatabaseSectionState extends ConsumerState<_OuiDatabaseSection> {
         ),
         if (_status != null) ...[
           const SizedBox(height: 8),
-          Text(_status!, style: TextStyle(color: t.textSecondary, fontSize: 11)),
+          Text(_status!, style: TextStyle(color: t.textSecondary, fontSize: 12)),
         ],
       ],
     );
@@ -304,11 +304,10 @@ class _OtaSectionState extends ConsumerState<_OtaSection> {
           children: [
             Icon(Icons.hub_outlined, size: 14, color: t.textSecondary),
             const SizedBox(width: 6),
-            Text('REMOTE NODES',
+            Text('Remote nodes',
                 style: TextStyle(
                     color: t.textSecondary,
-                    fontSize: 11,
-                    letterSpacing: 2,
+                    fontSize: 12,
                     fontWeight: FontWeight.w600)),
             const Spacer(),
             if (_nodeRelease != null)
@@ -318,7 +317,7 @@ class _OtaSectionState extends ConsumerState<_OtaSection> {
                       : 'latest ${_nodeRelease!.tag} · On latest version',
                   style: TextStyle(
                       color: nodeNewer ? AppTheme.accent : t.textDim,
-                      fontSize: 10)),
+                      fontSize: 12)),
           ],
         ),
       ),
@@ -328,7 +327,7 @@ class _OtaSectionState extends ConsumerState<_OtaSection> {
         child: Row(
           children: [
             Text('Board for nodes on older firmware',
-                style: TextStyle(color: t.textSecondary, fontSize: 11)),
+                style: TextStyle(color: t.textSecondary, fontSize: 12)),
             const SizedBox(width: 10),
             DropdownButton<String>(
               value: _nodeBoard,
@@ -355,13 +354,13 @@ class _OtaSectionState extends ConsumerState<_OtaSection> {
         Padding(
           padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
           child: Text('No live nodes. Power them on and Check for Update.',
-              style: TextStyle(color: t.textDim, fontSize: 11)),
+              style: TextStyle(color: t.textDim, fontSize: 12)),
         )
       else if (_nodeRelease == null)
         Padding(
           padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
           child: Text('Tap Check for Update to fetch the latest node firmware.',
-              style: TextStyle(color: t.textDim, fontSize: 11)),
+              style: TextStyle(color: t.textDim, fontSize: 12)),
         ),
       for (final id in nodes)
         Padding(
@@ -375,7 +374,7 @@ class _OtaSectionState extends ConsumerState<_OtaSection> {
                     style: TextStyle(color: t.textPrimary, fontSize: 12)),
               ),
               Text(boardDisplayName(appState.nodeBoard(id)),
-                  style: TextStyle(color: t.textDim, fontSize: 11)),
+                  style: TextStyle(color: t.textDim, fontSize: 12)),
               const SizedBox(width: 8),
               Builder(builder: (_) {
                 final v = appState.nodeFwVersion(id);
@@ -388,7 +387,7 @@ class _OtaSectionState extends ConsumerState<_OtaSection> {
                   v == null ? 'v?' : 'v$v',
                   style: TextStyle(
                     color: outdated ? AppTheme.accent : t.textSecondary,
-                    fontSize: 11,
+                    fontSize: 12,
                     fontWeight: outdated ? FontWeight.w700 : FontWeight.w400,
                   ),
                 );
@@ -411,7 +410,7 @@ class _OtaSectionState extends ConsumerState<_OtaSection> {
         Padding(
           padding: const EdgeInsets.fromLTRB(16, 4, 16, 8),
           child: Text(_nodeStatus!,
-              style: TextStyle(color: t.textSecondary, fontSize: 11)),
+              style: TextStyle(color: t.textSecondary, fontSize: 12)),
         ),
     ];
   }
@@ -627,10 +626,10 @@ class _OtaSectionState extends ConsumerState<_OtaSection> {
           title: const Text('Board mismatch'),
           content: Text('$warn\n\nProceed anyway?'),
           actions: [
-            TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('CANCEL')),
+            TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
             TextButton(
               onPressed: () => Navigator.pop(ctx, true),
-              child: const Text('FLASH ANYWAY', style: TextStyle(color: AppTheme.error)),
+              child: Text('Flash anyway', style: TextStyle(color: AppTheme.error)),
             ),
           ],
         ),
@@ -678,7 +677,7 @@ class _OtaSectionState extends ConsumerState<_OtaSection> {
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 4, 16, 4),
             child: Text(_checkStatus!,
-                style: TextStyle(color: t.textSecondary, fontSize: 11)),
+                style: TextStyle(color: t.textSecondary, fontSize: 12)),
           ),
         Padding(
           padding: const EdgeInsets.fromLTRB(16, 4, 16, 4),
@@ -701,7 +700,7 @@ class _OtaSectionState extends ConsumerState<_OtaSection> {
                       _wifiConfigured
                           ? 'Manager joins saved WiFi to download the update'
                           : 'Save WiFi credentials in the WIFI NETWORK section above to use this',
-                      style: TextStyle(color: t.textSecondary, fontSize: 11),
+                      style: TextStyle(color: t.textSecondary, fontSize: 12),
                     ),
                   ],
                 ),
@@ -784,17 +783,16 @@ class _OtaSectionState extends ConsumerState<_OtaSection> {
           children: [
             Icon(Icons.dns_outlined, size: 14, color: t.textSecondary),
             const SizedBox(width: 6),
-            Text('FLEET UPDATE',
+            Text('Fleet update',
                 style: TextStyle(
                     color: t.textSecondary,
-                    fontSize: 11,
-                    letterSpacing: 2,
+                    fontSize: 12,
                     fontWeight: FontWeight.w600)),
             const Spacer(),
             Text('$done / ${_fleet.length}',
                 style: TextStyle(
                     color: _fleetRunning ? AppTheme.accent : AppTheme.success,
-                    fontSize: 10,
+                    fontSize: 12,
                     fontWeight: FontWeight.w700)),
           ],
         ),
@@ -810,7 +808,7 @@ class _OtaSectionState extends ConsumerState<_OtaSection> {
                   size: 14, color: AppTheme.accent),
               const SizedBox(width: 6),
               Text(f.label,
-                  style: const TextStyle(
+                  style: TextStyle(
                       color: AppTheme.accent,
                       fontSize: 12,
                       fontWeight: FontWeight.w700)),
@@ -835,13 +833,13 @@ class _OtaSectionState extends ConsumerState<_OtaSection> {
                   child: LinearProgressIndicator(
                     minHeight: 5,
                     backgroundColor: t.border,
-                    valueColor: const AlwaysStoppedAnimation<Color>(
+                    valueColor: AlwaysStoppedAnimation<Color>(
                         AppTheme.accent),
                   ),
                 ),
                 const SizedBox(height: 6),
                 Text(f.detail,
-                    style: TextStyle(color: t.textSecondary, fontSize: 11)),
+                    style: TextStyle(color: t.textSecondary, fontSize: 12)),
               ],
             ),
           ));
@@ -875,7 +873,7 @@ class _OtaSectionState extends ConsumerState<_OtaSection> {
                     style: TextStyle(color: t.textPrimary, fontSize: 12)),
               ),
               Text(f.detail,
-                  style: TextStyle(color: c, fontSize: 10)),
+                  style: TextStyle(color: c, fontSize: 12)),
             ],
           ),
         ));

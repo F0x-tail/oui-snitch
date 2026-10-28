@@ -102,7 +102,7 @@ class _WifiStatusPanelState extends ConsumerState<_WifiStatusPanel> {
               children: [
                 Text(title, style: TextStyle(color: color, fontSize: 12, fontWeight: FontWeight.w600)),
                 if (subtitle != null)
-                  Text(subtitle, style: TextStyle(color: t.textSecondary, fontSize: 11)),
+                  Text(subtitle, style: TextStyle(color: t.textSecondary, fontSize: 12)),
               ],
             ),
           ),
@@ -187,7 +187,7 @@ class _WifiEnableToggleState extends ConsumerState<_WifiEnableToggle> {
                   _enabled
                       ? 'Connects automatically using saved credentials'
                       : 'Off — node will not join WiFi until you enable it',
-                  style: TextStyle(color: t.textSecondary, fontSize: 11),
+                  style: TextStyle(color: t.textSecondary, fontSize: 12),
                 ),
               ],
             ),
@@ -226,9 +226,8 @@ class _ConfigAuthPill extends StatelessWidget {
           Icon(authMode == 0 ? Icons.lock_open : Icons.lock, size: 11, color: color),
           const SizedBox(width: 3),
           Text(label, style: TextStyle(
-            color: color, fontSize: 10,
-            fontWeight: FontWeight.w700, letterSpacing: 0.5,
-          )),
+            color: color, fontSize: 12,
+            fontWeight: FontWeight.w700)),
         ],
       ),
     );
@@ -290,7 +289,6 @@ class _MeshModeTile extends StatelessWidget {
                         color: color,
                         fontSize: 12,
                         fontWeight: FontWeight.w700,
-                        letterSpacing: 1.5,
                       ),
                     ),
                     const SizedBox(height: 2),
@@ -298,7 +296,7 @@ class _MeshModeTile extends StatelessWidget {
                       subtitle,
                       style: TextStyle(
                         color: t.textDim,
-                        fontSize: 11,
+                        fontSize: 12,
                       ),
                     ),
                   ],
@@ -390,7 +388,6 @@ class _NodeRenameRowState extends ConsumerState<_NodeRenameRow> {
                           color: t.textPrimary,
                           fontSize: 12,
                           fontWeight: FontWeight.w600,
-                          letterSpacing: 1,
                         ),
                       ),
                       Text(
@@ -399,8 +396,8 @@ class _NodeRenameRowState extends ConsumerState<_NodeRenameRow> {
                             : '${widget.sourceId}  ·  ${widget.detectionCount} dets',
                         style: TextStyle(
                           color: t.textDim,
-                          fontSize: 10,
-                          fontFamily: 'monospace',
+                          fontSize: 12,
+                          fontFamily: AppTheme.monoFamily,
                         ),
                       ),
                     ],

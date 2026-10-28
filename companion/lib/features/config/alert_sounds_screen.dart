@@ -32,10 +32,10 @@ class AlertSoundsScreen extends ConsumerWidget {
                 style: TextStyle(color: AppTheme.warning, fontSize: 12),
               ),
             ),
-          const ConfigSectionHeader(label: 'ASSIGNMENTS'),
+          const ConfigSectionHeader(label: 'Assignments'),
           for (final slot in kAlertSlots) _SlotRow(slot: slot, mel: mel),
           const SizedBox(height: 16),
-          const ConfigSectionHeader(label: 'MELODIES'),
+          const ConfigSectionHeader(label: 'Melodies'),
           for (final m in mel.melodies) _MelodyRow(melody: m),
           ConfigActionRow(
             icon: Icons.add,
@@ -128,7 +128,7 @@ class _MelodyRow extends ConsumerWidget {
                 Text(melody.name,
                     style: TextStyle(color: t.textPrimary, fontSize: 13, fontWeight: FontWeight.w600)),
                 Text(melody.notes.map((n) => n.label).join(' '),
-                    style: TextStyle(color: t.textDim, fontSize: 10, fontFamily: 'monospace')),
+                    style: TextStyle(color: t.textDim, fontSize: 12,)),
               ],
             ),
           ),
@@ -234,7 +234,7 @@ class _MelodyComposerScreenState extends ConsumerState<MelodyComposerScreen> {
             decoration: const InputDecoration(labelText: 'Name'),
           ),
           const SizedBox(height: 16),
-          ConfigSectionHeader(label: 'NOTES ${_notes.length}/$melodyMaxNotes'),
+          ConfigSectionHeader(label: 'Notes ${_notes.length}/$melodyMaxNotes'),
           for (var i = 0; i < _notes.length; i++)
             Container(
               margin: const EdgeInsets.only(bottom: 4),

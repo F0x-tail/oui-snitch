@@ -25,7 +25,7 @@ class ExportScreen extends ConsumerWidget {
 
     return Scaffold(
       backgroundColor: t.background,
-      appBar: AppBar(title: const Text('EXPORT')),
+      appBar: AppBar(title: const Text('Export')),
       body: Padding(
         padding: const EdgeInsets.all(16),
         child: Column(
@@ -52,7 +52,7 @@ class ExportScreen extends ConsumerWidget {
             ),
             const SizedBox(height: 24),
             _ExportButton(
-              label: 'WIGLE CSV 1.6',
+              label: 'WiGLE CSV 1.6',
               description: 'Compatible with wigle.net upload',
               icon: Icons.table_chart,
               onTap: count > 0 ? () => _exportWigleCsv(context, state.recentDetections, ref.read(ignoreListProvider), ref.read(bleManagerProvider).board) : null,
@@ -70,21 +70,20 @@ class ExportScreen extends ConsumerWidget {
               onTap: count > 0 ? () => _exportKml(context, state.recentDetections) : null,
             ),
             const SizedBox(height: 24),
-            Text('DATABASE',
+            Text('Database',
                 style: TextStyle(
                     color: t.textDim,
-                    fontSize: 11,
-                    letterSpacing: 1.5,
+                    fontSize: 12,
                     fontWeight: FontWeight.w600)),
             const SizedBox(height: 8),
             _ExportButton(
-              label: 'BACKUP DATABASE',
+              label: 'Backup database',
               description: 'Save full capture DB (.db) to Files / iCloud',
               icon: Icons.backup,
               onTap: () => _backupDatabase(context, ref),
             ),
             _ExportButton(
-              label: 'RESTORE DATABASE',
+              label: 'Restore database',
               description: 'Replace ALL data from a .db backup file',
               icon: Icons.settings_backup_restore,
               trailingIcon: Icons.folder_open,
@@ -147,10 +146,10 @@ class ExportScreen extends ConsumerWidget {
           actions: [
             TextButton(
                 onPressed: () => Navigator.pop(ctx, false),
-                child: const Text('CANCEL')),
+                child: const Text('Cancel')),
             TextButton(
                 onPressed: () => Navigator.pop(ctx, true),
-                child: Text('RESTORE',
+                child: Text('Restore',
                     style: TextStyle(color: AppTheme.accent))),
           ],
         );
@@ -273,11 +272,10 @@ class _ExportButton extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(label, style: TextStyle(
-                  fontSize: 13, fontWeight: FontWeight.w600, letterSpacing: 1,
-                  color: enabled ? t.textPrimary : t.textDim,
+                  fontSize: 13, fontWeight: FontWeight.w600, color: enabled ? t.textPrimary : t.textDim,
                 )),
                 Text(description, style: TextStyle(
-                  fontSize: 11, color: enabled ? t.textDim : t.textDim.withValues(alpha: 0.5),
+                  fontSize: 12, color: enabled ? t.textDim : t.textDim.withValues(alpha: 0.5),
                 )),
               ],
             )),

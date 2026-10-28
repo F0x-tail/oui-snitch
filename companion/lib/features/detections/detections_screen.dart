@@ -61,9 +61,9 @@ class _SegmentBar extends ConsumerWidget {
       ),
       child: SegmentedButton<DetectionsView>(
         segments: const [
-          ButtonSegment(value: DetectionsView.live, label: Text('LIVE')),
-          ButtonSegment(value: DetectionsView.detection, label: Text('DETECTION')),
-          ButtonSegment(value: DetectionsView.devices, label: Text('DEVICES')),
+          ButtonSegment(value: DetectionsView.live, label: Text('Live')),
+          ButtonSegment(value: DetectionsView.detection, label: Text('Detection')),
+          ButtonSegment(value: DetectionsView.devices, label: Text('Devices')),
         ],
         selected: {current},
         onSelectionChanged: (v) => ref.read(detectionsViewProvider.notifier).state = v.first,

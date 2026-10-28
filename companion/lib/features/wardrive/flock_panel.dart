@@ -69,8 +69,8 @@ class _FlockPanelState extends State<FlockPanel> {
                   '$count',
                   style: TextStyle(
                     color: count > 0 ? accent : t.textDim,
-                    fontSize: 11, fontWeight: FontWeight.w700,
-                    fontFamily: 'monospace',
+                    fontSize: 12, fontWeight: FontWeight.w700,
+                    fontFamily: AppTheme.monoFamily,
                   ),
                 ),
                 if (count > 0) ...[
@@ -118,7 +118,7 @@ class _Row extends StatelessWidget {
     final t = AppTheme.of(context);
     // Flock is Wi-Fi only now: the BLE engine was removed and its slot reused
     // for Axon, so every row in this panel is a Wi-Fi hit.
-    const color = AppTheme.flockWifi;
+    final color = AppTheme.flockWifi;
     final isRaven = d.flock?.isRaven ?? false;
     final rssiNorm = ((d.rssi + 100) / 70).clamp(0.0, 1.0);
     final rssiColor = Color.lerp(AppTheme.error, AppTheme.success, rssiNorm)!;
@@ -141,8 +141,8 @@ class _Row extends StatelessWidget {
               Text(
                 d.macAddress.toUpperCase(),
                 style: TextStyle(
-                  color: t.textPrimary, fontSize: 9,
-                  fontFamily: 'monospace', fontWeight: FontWeight.w500,
+                  color: t.textPrimary, fontSize: 12,
+                  fontFamily: AppTheme.monoFamily, fontWeight: FontWeight.w500,
                 ),
               ),
               const SizedBox(width: 4),
@@ -154,7 +154,7 @@ class _Row extends StatelessWidget {
                 ),
                 child: Text(
                   'W',
-                  style: TextStyle(color: color, fontSize: 7, fontWeight: FontWeight.w700),
+                  style: TextStyle(color: color, fontSize: 12, fontWeight: FontWeight.w700),
                 ),
               ),
               if (isRaven) ...[
@@ -165,8 +165,8 @@ class _Row extends StatelessWidget {
                     color: AppTheme.warning.withValues(alpha: 0.15),
                     borderRadius: BorderRadius.circular(2),
                   ),
-                  child: const Text('R',
-                    style: TextStyle(color: AppTheme.warning, fontSize: 7, fontWeight: FontWeight.w700)),
+                  child: Text('R',
+                    style: TextStyle(color: AppTheme.warning, fontSize: 12, fontWeight: FontWeight.w700)),
                 ),
               ],
               if (d.flock != null) ...[
@@ -181,15 +181,15 @@ class _Row extends StatelessWidget {
                       borderRadius: BorderRadius.circular(2),
                     ),
                     child: Text(_flockConfShort(fc),
-                      style: TextStyle(color: cc, fontSize: 7, fontWeight: FontWeight.w700)),
+                      style: TextStyle(color: cc, fontSize: 12, fontWeight: FontWeight.w700)),
                   );
                 }),
               ],
             ]),
           ),
           Text('${d.rssi}', style: TextStyle(
-            color: rssiColor, fontSize: 9,
-            fontFamily: 'monospace', fontWeight: FontWeight.w600,
+            color: rssiColor, fontSize: 12,
+            fontFamily: AppTheme.monoFamily, fontWeight: FontWeight.w600,
           )),
         ],
       ),

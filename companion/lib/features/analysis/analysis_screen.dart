@@ -71,7 +71,7 @@ class _AnalysisScreenState extends ConsumerState<AnalysisScreen> {
     return Scaffold(
       backgroundColor: t.background,
       appBar: AppBar(
-        title: const Text('ANALYSIS'),
+        title: const Text('Analysis'),
         actions: [
           IconButton(
             icon: const Icon(Icons.refresh, size: 20),
@@ -95,7 +95,7 @@ class _AnalysisScreenState extends ConsumerState<AnalysisScreen> {
                 ),
                 const SizedBox(height: 16),
                 if (_lastQuery.isNotEmpty) ...[
-                  _SectionLabel('RESULTS FOR "$_lastQuery"'),
+                  _SectionLabel('Results for "$_lastQuery"'),
                   const SizedBox(height: 8),
                   if (_results.isEmpty)
                     _Hint('Nothing in the local archive matches that.')
@@ -184,7 +184,7 @@ class _OverviewCard extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const _SectionLabel('ARCHIVE'),
+        const _SectionLabel('Archive'),
         const SizedBox(height: 8),
         _StatGrid(cells: [
           _Stat('Observations', _num(overview.detections)),
@@ -201,7 +201,7 @@ class _OverviewCard extends StatelessWidget {
         if (overview.first != null && overview.last != null)
           _KeyValue('Span', '${_date(overview.first!)} → ${_date(overview.last!)}'),
         const SizedBox(height: 20),
-        const _SectionLabel('BY ENGINE'),
+        const _SectionLabel('By engine'),
         const SizedBox(height: 8),
         ...engines.map((e) => _BarRow(
               label: e.key,
@@ -267,8 +267,8 @@ class _SightingTile extends ConsumerWidget {
             sighting.mac + (vendor != null ? '  ·  $vendor' : ''),
             style: TextStyle(
               color: t.textDim,
-              fontSize: 11,
-              fontFamily: 'monospace',
+              fontSize: 12,
+              fontFamily: AppTheme.monoFamily,
             ),
             overflow: TextOverflow.ellipsis,
           ),
@@ -287,7 +287,7 @@ class _SightingTile extends ConsumerWidget {
           const SizedBox(height: 6),
           Text(
             'First ${_stamp(sighting.firstSeen)} · last ${_stamp(sighting.lastSeen)}',
-            style: TextStyle(color: t.textDim, fontSize: 11),
+            style: TextStyle(color: t.textDim, fontSize: 12),
           ),
         ],
       ),
@@ -355,7 +355,7 @@ class _Stat extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 2),
-          Text(label, style: TextStyle(color: t.textDim, fontSize: 10)),
+          Text(label, style: TextStyle(color: t.textDim, fontSize: 12)),
         ],
       ),
     );
@@ -419,9 +419,8 @@ class _SectionLabel extends StatelessWidget {
       text,
       style: TextStyle(
         color: t.textDim,
-        fontSize: 11,
+        fontSize: 12,
         fontWeight: FontWeight.w700,
-        letterSpacing: 1.2,
       ),
     );
   }
@@ -442,7 +441,7 @@ class _Chip extends StatelessWidget {
         borderRadius: BorderRadius.circular(4),
         border: Border.all(color: t.border),
       ),
-      child: Text(text, style: TextStyle(color: t.textDim, fontSize: 10)),
+      child: Text(text, style: TextStyle(color: t.textDim, fontSize: 12)),
     );
   }
 }

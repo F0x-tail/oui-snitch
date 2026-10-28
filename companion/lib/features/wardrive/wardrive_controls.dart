@@ -32,10 +32,9 @@ class _IdleControls extends StatelessWidget {
             children: [
               Icon(Icons.straighten, size: 12, color: th.textDim),
               const SizedBox(width: 6),
-              Text('DIST', style: TextStyle(
-                color: th.textDim, fontSize: 8,
-                fontWeight: FontWeight.w600, letterSpacing: 1,
-              )),
+              Text('Dist', style: TextStyle(
+                color: th.textDim, fontSize: 12,
+                fontWeight: FontWeight.w600)),
               Expanded(
                 child: SliderTheme(
                   data: SliderThemeData(overlayShape: SliderComponentShape.noOverlay),
@@ -50,9 +49,9 @@ class _IdleControls extends StatelessWidget {
                   ),
                 ),
               ),
-              Text('${wd.markerDistanceM.round()}m', style: const TextStyle(
-                color: AppTheme.accent, fontSize: 10,
-                fontFamily: 'monospace', fontWeight: FontWeight.w600,
+              Text('${wd.markerDistanceM.round()}m', style: TextStyle(
+                color: AppTheme.accent, fontSize: 12,
+                fontFamily: AppTheme.monoFamily, fontWeight: FontWeight.w600,
               )),
             ],
           ),
@@ -80,10 +79,9 @@ class _IdleControls extends StatelessWidget {
                   children: [
                     Icon(Icons.history, size: 14, color: th.textSecondary),
                     const SizedBox(width: 6),
-                    Text('SESSIONS', style: TextStyle(
-                      color: th.textSecondary, fontSize: 11,
-                      fontWeight: FontWeight.w700, letterSpacing: 1,
-                    )),
+                    Text('Sessions', style: TextStyle(
+                      color: th.textSecondary, fontSize: 12,
+                      fontWeight: FontWeight.w700)),
                   ],
                 ),
               ),
@@ -133,8 +131,7 @@ class _Pill extends StatelessWidget {
         ),
         child: Text(label, style: TextStyle(
           color: t.background, fontSize: 13,
-          fontWeight: FontWeight.w700, letterSpacing: 1.5,
-        )),
+          fontWeight: FontWeight.w700)),
       ),
     );
   }
@@ -159,8 +156,7 @@ class _OutlinePill extends StatelessWidget {
         ),
         child: Text(label, style: TextStyle(
           color: color, fontSize: 13,
-          fontWeight: FontWeight.w700, letterSpacing: 1.5,
-        )),
+          fontWeight: FontWeight.w700)),
       ),
     );
   }
@@ -263,13 +259,13 @@ class _CompassResetBtn extends StatelessWidget {
                     size: const Size(28, 28),
                     painter: _CompassNeedlePainter(),
                   ),
-                  const Positioned(
+                  Positioned(
                     top: 2,
                     child: Text(
                       'N',
                       style: TextStyle(
                         color: AppTheme.accent,
-                        fontSize: 9,
+                        fontSize: 12,
                         fontWeight: FontWeight.w900,
                         height: 1,
                       ),
@@ -289,7 +285,7 @@ class _CompassNeedlePainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
     final c = Offset(size.width / 2, size.height / 2);
-    final red = Paint()..color = const Color(0xFFE54848);
+    final red = Paint()..color = AppTheme.error;
     final gray = Paint()..color = const Color(0xFF888888);
     final pathN = ui.Path()
       ..moveTo(c.dx, c.dy - 10)
@@ -386,9 +382,8 @@ class _LayerLoadingPill extends StatelessWidget {
             label,
             style: TextStyle(
               color: color,
-              fontSize: 10,
+              fontSize: 12,
               fontWeight: FontWeight.w700,
-              letterSpacing: 0.5,
             ),
           ),
         ],
@@ -493,7 +488,7 @@ class _MapStyleButton extends StatelessWidget {
               ),
               const Spacer(),
               if (df.loading)
-                const SizedBox(
+                SizedBox(
                   width: 12,
                   height: 12,
                   child: CircularProgressIndicator(
@@ -520,7 +515,7 @@ class _MapStyleButton extends StatelessWidget {
                 ),
                 const SizedBox(width: 8),
                 Text(
-                  'WDG TERRITORY',
+                  'WDG territory',
                   style: TextStyle(
                     color: wdg.showTerritories
                         ? AppTheme.wdgwars
@@ -589,18 +584,17 @@ class _ClassGroupChip extends StatelessWidget {
           child: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Text(label.toUpperCase(),
+              Text(label,
                   style: TextStyle(
                     color: t.textPrimary,
-                    fontSize: 11,
+                    fontSize: 12,
                     fontWeight: FontWeight.w700,
-                    letterSpacing: 1,
                   )),
               const SizedBox(width: 6),
               Text('$count',
                   style: TextStyle(
                     color: t.textDim,
-                    fontSize: 11,
+                    fontSize: 12,
                     fontWeight: FontWeight.w700,
                   )),
               const SizedBox(width: 6),
@@ -655,7 +649,7 @@ class _FocusedDetectionChip extends StatelessWidget {
                   overflow: TextOverflow.ellipsis,
                   style: TextStyle(
                     color: t.textPrimary,
-                    fontSize: 11,
+                    fontSize: 12,
                     fontWeight: FontWeight.w700,
                   ),
                 ),
@@ -668,12 +662,11 @@ class _FocusedDetectionChip extends StatelessWidget {
                 onTap: onShowAll,
                 child: Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 2, vertical: 4),
-                  child: Text('ALL ${classLabel.toUpperCase()}',
+                  child: Text('All $classLabel',
                       style: TextStyle(
                         color: detection.engine.color,
-                        fontSize: 8,
+                        fontSize: 12,
                         fontWeight: FontWeight.w700,
-                        letterSpacing: 1,
                       )),
                 ),
               ),
@@ -700,7 +693,7 @@ class _DetectionList extends StatelessWidget {
     final grouped = <String, List<Detection>>{};
     for (final d in detections) {
       final key = d.engine == Engine.wardrive
-          ? (d.isBleDetection ? 'WARDRIVE BLE' : 'WARDRIVE WIFI')
+          ? (d.isBleDetection ? 'Wardrive BLE' : 'Wardrive Wi-Fi')
           : d.engine.label;
       (grouped[key] ??= []).add(d);
     }
@@ -725,11 +718,10 @@ class _DetectionList extends StatelessWidget {
                       size: 10, color: entry.value.first.engine.color),
                   const SizedBox(width: 4),
                   Text(
-                    '${entry.key.toUpperCase()}  ${entry.value.length}',
+                    '${entry.key}  ${entry.value.length}',
                     style: TextStyle(
                       color: entry.value.first.engine.color,
-                      fontSize: 9, fontWeight: FontWeight.w700,
-                      letterSpacing: 1,
+                      fontSize: 12, fontWeight: FontWeight.w700,
                     ),
                   ),
                 ],
@@ -776,12 +768,11 @@ class _FeedToggle extends StatelessWidget {
             ),
             const SizedBox(width: 6),
             Text(
-              collapsed ? 'DEVICES  $count' : 'HIDE DEVICES',
+              collapsed ? 'Devices  $count' : 'Hide devices',
               style: TextStyle(
                 color: t.textDim,
-                fontSize: 10,
+                fontSize: 12,
                 fontWeight: FontWeight.w700,
-                letterSpacing: 1.2,
               ),
             ),
           ],
@@ -840,8 +831,8 @@ class _DetListRow extends ConsumerWidget {
           const SizedBox(width: 5),
           Text(d.macAddress.toUpperCase(),
             style: TextStyle(
-              color: t.textPrimary, fontSize: 9,
-              fontFamily: 'monospace', fontWeight: FontWeight.w500,
+              color: t.textPrimary, fontSize: 12,
+              fontFamily: AppTheme.monoFamily, fontWeight: FontWeight.w500,
             ),
           ),
           if (label.isNotEmpty) ...[
@@ -852,7 +843,7 @@ class _DetListRow extends ConsumerWidget {
                 color: vendor != null && d.ssid.isEmpty && d.deviceName.isEmpty
                     ? t.textDim
                     : t.textSecondary,
-                fontSize: 9,
+                fontSize: 12,
               ),
             )),
           ] else
@@ -862,14 +853,14 @@ class _DetListRow extends ConsumerWidget {
               padding: const EdgeInsets.only(right: 4),
               child: Text('\u00d7${d.count}',
                 style: TextStyle(
-                  color: t.textDim, fontSize: 8,
-                  fontFamily: 'monospace', fontWeight: FontWeight.w600,
+                  color: t.textDim, fontSize: 12,
+                  fontFamily: AppTheme.monoFamily, fontWeight: FontWeight.w600,
                 ),
               ),
             ),
           Text('${d.rssi}', style: TextStyle(
-            color: rssiColor, fontSize: 9,
-            fontFamily: 'monospace', fontWeight: FontWeight.w600,
+            color: rssiColor, fontSize: 12,
+            fontFamily: AppTheme.monoFamily, fontWeight: FontWeight.w600,
           )),
         ],
       ),
@@ -910,14 +901,12 @@ class _ClusterDot extends StatelessWidget {
     required this.secondaryEngineColor,
     required this.size,
     required this.count,
-    this.neon = false,
   });
   final Color fill;
   final Color engineColor;
   final Color? secondaryEngineColor;
   final double size;
   final int count;
-  final bool neon;
 
   @override
   Widget build(BuildContext context) {
@@ -934,7 +923,6 @@ class _ClusterDot extends StatelessWidget {
             fill: fill,
             engineColor: engineColor,
             ringColor: ringColor,
-            neon: neon,
           ),
           child: Padding(
             padding: EdgeInsets.all(size * 0.16 + 4),
@@ -946,22 +934,14 @@ class _ClusterDot extends StatelessWidget {
                         label,
                         textAlign: TextAlign.center,
                         style: TextStyle(
-                          color: neon ? ringColor : Colors.white,
+                          color: Colors.white,
                           fontWeight: FontWeight.w800,
-                          fontFamily: 'monospace',
                           fontSize: 13,
                           height: 1.0,
                           letterSpacing: -0.3,
-                          shadows: neon
-                              ? [
-                                  Shadow(
-                                    color: ringColor.withValues(alpha: 0.8),
-                                    blurRadius: 8,
-                                  ),
-                                ]
-                              : const [
-                                  Shadow(blurRadius: 3, color: Colors.black87),
-                                ],
+                          shadows: const [
+                            Shadow(blurRadius: 3, color: Colors.black87),
+                          ],
                         ),
                       ),
                     ),
@@ -979,94 +959,32 @@ class _ClusterPainter extends CustomPainter {
     required this.fill,
     required this.engineColor,
     required this.ringColor,
-    required this.neon,
   });
   final Color fill;
   final Color engineColor;
   final Color ringColor;
-  final bool neon;
 
   @override
   void paint(Canvas canvas, Size size) {
     final c = Offset(size.width / 2, size.height / 2);
     final r = math.min(size.width, size.height) / 2 - 8;
-    if (neon) {
-      // Glowing hex ring — synthwave wireframe vibe.
-      final path = ui.Path();
-      for (var i = 0; i < 6; i++) {
-        final a = (pi / 3) * i - pi / 2;
-        final x = c.dx + r * cos(a);
-        final y = c.dy + r * sin(a);
-        if (i == 0) {
-          path.moveTo(x, y);
-        } else {
-          path.lineTo(x, y);
-        }
-      }
-      path.close();
-      // Outer glow.
-      canvas.drawPath(
-        path,
-        Paint()
-          ..color = ringColor.withValues(alpha: 0.55)
-          ..style = PaintingStyle.stroke
-          ..strokeWidth = 6
-          ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 8),
-      );
-      // Inner fill.
-      canvas.drawPath(
-        path,
-        Paint()..color = ringColor.withValues(alpha: 0.10),
-      );
-      // Crisp ring.
-      canvas.drawPath(
-        path,
-        Paint()
-          ..color = ringColor
-          ..style = PaintingStyle.stroke
-          ..strokeWidth = 1.8,
-      );
-    } else {
-      canvas.drawCircle(
-        c,
-        r + 7,
-        Paint()
-          ..color = fill.withValues(alpha: 0.22)
-          ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 4),
-      );
-      // Body.
-      canvas.drawCircle(
-        c,
-        r,
-        Paint()
-          ..color = fill
-          ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 0),
-      );
-      // Glow.
-      canvas.drawCircle(
-        c,
-        r,
-        Paint()
-          ..color = fill.withValues(alpha: 0.45)
-          ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 6),
-      );
-      // Stroke.
-      canvas.drawCircle(
-        c,
-        r,
-        Paint()
-          ..color = ringColor
-          ..style = PaintingStyle.stroke
-          ..strokeWidth = 1.4,
-      );
-    }
+    // Body.
+    canvas.drawCircle(c, r, Paint()..color = fill);
+    // Stroke.
+    canvas.drawCircle(
+      c,
+      r,
+      Paint()
+        ..color = ringColor
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 1.4,
+    );
   }
 
   @override
   bool shouldRepaint(covariant _ClusterPainter old) =>
       old.fill != fill ||
       old.engineColor != engineColor ||
-      old.ringColor != ringColor ||
-      old.neon != neon;
+      old.ringColor != ringColor;
 }
 

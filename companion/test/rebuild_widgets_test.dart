@@ -23,12 +23,12 @@ void main() {
 
   testWidgets('CommandHeader stays one line with many chips at phone width', (tester) async {
     await tester.pumpWidget(_host(CommandHeader(
-      title: 'DEVICES',
+      title: 'Devices',
       count: '12/340',
-      chips: [for (var i = 0; i < 8; i++) CommandActiveChip(label: 'FILTER $i', color: AppTheme.accent, onClear: () {})],
+      chips: [for (var i = 0; i < 8; i++) CommandActiveChip(label: 'Filter $i', color: AppTheme.accent, onClear: () {})],
     )));
     expect(tester.takeException(), isNull);
-    final title = tester.getTopLeft(find.text('DEVICES')).dy;
+    final title = tester.getTopLeft(find.text('Devices')).dy;
     final count = tester.getTopLeft(find.text('12/340')).dy;
     expect((title - count).abs(), lessThan(4));
   });
@@ -39,7 +39,7 @@ void main() {
     )));
     await tester.pumpAndSettle();
     expect(find.text('No targets. Add one or import a list.'), findsOneWidget);
-    expect(find.text('SIGNATURES'), findsOneWidget);
+    expect(find.text('Signatures'), findsOneWidget);
 
     final container = ProviderScope.containerOf(tester.element(find.byType(WatchlistPanel)));
     await container.read(watchlistProvider).importText('40:48:6E,Nokia router\nAA:BB:CC:DD:EE:FF,My tag');

@@ -81,7 +81,7 @@ class WardriveStats extends ConsumerWidget {
           icon: Icons.flight,
           unique: stats.droneCount,
           total: null,
-          color: const Color(0xFF4AFFEA)
+          color: AppTheme.accent
         ),
       if (stats.detectorCount > 0)
         (
@@ -165,7 +165,7 @@ class _HeroCount extends StatelessWidget {
             color: color,
             fontSize: fontSize,
             fontWeight: FontWeight.w400,
-            fontFamily: 'monospace',
+            fontFamily: AppTheme.monoFamily,
             height: 1,
           ),
         ),
@@ -174,9 +174,9 @@ class _HeroCount extends StatelessWidget {
           total != null ? '$total total' : 'unique',
           style: TextStyle(
             color: t.textSecondary,
-            fontSize: 11,
+            fontSize: 12,
             fontWeight: FontWeight.w500,
-            fontFamily: 'monospace',
+            fontFamily: AppTheme.monoFamily,
           ),
         ),
       ],
@@ -211,9 +211,9 @@ class _InfoChip extends StatelessWidget {
             value,
             style: TextStyle(
               color: color,
-              fontSize: 11,
+              fontSize: 12,
               fontWeight: FontWeight.w500,
-              fontFamily: 'monospace',
+              fontFamily: AppTheme.monoFamily,
             ),
           ),
         ],
@@ -249,9 +249,9 @@ class _GpsChip extends StatelessWidget {
             accuracy > 0 ? '${accuracy.toStringAsFixed(0)}m' : '--',
             style: TextStyle(
               color: color,
-              fontSize: 11,
+              fontSize: 12,
               fontWeight: FontWeight.w600,
-              fontFamily: 'monospace',
+              fontFamily: AppTheme.monoFamily,
             ),
           ),
         ],

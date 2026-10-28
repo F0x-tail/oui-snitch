@@ -55,7 +55,7 @@ class DetectorScreen extends ConsumerWidget {
       body: ListView(
         children: [
           ListTile(
-            leading: const Icon(Icons.track_changes, color: AppTheme.detector),
+            leading: Icon(Icons.track_changes, color: AppTheme.detector),
             title: Text('Watching for',
                 style: TextStyle(color: t.textPrimary, fontSize: 15, fontWeight: FontWeight.w600)),
             subtitle: Text(
@@ -64,7 +64,7 @@ class DetectorScreen extends ConsumerWidget {
             ),
             trailing: Icon(Icons.chevron_right, color: t.textDim),
             onTap: () {
-              ref.read(configSectionRequestProvider.notifier).state = 'DETECTION';
+              ref.read(configSectionRequestProvider.notifier).state = 'Detection';
               // push, not go: this screen lives OUTSIDE the bottom-nav
               // ShellRoute, and go() replaces the whole stack — which destroyed
               // the back entry and made Back exit the app. The go('/config')
@@ -79,7 +79,7 @@ class DetectorScreen extends ConsumerWidget {
           // action only shows on an actual tracker hit, which makes it
           // impossible to test — or to confirm nothing fires — on demand.
           ListTile(
-            leading: const Icon(Icons.notifications_active,
+            leading: Icon(Icons.notifications_active,
                 color: AppTheme.detector),
             title: Text('FindMy Beeper',
                 style: TextStyle(
@@ -115,7 +115,7 @@ class DetectorScreen extends ConsumerWidget {
                     ? 'No GPS fix yet — detections cannot be placed on the map'
                     : '$withGps of ${detections.length} have coordinates'
                       '${ok ? '' : ' · the rest arrived before the first fix'}',
-                style: TextStyle(color: t.textDim, fontSize: 11),
+                style: TextStyle(color: t.textDim, fontSize: 12),
               ),
             );
           }),
@@ -135,7 +135,7 @@ class DetectorScreen extends ConsumerWidget {
             for (final d in detections.take(50)) DetectionRow(detection: d),
           const Divider(height: 1),
           ListTile(
-            leading: const Icon(Icons.history, color: AppTheme.detector),
+            leading: Icon(Icons.history, color: AppTheme.detector),
             title: Text('Detection',
                 style: TextStyle(color: t.textPrimary, fontSize: 15, fontWeight: FontWeight.w600)),
             subtitle: Text(
@@ -207,17 +207,17 @@ Future<void> _showBeeperSheet(BuildContext context, WidgetRef ref) async {
           if (recent.isNotEmpty) ...[
             const SizedBox(height: 10),
             Text('Recent trackers',
-                style: TextStyle(color: t.textDim, fontSize: 11)),
+                style: TextStyle(color: t.textDim, fontSize: 12)),
             for (final d in recent.take(5))
               ListTile(
                 dense: true,
                 contentPadding: EdgeInsets.zero,
-                leading: const Icon(Icons.track_changes,
+                leading: Icon(Icons.track_changes,
                     color: AppTheme.detector, size: 18),
                 title: Text(d.macAddress.toUpperCase(),
                     style: TextStyle(color: t.textPrimary, fontSize: 13)),
                 subtitle: Text('${d.rssi} dBm',
-                    style: TextStyle(color: t.textDim, fontSize: 11)),
+                    style: TextStyle(color: t.textDim, fontSize: 12)),
                 onTap: () => ctrl.text = d.macAddress.toUpperCase(),
               ),
           ],
@@ -227,7 +227,7 @@ Future<void> _showBeeperSheet(BuildContext context, WidgetRef ref) async {
                 backgroundColor: AppTheme.accent,
                 foregroundColor: AppTheme.background),
             icon: const Icon(Icons.notifications_active),
-            label: const Text('RING IT'),
+            label: const Text('Ring it'),
             onPressed: () async {
               final mac = ctrl.text.trim();
               Navigator.pop(ctx);

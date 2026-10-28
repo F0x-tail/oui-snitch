@@ -27,6 +27,16 @@ and are **not** relicensed by `LICENSE`:
 From the OpenDroneID reference implementation. Apache-2.0 requires that these
 notices and the licence travel with any redistribution.
 
+| File | Licence | Copyright |
+| --- | --- | --- |
+| `companion/assets/fonts/AtkinsonHyperlegible-*.ttf` | OFL-1.1 | 2020 Braille Institute of America, Inc. |
+| `companion/assets/fonts/AtkinsonHyperlegibleMono-*.ttf` | OFL-1.1 | 2020-2024 The Atkinson Hyperlegible Mono Project Authors |
+
+The app's typefaces, taken from the Google Fonts repository. The two Mono
+files are static Regular and SemiBold instances cut from the upstream variable
+font, which the OFL permits; neither font declares a Reserved Font Name. The
+licence texts sit next to the fonts as `OFL-*.txt` and ship inside the app.
+
 ## Build-time dependencies
 
 Fetched by PlatformIO and pub, not stored here, but linked into what you ship:

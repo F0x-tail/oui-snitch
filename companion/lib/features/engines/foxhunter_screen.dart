@@ -72,7 +72,7 @@ class _FoxhunterScreenState extends ConsumerState<FoxhunterScreen> {
     return Scaffold(
       backgroundColor: t.background,
       appBar: AppBar(
-        title: const Text('FOXHUNTER'),
+        title: const Text('Foxhunter'),
         actions: [
           Container(
             margin: const EdgeInsets.only(right: 8),
@@ -86,17 +86,16 @@ class _FoxhunterScreenState extends ConsumerState<FoxhunterScreen> {
             ),
             child: Text(
               isActive
-                  ? (channel > 0 ? 'CH $channel' : 'SCANNING')
-                  : 'OFF',
+                  ? (channel > 0 ? 'Ch $channel' : 'Scanning')
+                  : 'Off',
               style: TextStyle(
                 color: isActive ? AppTheme.foxhunter : t.textDim,
-                fontSize: 10, fontWeight: FontWeight.w700, letterSpacing: 1,
-              ),
+                fontSize: 12, fontWeight: FontWeight.w700),
             ),
           ),
           if (target != null)
             IconButton(
-              icon: const Icon(Icons.clear, color: AppTheme.error),
+              icon: Icon(Icons.clear, color: AppTheme.error),
               onPressed: _clearTarget,
               tooltip: 'Clear target',
             ),
@@ -120,7 +119,7 @@ class _FoxhunterScreenState extends ConsumerState<FoxhunterScreen> {
                 Expanded(
                   child: TextField(
                     controller: _macController,
-                    style: TextStyle(color: t.textPrimary, fontFamily: 'monospace', fontSize: 14),
+                    style: TextStyle(color: t.textPrimary, fontFamily: AppTheme.monoFamily, fontSize: 14),
                     decoration: const InputDecoration(
                       hintText: 'AA:BB:CC:DD:EE:FF',
                       labelText: 'Target MAC',
@@ -139,7 +138,7 @@ class _FoxhunterScreenState extends ConsumerState<FoxhunterScreen> {
                       ? ElevatedButton.styleFrom(
                           backgroundColor: AppTheme.error)
                       : null,
-                  child: Text(target != null ? 'STOP' : 'HUNT'),
+                  child: Text(target != null ? 'Stop' : 'Hunt'),
                 ),
               ],
             ),
@@ -160,7 +159,7 @@ class _FoxhunterScreenState extends ConsumerState<FoxhunterScreen> {
                     'Tracking: ${target.toUpperCase()}',
                     style: TextStyle(
                       color: isActive ? AppTheme.foxhunter : t.textDim,
-                      fontSize: 11, fontFamily: 'monospace',
+                      fontSize: 12,
                     ),
                   ),
                   if (channel > 0) ...[
@@ -168,7 +167,7 @@ class _FoxhunterScreenState extends ConsumerState<FoxhunterScreen> {
                     Text('ch$channel',
                       style: TextStyle(
                         color: AppTheme.foxhunter.withValues(alpha: 0.6),
-                        fontSize: 10, fontFamily: 'monospace',
+                        fontSize: 12, fontFamily: AppTheme.monoFamily,
                       ),
                     ),
                   ],
@@ -185,9 +184,9 @@ class _FoxhunterScreenState extends ConsumerState<FoxhunterScreen> {
                     mainAxisSize: MainAxisSize.min,
                     children: [
                       Text('$rssi', style: TextStyle(
-                        color: color, fontSize: 48, fontWeight: FontWeight.w300, fontFamily: 'monospace',
+                        color: color, fontSize: 48, fontWeight: FontWeight.w300, fontFamily: AppTheme.monoFamily,
                       )),
-                      Text(targetLost ? 'LOST' : 'dBm', style: TextStyle(
+                      Text(targetLost ? 'Lost' : 'dBm', style: TextStyle(
                         color: color.withValues(alpha: 0.6), fontSize: 14,
                       )),
                     ],
@@ -199,7 +198,7 @@ class _FoxhunterScreenState extends ConsumerState<FoxhunterScreen> {
             Text(targetLost ? 'TARGET LOST — scanning...' : 'Beep interval: ${intervalMs}ms',
                 style: TextStyle(
                   color: targetLost ? AppTheme.error.withValues(alpha: 0.7) : t.textDim,
-                  fontSize: 11, fontFamily: 'monospace',
+                  fontSize: 12,
                 )),
             const Spacer(),
           ],
@@ -247,8 +246,8 @@ class _NodeTargetPicker extends ConsumerWidget {
         children: [
           Icon(Icons.memory, color: t.textDim, size: 18),
           const SizedBox(width: 8),
-          Text('HUNT FROM',
-              style: TextStyle(color: t.textDim, fontSize: 11, letterSpacing: 1.5)),
+          Text('Hunt from',
+              style: TextStyle(color: t.textDim, fontSize: 12)),
           const SizedBox(width: 8),
           Expanded(
             child: DropdownButton<String>(

@@ -94,12 +94,12 @@ class _PcapLibraryScreenState extends ConsumerState<PcapLibraryScreen> {
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('CANCEL'),
+            child: const Text('Cancel'),
           ),
           TextButton(
             onPressed: () => Navigator.pop(ctx, true),
             style: TextButton.styleFrom(foregroundColor: AppTheme.error),
-            child: const Text('DELETE'),
+            child: const Text('Delete'),
           ),
         ],
       ),
@@ -127,12 +127,12 @@ class _PcapLibraryScreenState extends ConsumerState<PcapLibraryScreen> {
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('CANCEL'),
+            child: const Text('Cancel'),
           ),
           TextButton(
             onPressed: () => Navigator.pop(ctx, true),
             style: TextButton.styleFrom(foregroundColor: AppTheme.error),
-            child: const Text('DELETE ALL'),
+            child: const Text('Delete all'),
           ),
         ],
       ),
@@ -167,7 +167,7 @@ class _PcapLibraryScreenState extends ConsumerState<PcapLibraryScreen> {
     final actions = [
       IconButton(icon: const Icon(Icons.refresh), onPressed: _refresh),
       IconButton(
-        icon: const Icon(Icons.delete_sweep, color: AppTheme.error),
+        icon: Icon(Icons.delete_sweep, color: AppTheme.error),
         tooltip: 'Delete all',
         onPressed: _confirmDeleteAll,
       ),
@@ -178,7 +178,7 @@ class _PcapLibraryScreenState extends ConsumerState<PcapLibraryScreen> {
           ? null
           : AppBar(
               backgroundColor: t.background,
-              title: const Text('SAVED PCAPS'),
+              title: const Text('Saved PCAPs'),
               actions: actions,
             ),
       body: Container(
@@ -228,9 +228,7 @@ class _PcapLibraryScreenState extends ConsumerState<PcapLibraryScreen> {
                       return ListTile(
                         leading: Icon(
                           isBle ? Icons.bluetooth : Icons.wifi,
-                          color: isBle
-                              ? const Color(0xFFB44AFF)
-                              : const Color(0xFF4AB4FF),
+                          color: AppTheme.accent,
                         ),
                         title: Row(
                           children: [
@@ -240,7 +238,6 @@ class _PcapLibraryScreenState extends ConsumerState<PcapLibraryScreen> {
                                 style: TextStyle(
                                   color: t.textPrimary,
                                   fontSize: 12,
-                                  fontFamily: 'monospace',
                                 ),
                               ),
                             ),
@@ -256,13 +253,12 @@ class _PcapLibraryScreenState extends ConsumerState<PcapLibraryScreen> {
                                   ),
                                   borderRadius: BorderRadius.circular(4),
                                 ),
-                                child: const Text(
-                                  'LIVE',
+                                child: Text(
+                                  'Online',
                                   style: TextStyle(
                                     color: AppTheme.success,
-                                    fontSize: 9,
+                                    fontSize: 12,
                                     fontWeight: FontWeight.bold,
-                                    letterSpacing: 1.5,
                                   ),
                                 ),
                               ),
@@ -270,7 +266,7 @@ class _PcapLibraryScreenState extends ConsumerState<PcapLibraryScreen> {
                         ),
                         subtitle: Text(
                           '${_humanBytes(e.size)}  ·  ${AppTime.dateTimeSeconds(e.modified)}',
-                          style: TextStyle(color: t.textDim, fontSize: 11),
+                          style: TextStyle(color: t.textDim, fontSize: 12),
                         ),
                         trailing: Row(
                           mainAxisSize: MainAxisSize.min,
@@ -284,7 +280,7 @@ class _PcapLibraryScreenState extends ConsumerState<PcapLibraryScreen> {
                               onPressed: () => _share(e.file),
                             ),
                             IconButton(
-                              icon: const Icon(
+                              icon: Icon(
                                 Icons.delete_outline,
                                 size: 18,
                                 color: AppTheme.error,

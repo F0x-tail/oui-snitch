@@ -72,3 +72,16 @@ flutter:
     - assets/bt_sig/
     - assets/classify/
     - assets/icons/
+    - assets/fonts/OFL-AtkinsonHyperlegible.txt
+    - assets/fonts/OFL-AtkinsonHyperlegibleMono.txt
+  fonts:
+    - family: AtkinsonHyperlegible
+      fonts:
+        - asset: assets/fonts/AtkinsonHyperlegible-Regular.ttf
+        - asset: assets/fonts/AtkinsonHyperlegible-Bold.ttf
+          weight: 700
+    - family: AtkinsonHyperlegibleMono
+      fonts:
+        - asset: assets/fonts/AtkinsonHyperlegibleMono-Regular.ttf
+        - asset: assets/fonts/AtkinsonHyperlegibleMono-SemiBold.ttf
+          weight: 600

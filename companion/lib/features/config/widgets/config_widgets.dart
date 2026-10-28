@@ -13,9 +13,8 @@ class ConfigSectionHeader extends StatelessWidget {
     return Padding(
       padding: EdgeInsets.only(bottom: 8, top: topPadding),
       child: Text(label, style: TextStyle(
-        color: t.textDim, fontSize: 10,
-        fontWeight: FontWeight.w700, letterSpacing: 2,
-      )),
+        color: t.textDim, fontSize: 12,
+        fontWeight: FontWeight.w700)),
     );
   }
 }
@@ -61,7 +60,7 @@ class ConfigToggleRow extends StatelessWidget {
                 )),
                 if (subtitle != null)
                   Text(subtitle!, style: TextStyle(
-                    color: t.textDim, fontSize: 10,
+                    color: t.textDim, fontSize: 12,
                   )),
               ],
             ),
@@ -124,8 +123,8 @@ class ConfigSliderRow extends StatelessWidget {
               )),
               const Spacer(),
               Text(valueLabel, style: TextStyle(
-                color: c, fontSize: 11,
-                fontFamily: 'monospace', fontWeight: FontWeight.w600,
+                color: c, fontSize: 12,
+ fontWeight: FontWeight.w600,
               )),
             ],
           ),
@@ -253,7 +252,7 @@ class ConfigActionRow extends StatelessWidget {
                     )),
                     if (subtitle != null)
                       Text(subtitle!, style: TextStyle(
-                        color: t.textDim, fontSize: 10,
+                        color: t.textDim, fontSize: 12,
                       )),
                   ],
                 ),
@@ -314,7 +313,7 @@ class ConfigCompactButton extends StatelessWidget {
                 overflow: TextOverflow.ellipsis,
                 style: TextStyle(
                   color: destructive ? AppTheme.error : t.textPrimary,
-                  fontSize: 11,
+                  fontSize: 12,
                   fontWeight: FontWeight.w600,
                 ),
               ),
@@ -464,9 +463,8 @@ class _ConfigNumberFieldState extends State<ConfigNumberField> {
               focusNode: _focusNode,
               keyboardType: TextInputType.number,
               textInputAction: TextInputAction.done,
-              style: const TextStyle(
+              style: TextStyle(
                 color: AppTheme.accent,
-                fontFamily: 'monospace',
                 fontSize: 13,
                 fontWeight: FontWeight.w600,
               ),
@@ -476,7 +474,7 @@ class _ConfigNumberFieldState extends State<ConfigNumberField> {
                 border: InputBorder.none,
                 suffixText: widget.suffix,
                 suffixStyle: TextStyle(
-                  color: t.textDim, fontSize: 11, fontFamily: 'monospace',
+                  color: t.textDim, fontSize: 12, fontFamily: AppTheme.monoFamily,
                 ),
                 contentPadding: const EdgeInsets.symmetric(vertical: 4),
               ),

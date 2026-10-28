@@ -83,7 +83,7 @@ class DetectionRow extends ConsumerWidget {
                           text: headline,
                           style: TextStyle(
                             color: detection.isBleDetection
-                                ? const Color(0xFF4FA8FF)
+                                ? AppTheme.info
                                 : t.textPrimary,
                             fontSize: 15,
                             fontFamily: headlineIsMac ? 'monospace' : null,
@@ -129,7 +129,7 @@ class DetectionRow extends ConsumerWidget {
                       child: Row(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          const Icon(Icons.hub,
+                          Icon(Icons.hub,
                               size: 11, color: AppTheme.warning),
                           const SizedBox(width: 3),
                           Flexible(
@@ -139,10 +139,10 @@ class DetectionRow extends ConsumerWidget {
                                   : detection.sourceNodeId,
                               overflow: TextOverflow.ellipsis,
                               softWrap: false,
-                              style: const TextStyle(
+                              style: TextStyle(
                                 color: AppTheme.warning,
-                                fontSize: 11,
-                                fontFamily: 'monospace',
+                                fontSize: 12,
+                                fontFamily: AppTheme.monoFamily,
                                 fontWeight: FontWeight.w700,
                               ),
                             ),
@@ -180,8 +180,8 @@ class DetectionRow extends ConsumerWidget {
                   Text(timeStr,
                       style: TextStyle(
                         color: t.textDim,
-                        fontSize: 11,
-                        fontFamily: 'monospace',
+                        fontSize: 12,
+                        fontFamily: AppTheme.monoFamily,
                         fontWeight: FontWeight.w700,
                       )),
                   const SizedBox(width: 6),
@@ -310,7 +310,7 @@ void showDetectionDetails(
               maskMac(detection.macAddress.toUpperCase(), privacy),
               style: TextStyle(
                 color: t.textPrimary, fontSize: 14,
-                fontFamily: 'monospace', fontWeight: FontWeight.w600,
+                fontFamily: AppTheme.monoFamily, fontWeight: FontWeight.w600,
               ),
             ),
             if (vendor != null)
@@ -328,11 +328,11 @@ void showDetectionDetails(
             const SizedBox(height: 12),
             if (connected)
               ListTile(
-                leading: const Icon(Icons.gps_fixed, color: AppTheme.foxhunter),
-                title: const Text('Foxhunt This Device',
+                leading: Icon(Icons.gps_fixed, color: AppTheme.foxhunter),
+                title: Text('Foxhunt This Device',
                     style: TextStyle(color: AppTheme.foxhunter)),
                 subtitle: Text('Track by RSSI proximity',
-                    style: TextStyle(color: t.textDim, fontSize: 11)),
+                    style: TextStyle(color: t.textDim, fontSize: 12)),
                 onTap: () {
                   Navigator.pop(ctx);
                   detectionStartFoxhunt(context, ref, detection);
@@ -343,14 +343,14 @@ void showDetectionDetails(
             // user-initiated.
             if (connected && detection.method == 'tracker')
               ListTile(
-                leading: const Icon(Icons.notifications_active,
+                leading: Icon(Icons.notifications_active,
                     color: AppTheme.detector),
-                title: const Text('Make it beep',
+                title: Text('Make it beep',
                     style: TextStyle(color: AppTheme.detector)),
                 subtitle: Text(
                     'Ring this tracker to locate it. Works only on a tracker '
                     'away from its owner, and the device must stay in range.',
-                    style: TextStyle(color: t.textDim, fontSize: 11)),
+                    style: TextStyle(color: t.textDim, fontSize: 12)),
                 onTap: () async {
                   Navigator.pop(ctx);
                   final ok = await ref
@@ -368,11 +368,11 @@ void showDetectionDetails(
               ),
             if (showMapAction && detection.latitude != null)
               ListTile(
-                leading: const Icon(Icons.map, color: AppTheme.gpsGood),
-                title: const Text('Show on Map',
+                leading: Icon(Icons.map, color: AppTheme.gpsGood),
+                title: Text('Show on Map',
                     style: TextStyle(color: AppTheme.gpsGood)),
                 subtitle: Text('Zoom to detection location',
-                    style: TextStyle(color: t.textDim, fontSize: 11)),
+                    style: TextStyle(color: t.textDim, fontSize: 12)),
                 onTap: () {
                   Navigator.pop(ctx);
                   if (onShowMap != null) {
@@ -386,11 +386,11 @@ void showDetectionDetails(
             // to do it; the ignore list was previously only reachable from
             // Config, which meant retyping a MAC you were already staring at.
             ListTile(
-              leading: const Icon(Icons.block, color: AppTheme.warning),
+              leading: Icon(Icons.block, color: AppTheme.warning),
               title: Text('Ignore this device',
                   style: TextStyle(color: t.textPrimary)),
               subtitle: Text('Stop logging and alerting on this MAC',
-                  style: TextStyle(color: t.textDim, fontSize: 11)),
+                  style: TextStyle(color: t.textDim, fontSize: 12)),
               onTap: () async {
                 Navigator.pop(ctx);
                 final mac = detection.macAddress.toUpperCase();
@@ -409,12 +409,12 @@ void showDetectionDetails(
             ),
             if (detection.macAddress.length >= 8)
               ListTile(
-                leading: const Icon(Icons.block_flipped, color: AppTheme.warning),
+                leading: Icon(Icons.block_flipped, color: AppTheme.warning),
                 title: Text('Ignore this whole vendor',
                     style: TextStyle(color: t.textPrimary)),
                 subtitle: Text(
                     'Every device with OUI ${detection.macAddress.substring(0, 8).toUpperCase()}',
-                    style: TextStyle(color: t.textDim, fontSize: 11)),
+                    style: TextStyle(color: t.textDim, fontSize: 12)),
                 onTap: () async {
                   Navigator.pop(ctx);
                   final oui = detection.macAddress.substring(0, 8).toUpperCase();
@@ -447,11 +447,11 @@ void showDetectionDetails(
               },
             ),
             ListTile(
-              leading: const Icon(Icons.delete_outline, color: AppTheme.error),
-              title: const Text('Delete Detection',
+              leading: Icon(Icons.delete_outline, color: AppTheme.error),
+              title: Text('Delete Detection',
                   style: TextStyle(color: AppTheme.error)),
               subtitle: Text('Remove all MACs of this device',
-                  style: TextStyle(color: t.textDim, fontSize: 11)),
+                  style: TextStyle(color: t.textDim, fontSize: 12)),
               onTap: () {
                 Navigator.pop(ctx);
                 if (onDelete != null) {
@@ -689,7 +689,7 @@ class _DetailSummary extends ConsumerWidget {
               'tap any row to copy',
               style: TextStyle(
                 color: t.textDim,
-                fontSize: 9,
+                fontSize: 12,
                 fontStyle: FontStyle.italic,
               ),
             ),
@@ -734,7 +734,7 @@ class _DetailSummary extends ConsumerWidget {
                   label,
                   style: TextStyle(
                     color: t.textDim,
-                    fontSize: 11,
+                    fontSize: 12,
                     fontWeight: FontWeight.w500,
                   ),
                 ),
@@ -744,8 +744,8 @@ class _DetailSummary extends ConsumerWidget {
                   value,
                   style: TextStyle(
                     color: t.textPrimary,
-                    fontSize: 11,
-                    fontFamily: 'monospace',
+                    fontSize: 12,
+                    fontFamily: AppTheme.monoFamily,
                   ),
                 ),
               ),
@@ -870,8 +870,8 @@ List<String> _flockSignalLabels(FlockExtension? flock) {
   if (flock == null || flock.signals == 0) return const [];
   return [
     if (flock.hasSignal(FlockSignal.oui)) 'OUI',
-    if (flock.hasSignal(FlockSignal.name)) 'NAME',
-    if (flock.hasSignal(FlockSignal.serial)) 'SERIAL',
+    if (flock.hasSignal(FlockSignal.name)) 'Name',
+    if (flock.hasSignal(FlockSignal.serial)) 'Serial',
     if (flock.hasSignal(FlockSignal.mfg)) 'XUNTONG',
     if (flock.hasSignal(FlockSignal.tn)) 'TN',
     if (flock.hasSignal(FlockSignal.ravenUuid)) 'RAVEN-UUID',
@@ -895,31 +895,31 @@ String methodLabel(String method) => switch (method) {
   'oui_addr2' => 'ADDR2 (SRC)',
   'oui_addr3' => 'ADDR3 (BSSID)',
   'ssid' => 'SSID',
-  'wildcard_probe' => 'PROBE REQ',
+  'wildcard_probe' => 'Probe req',
   'oui_match' => 'BLE OUI',
-  'name_match' => 'BLE NAME',
-  'mfg_id' => 'MFG DATA',
-  'raven_uuid' => 'RAVEN UUID',
-  'gatt_uuid' => 'FLOCK GATT',
-  'nordic_dfu' => 'NORDIC DFU',
-  'tracker' => 'FIND MY',
-  'flipper' => 'FLIPPER',
-  'deauth_storm' => 'DEAUTH',
-  'probe_ssid' => 'PROBE',
-  'pwnagotchi' => 'PWNAGOTCHI',
-  'glasses' => 'META GLASSES',
-  'axon' => 'AXON',
-  'camera' => 'CAMERA',
-  'evil_twin' => 'EVIL TWIN',
-  'pineapple' => 'KARMA AP',
-  'mesh' => 'MESH NODE',
-  'ble_watchlist' => 'WATCHLIST',
-  'wifi_watchlist' => 'WATCHLIST',
-  'ble_proximity' => 'PROXIMITY',
-  'wifi_proximity' => 'PROXIMITY',
-  'wifi_ap' => 'WIFI AP',
-  'ble_adv' => 'BLE ADV',
-  'unitree_ble' => 'UNITREE',
+  'name_match' => 'BLE name',
+  'mfg_id' => 'MFG data',
+  'raven_uuid' => 'Raven UUID',
+  'gatt_uuid' => 'Flock GATT',
+  'nordic_dfu' => 'Nordic DFU',
+  'tracker' => 'Find My',
+  'flipper' => 'Flipper',
+  'deauth_storm' => 'Deauth',
+  'probe_ssid' => 'Probe',
+  'pwnagotchi' => 'Pwnagotchi',
+  'glasses' => 'Meta glasses',
+  'axon' => 'Axon',
+  'camera' => 'Camera',
+  'evil_twin' => 'Evil twin',
+  'pineapple' => 'Karma AP',
+  'mesh' => 'Mesh node',
+  'ble_watchlist' => 'Watchlist',
+  'wifi_watchlist' => 'Watchlist',
+  'ble_proximity' => 'Proximity',
+  'wifi_proximity' => 'Proximity',
+  'wifi_ap' => 'Wi-Fi AP',
+  'ble_adv' => 'BLE adv',
+  'unitree_ble' => 'Unitree',
   'pcap' => 'PCAP',
   _ => method.toUpperCase(),
 };
@@ -942,8 +942,7 @@ class _FlockConfidenceLine extends StatelessWidget {
       confidence.label(method),
       style: TextStyle(
         color: color,
-        fontSize: 11,
-        fontFamily: 'monospace',
+        fontSize: 12,
         fontWeight: FontWeight.w800,
       ),
     );
@@ -969,7 +968,7 @@ class _RssiBlock extends StatelessWidget {
           style: TextStyle(
             color: color,
             fontSize: 16,
-            fontFamily: 'monospace',
+            fontFamily: AppTheme.monoFamily,
             fontWeight: FontWeight.w800,
             height: 1.0,
           ),
@@ -1018,10 +1017,9 @@ class _DetailLine extends StatelessWidget {
         detection.macAddress.toUpperCase(),
         style: TextStyle(
           color: t.textSecondary,
-          fontSize: 11,
-          fontFamily: 'monospace',
+          fontSize: 12,
+          fontFamily: AppTheme.monoFamily,
           fontWeight: FontWeight.w700,
-          letterSpacing: 0.5,
         ),
       ));
       tokens.add(_pipe());
@@ -1035,7 +1033,7 @@ class _DetailLine extends StatelessWidget {
     ));
     if (OuiLookupService.isLawEnforcement(detection.macAddress)) {
       tokens.add(const SizedBox(width: 5));
-      tokens.add(const Icon(Icons.local_police, size: 13, color: AppTheme.warning));
+      tokens.add(Icon(Icons.local_police, size: 13, color: AppTheme.warning));
     }
     final isGenericMethod =
         detection.method == 'wifi_ap' || detection.method == 'ble_adv';
@@ -1045,10 +1043,8 @@ class _DetailLine extends StatelessWidget {
       tokens.add(Text(discovery,
           style: TextStyle(
             color: engine.color,
-            fontSize: 11,
-            fontFamily: 'monospace',
+            fontSize: 12,
             fontWeight: FontWeight.w800,
-            letterSpacing: 0.3,
           )));
     }
     if (detection.channel > 0) {
@@ -1063,11 +1059,10 @@ class _DetailLine extends StatelessWidget {
       tokens.add(_pipe());
       tokens.add(Icon(Icons.memory, size: 12, color: AppTheme.warning));
       tokens.add(const SizedBox(width: 3));
-      tokens.add(Text('RAVEN',
+      tokens.add(Text('Raven',
           style: TextStyle(
               color: AppTheme.warning,
-              fontSize: 11,
-              fontFamily: 'monospace',
+              fontSize: 12,
               fontWeight: FontWeight.w800)));
       final fw = detection.flock?.ravenFirmware;
       if (fw != null && fw.isNotEmpty) {
@@ -1079,11 +1074,10 @@ class _DetailLine extends StatelessWidget {
       tokens.add(_pipe());
       tokens.add(Icon(Icons.verified_user, size: 12, color: AppTheme.success));
       tokens.add(const SizedBox(width: 3));
-      tokens.add(Text('VALIDATED',
+      tokens.add(Text('Validated',
           style: TextStyle(
               color: AppTheme.success,
-              fontSize: 11,
-              fontFamily: 'monospace',
+              fontSize: 12,
               fontWeight: FontWeight.w800)));
     }
     if (detection.unipwn != null) {
@@ -1093,18 +1087,17 @@ class _DetailLine extends StatelessWidget {
       tokens.add(Text(detection.unipwn!.robotType.toUpperCase(),
           style: TextStyle(
               color: Engine.uniPwn.color,
-              fontSize: 11,
-              fontFamily: 'monospace',
+              fontSize: 12,
+              fontFamily: AppTheme.monoFamily,
               fontWeight: FontWeight.w800)));
       if (detection.unipwn!.exploited) {
         tokens.add(_pipe());
         tokens.add(Icon(Icons.verified, size: 12, color: AppTheme.success));
         tokens.add(const SizedBox(width: 3));
-        tokens.add(Text('PWNED',
+        tokens.add(Text('Pwned',
             style: TextStyle(
                 color: AppTheme.success,
-                fontSize: 11,
-                fontFamily: 'monospace',
+                fontSize: 12,
                 fontWeight: FontWeight.w800)));
       }
     }
@@ -1115,8 +1108,8 @@ class _DetailLine extends StatelessWidget {
       tokens.add(Text(detection.odid!.uavId!,
           style: TextStyle(
               color: Engine.skySpy.color,
-              fontSize: 11,
-              fontFamily: 'monospace',
+              fontSize: 12,
+              fontFamily: AppTheme.monoFamily,
               fontWeight: FontWeight.w700)));
       if (detection.odid!.altitudeMsl != null) {
         tokens.add(_pipe());
@@ -1130,12 +1123,11 @@ class _DetailLine extends StatelessWidget {
         tokens.add(Text(d.filterDescription!,
             style: TextStyle(
                 color: AppTheme.accent,
-                fontSize: 11,
-                fontFamily: 'monospace',
+                fontSize: 12,
                 fontWeight: FontWeight.w700)));
       }
       tokens.add(_pipe());
-      tokens.add(_mono(d.isFullMac ? 'FULL' : 'OUI'));
+      tokens.add(_mono(d.isFullMac ? 'Full' : 'OUI'));
     }
     return Row(mainAxisSize: MainAxisSize.min, children: tokens);
   }
@@ -1143,8 +1135,8 @@ class _DetailLine extends StatelessWidget {
   Widget _mono(String s) => Text(s,
       style: TextStyle(
         color: t.textDim,
-        fontSize: 11,
-        fontFamily: 'monospace',
+        fontSize: 12,
+        fontFamily: AppTheme.monoFamily,
         fontWeight: FontWeight.w600,
       ));
 
@@ -1153,7 +1145,7 @@ class _DetailLine extends StatelessWidget {
         child: Text('•',
             style: TextStyle(
               color: t.textDim.withValues(alpha: 0.45),
-              fontSize: 10,
+              fontSize: 12,
               fontWeight: FontWeight.w700,
             )),
       );
@@ -1161,7 +1153,7 @@ class _DetailLine extends StatelessWidget {
 }
 
 (String, Color) _authMeta(int mode) => switch (mode) {
-      0 => ('OPEN', AppTheme.error),
+      0 => ('Open', AppTheme.error),
       1 => ('WEP', AppTheme.warning),
       2 => ('WPA', AppTheme.warning),
       3 => ('WPA2', AppTheme.success),
@@ -1194,10 +1186,8 @@ class _AuthPill extends StatelessWidget {
           Text(label,
               style: TextStyle(
                 color: color,
-                fontSize: 10,
-                fontFamily: 'monospace',
+                fontSize: 12,
                 fontWeight: FontWeight.w800,
-                letterSpacing: 0.5,
               )),
         ],
       ),
@@ -1257,7 +1247,7 @@ class _FaaLookupTileState extends ConsumerState<_FaaLookupTile> {
       children: [
         ListTile(
           leading: _loading
-              ? const SizedBox(
+              ? SizedBox(
                   width: 20,
                   height: 20,
                   child: CircularProgressIndicator(
@@ -1265,17 +1255,17 @@ class _FaaLookupTileState extends ConsumerState<_FaaLookupTile> {
                     color: AppTheme.skySpy,
                   ),
                 )
-              : const Icon(Icons.policy_outlined, color: AppTheme.skySpy),
+              : Icon(Icons.policy_outlined, color: AppTheme.skySpy),
           title: Text(
             'FAA RemoteID Lookup',
             style: TextStyle(color: widget.t.textPrimary),
           ),
           subtitle: _error != null
               ? Text(_error!,
-                  style: const TextStyle(color: AppTheme.error, fontSize: 11))
+                  style: TextStyle(color: AppTheme.error, fontSize: 12))
               : Text('Query ${widget.uasId}',
-                  style: TextStyle(color: widget.t.textDim, fontSize: 11,
-                      fontFamily: 'monospace'),
+                  style: TextStyle(color: widget.t.textDim, fontSize: 12,
+                      fontFamily: AppTheme.monoFamily),
                   overflow: TextOverflow.ellipsis),
           onTap: _loading ? null : _lookup,
         ),
@@ -1329,22 +1319,21 @@ class _FaaResultSheet extends StatelessWidget {
             children: [
               Row(
                 children: [
-                  const Icon(Icons.policy_outlined, color: AppTheme.skySpy, size: 18),
+                  Icon(Icons.policy_outlined, color: AppTheme.skySpy, size: 18),
                   const SizedBox(width: 8),
                   Expanded(
                     child: Text(
-                      'FAA REGISTRATION',
+                      'FAA registration',
                       style: TextStyle(
                         color: AppTheme.skySpy,
                         fontSize: 14,
                         fontWeight: FontWeight.w700,
-                        letterSpacing: 1,
                       ),
                     ),
                   ),
                   Text(cacheLabel,
                       style: TextStyle(
-                          color: t.textDim, fontSize: 10, fontStyle: FontStyle.italic)),
+                          color: t.textDim, fontSize: 12, fontStyle: FontStyle.italic)),
                 ],
               ),
               const SizedBox(height: 4),
@@ -1352,8 +1341,8 @@ class _FaaResultSheet extends StatelessWidget {
                 uasId,
                 style: TextStyle(
                     color: t.textSecondary,
-                    fontSize: 11,
-                    fontFamily: 'monospace'),
+                    fontSize: 12,
+                    fontFamily: AppTheme.monoFamily),
               ),
               const SizedBox(height: 12),
               if (rows.isEmpty)
@@ -1411,15 +1400,15 @@ class _FaaResultSheet extends StatelessWidget {
                 child: Text(r.label,
                     style: TextStyle(
                         color: t.textDim,
-                        fontSize: 11,
+                        fontSize: 12,
                         fontWeight: FontWeight.w500)),
               ),
               Expanded(
                 child: Text(r.value,
                     style: TextStyle(
                         color: t.textPrimary,
-                        fontSize: 11,
-                        fontFamily: 'monospace')),
+                        fontSize: 12,
+                        fontFamily: AppTheme.monoFamily)),
               ),
             ],
           ),
@@ -1464,7 +1453,7 @@ class _TransportBadge extends StatelessWidget {
   Widget build(BuildContext context) {
     final label = _odidTransportLabel(method);
     final color = switch (method) {
-      'odid_ble' => const Color(0xFF4FA8FF),
+      'odid_ble' => AppTheme.info,
       'odid_nan' => Engine.skySpy.color,
       'odid_beacon' => Engine.skySpy.color.withValues(alpha: 0.7),
       _ => Engine.skySpy.color,
@@ -1480,10 +1469,8 @@ class _TransportBadge extends StatelessWidget {
         label,
         style: TextStyle(
           color: color,
-          fontSize: 9,
-          fontFamily: 'monospace',
+          fontSize: 12,
           fontWeight: FontWeight.w800,
-          letterSpacing: 0.3,
         ),
       ),
     );
@@ -1545,9 +1532,8 @@ class DroneDetectionRow extends ConsumerWidget {
                       style: TextStyle(
                         color: Engine.skySpy.color,
                         fontSize: 14,
-                        fontFamily: 'monospace',
+                        fontFamily: AppTheme.monoFamily,
                         fontWeight: FontWeight.w700,
-                        letterSpacing: 0.5,
                         height: 1.1,
                       ),
                     ),
@@ -1564,17 +1550,17 @@ class DroneDetectionRow extends ConsumerWidget {
                       child: Row(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          const Icon(Icons.hub, size: 11, color: AppTheme.warning),
+                          Icon(Icons.hub, size: 11, color: AppTheme.warning),
                           const SizedBox(width: 3),
                           Flexible(
                             child: Text(
                               nodeLabel.isNotEmpty ? nodeLabel : d.sourceNodeId,
                               overflow: TextOverflow.ellipsis,
                               softWrap: false,
-                              style: const TextStyle(
+                              style: TextStyle(
                                 color: AppTheme.warning,
-                                fontSize: 11,
-                                fontFamily: 'monospace',
+                                fontSize: 12,
+                                fontFamily: AppTheme.monoFamily,
                                 fontWeight: FontWeight.w700,
                               ),
                             ),
@@ -1600,10 +1586,9 @@ class DroneDetectionRow extends ConsumerWidget {
                           group.macs[i].toUpperCase(),
                           style: TextStyle(
                             color: t.textSecondary,
-                            fontSize: 10,
-                            fontFamily: 'monospace',
+                            fontSize: 12,
+                            fontFamily: AppTheme.monoFamily,
                             fontWeight: FontWeight.w600,
-                            letterSpacing: 0.3,
                           ),
                         ),
                         const SizedBox(width: 4),
@@ -1626,8 +1611,8 @@ class DroneDetectionRow extends ConsumerWidget {
                       '${d.odid!.altitudeMsl}m MSL',
                       style: TextStyle(
                         color: t.textDim,
-                        fontSize: 10,
-                        fontFamily: 'monospace',
+                        fontSize: 12,
+                        fontFamily: AppTheme.monoFamily,
                         fontWeight: FontWeight.w600,
                       ),
                     ),
@@ -1636,8 +1621,8 @@ class DroneDetectionRow extends ConsumerWidget {
                   Text(timeStr,
                       style: TextStyle(
                         color: t.textDim,
-                        fontSize: 11,
-                        fontFamily: 'monospace',
+                        fontSize: 12,
+                        fontFamily: AppTheme.monoFamily,
                         fontWeight: FontWeight.w700,
                       )),
                   const SizedBox(width: 6),

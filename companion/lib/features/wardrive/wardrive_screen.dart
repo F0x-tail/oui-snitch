@@ -153,11 +153,11 @@ class _WardriveScreenState extends ConsumerState<WardriveScreen> with WidgetsBin
         actions: [
           TextButton(
             onPressed: () => Navigator.of(ctx).pop(false),
-            child: Text('STOP & SAVE', style: TextStyle(color: t.textDim)),
+            child: Text('Stop & save', style: TextStyle(color: t.textDim)),
           ),
           TextButton(
             onPressed: () => Navigator.of(ctx).pop(true),
-            child: const Text('CONTINUE', style: TextStyle(color: AppTheme.accent)),
+            child: Text('Continue', style: TextStyle(color: AppTheme.accent)),
           ),
         ],
       ),
@@ -380,8 +380,8 @@ class _WardriveScreenState extends ConsumerState<WardriveScreen> with WidgetsBin
     if (_exclusionZones.isEmpty) return [];
     final circles = <CircleMarker>[];
     final polygons = <Polygon>[];
-    const zoneColor = Color(0x30E6A85A); // warning @ 0.19
-    const zoneBorder = Color(0x99E6A85A); // warning @ 0.6
+    final zoneColor = AppTheme.warning.withValues(alpha: 0.19);
+    final zoneBorder = AppTheme.warning.withValues(alpha: 0.6);
 
     for (final g in _exclusionZones) {
       if (g.zoneType == 'circle' && g.centerLat != null && g.centerLon != null) {
@@ -516,9 +516,8 @@ class _WardriveScreenState extends ConsumerState<WardriveScreen> with WidgetsBin
         label: t.name.isEmpty ? null : t.name,
         labelStyle: TextStyle(
           color: t.color,
-          fontSize: 10,
+          fontSize: 12,
           fontWeight: FontWeight.w700,
-          letterSpacing: 1,
         ),
       ));
     }
@@ -530,7 +529,7 @@ class _WardriveScreenState extends ConsumerState<WardriveScreen> with WidgetsBin
   Widget build(BuildContext context) {
     final t = AppTheme.of(context);
     final mapStyle = ref.watch(mapStyleProvider);
-    final wt = ref.watch(wardriveThemeDataProvider);
+    final wt = wardriveTheme();
     final wd = ref.watch(wardriveProvider);
     if (wd.pendingReconnectPrompt && !_reconnectPromptOpen) {
       _reconnectPromptOpen = true;
@@ -594,7 +593,7 @@ class _WardriveScreenState extends ConsumerState<WardriveScreen> with WidgetsBin
 
     final gpsPos2 = wd.currentPosition ?? gpsPos;
     final povActive =
-        gpsPos2 != null && (wt.driverPov || (wd.isActive && _followMode));
+        gpsPos2 != null && wd.isActive && _followMode;
     if (povActive) {
       final here = LatLng(gpsPos2.latitude, gpsPos2.longitude);
       final speed = gpsPos2.speed;
@@ -614,14 +613,14 @@ class _WardriveScreenState extends ConsumerState<WardriveScreen> with WidgetsBin
         }
         WidgetsBinding.instance.addPostFrameCallback((_) {
           if (!mounted) return;
-          if (!(wt.driverPov || (wd.isActive && _followMode))) return;
+          if (!(wd.isActive && _followMode)) return;
           _applyFollowCamera(here, _povHeading);
         });
       } else if (wasFollowing) {
         // Stopped but had a heading — hold last heading, recenter.
         WidgetsBinding.instance.addPostFrameCallback((_) {
           if (!mounted) return;
-          if (!(wt.driverPov || (wd.isActive && _followMode))) return;
+          if (!(wd.isActive && _followMode)) return;
           _applyFollowCamera(here, _povHeading);
         });
       } else if (_followMode) {
@@ -640,7 +639,7 @@ class _WardriveScreenState extends ConsumerState<WardriveScreen> with WidgetsBin
 
     ref.watch(notificationServiceProvider.select((n) => n.classAlertedMacs.length));
     final detectionLayers = _buildDetectionLayers(wd, wt);
-    final tileStyle = wt.mapTileOverride ?? mapStyle;
+    final tileStyle = mapStyle;
     final darkBase = tileStyle.isDark;
 
     final mapWidget = FlutterMap(
@@ -698,7 +697,7 @@ class _WardriveScreenState extends ConsumerState<WardriveScreen> with WidgetsBin
                 },
               ),
               children: [
-                mapTileLayer(tileStyle, tint: wt.tileTint),
+                mapTileLayer(tileStyle),
                 ..._territoryLayers(ref.watch(wdgwarsProvider)),
                 ..._alprLayers(ref.watch(deflockProvider)),
                 if (detectionLayers.heat.isNotEmpty)
@@ -708,7 +707,7 @@ class _WardriveScreenState extends ConsumerState<WardriveScreen> with WidgetsBin
                   PolylineLayer(polylines: [
                     Polyline(
                       points: wd.routePoints,
-                      color: wt.routeColor.withValues(alpha: wt.routeAlpha),
+                      color: wt.routeColor.withValues(alpha: 0.85),
                       strokeWidth: 2.4,
                       borderColor: darkBase
                           ? Colors.black.withValues(alpha: 0.35)
@@ -737,49 +736,25 @@ class _WardriveScreenState extends ConsumerState<WardriveScreen> with WidgetsBin
                   MarkerLayer(markers: [
                     Marker(
                       point: LatLng(selfPos.latitude, selfPos.longitude),
-                      width: wt.synthwaveSky ? 56 : 16,
-                      height: wt.synthwaveSky ? 56 : 16,
+                      width: 16,
+                      height: 16,
                       child: _CurrentPosMarker(theme: wt),
                     ),
                   ]),
               ],
             );
 
-    Widget mapStack = mapWidget;
-    const horizonFrac = 0.34;
-    final isPov = wt.synthwaveSky;
-
-    // Speed-tied effects sample current speed (m/s).
-    final speed = wd.currentPosition?.speed ?? 0.0;
-    final units = ref.watch(unitSystemProvider);
-    final speedDisplay = units == UnitSystem.imperial
-        ? (wd.currentPosition?.speedMph ?? 0.0)
-        : (wd.currentPosition?.speedKmh ?? 0.0);
-    final speedUnit = units == UnitSystem.imperial ? 'MPH' : 'KM/H';
+    final mapStack = mapWidget;
 
     return Scaffold(
-      backgroundColor: wt.synthwaveSky ? Colors.black : t.background,
+      backgroundColor: t.background,
       body: SafeArea(
         child: LayoutBuilder(builder: (context, c) {
-          final h = c.maxHeight;
-          final w = c.maxWidth;
-          final horizonY = isPov ? h * horizonFrac : 0.0;
-
           return Stack(children: [
-            // Sky on top band.
-            if (wt.synthwaveSky)
-              Positioned(
-                top: 0, left: 0, right: 0, height: horizonY,
-                child: IgnorePointer(child: _SynthwaveSky(theme: wt)),
-              ),
-            // Tilted map fills bottom band.
-            Positioned(
-              top: horizonY, left: 0, right: 0, bottom: 0,
-              child: mapStack,
-            ),
+            Positioned.fill(child: mapStack),
             if (_focusedDetection != null)
               Positioned(
-                top: horizonY + 8, left: 0, right: 0,
+                top: 8, left: 0, right: 0,
                 child: Center(
                   child: _FocusedDetectionChip(
                     detection: _focusedDetection!,
@@ -791,7 +766,7 @@ class _WardriveScreenState extends ConsumerState<WardriveScreen> with WidgetsBin
               ),
             if (_focusedDetection == null && _classGroupMacs.isNotEmpty)
               Positioned(
-                top: horizonY + 8, left: 0, right: 0,
+                top: 8, left: 0, right: 0,
                 child: Center(
                   child: _ClassGroupChip(
                     label: _classGroupLabel,
@@ -802,7 +777,7 @@ class _WardriveScreenState extends ConsumerState<WardriveScreen> with WidgetsBin
               ),
             if (wd.isActive && wd.geofenceSuppressed > 0)
               Positioned(
-                top: horizonY + 8, left: 0, right: 0,
+                top: 8, left: 0, right: 0,
                 child: Center(
                   child: Container(
                     padding: const EdgeInsets.symmetric(
@@ -814,106 +789,16 @@ class _WardriveScreenState extends ConsumerState<WardriveScreen> with WidgetsBin
                           color: AppTheme.warning.withValues(alpha: 0.7)),
                     ),
                     child: Text(
-                      '${wd.geofenceSuppressed} HIDDEN — INSIDE EXCLUSION ZONE',
-                      style: const TextStyle(
+                      '${wd.geofenceSuppressed} hidden — inside exclusion zone',
+                      style: TextStyle(
                         color: AppTheme.warning,
-                        fontSize: 10,
+                        fontSize: 12,
                         fontWeight: FontWeight.w700,
-                        letterSpacing: 1,
                       ),
                     ),
                   ),
                 ),
               ),
-            if (wt.synthwaveSky)
-              Positioned(
-                top: horizonY - 28, left: 0, right: 0, height: 36,
-                child: IgnorePointer(
-                  child: CustomPaint(
-                    painter: _MountainsPainter(
-                      ridge: wt.accent,
-                      glow: wt.secondary,
-                    ),
-                  ),
-                ),
-              ),
-            if (wt.synthwaveSky)
-              Positioned(
-                top: horizonY, left: 0, right: 0, bottom: 0,
-                child: IgnorePointer(
-                  child: _SynthwaveGrid(
-                    color: wt.accent,
-                    accent: wt.secondary,
-                    speed: speed,
-                  ),
-                ),
-              ),
-            // Palm tree silhouettes streaming past on both sides (perspective).
-            if (wt.synthwaveSky)
-              Positioned(
-                top: horizonY, left: 0, right: 0, bottom: 0,
-                child: IgnorePointer(
-                  child: _PalmStreaker(
-                    silhouette: const Color(0xFF0A0014),
-                    glow: wt.accent,
-                    speed: speed,
-                  ),
-                ),
-              ),
-            // Speed lines stream into the horizon from the vanishing point.
-            if (wt.speedLines && wd.isActive)
-              Positioned(
-                top: 0, left: 0, right: 0, bottom: 0,
-                child: IgnorePointer(
-                  child: _SpeedLines(
-                    color: wt.accent,
-                    speed: speed,
-                    horizonY: horizonY,
-                    width: w,
-                  ),
-                ),
-              ),
-            // CRT scanline filter — subtle aged-screen feel across whole UI.
-            if (wt.synthwaveSky)
-              const Positioned.fill(
-                child: IgnorePointer(child: _CrtScanlines()),
-              ),
-            // Capture flash burst when score increments.
-            if (wt.detectionBanner && wd.isActive)
-              Positioned.fill(
-                child: IgnorePointer(
-                  child: _CaptureFlash(
-                    color: wt.tertiary,
-                    score: wd.dedupedDetections.length,
-                  ),
-                ),
-              ),
-            // Big digital speedometer.
-            if (wt.speedoHud && wd.isActive)
-              Positioned(
-                bottom: 96, left: 0, right: 0,
-                child: IgnorePointer(
-                  child: Center(
-                    child: _SpeedoHud(
-                      theme: wt,
-                      speed: speedDisplay,
-                      unit: speedUnit,
-                    ),
-                  ),
-                ),
-              ),
-            // Arcade-style score chip top-right.
-            if (wt.scoreChip && wd.isActive)
-              Positioned(
-                top: _statsHeight + 8, right: 12,
-                child: IgnorePointer(
-                  child: _ScoreChip(
-                    theme: wt,
-                    score: wd.dedupedDetections.length,
-                  ),
-                ),
-              ),
-
             // Stats bar (top, only when active)
             if (wd.isActive)
               Positioned(
@@ -942,19 +827,18 @@ class _WardriveScreenState extends ConsumerState<WardriveScreen> with WidgetsBin
                   child: Row(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      const SizedBox(
+                      SizedBox(
                         width: 16, height: 16,
                         child: CircularProgressIndicator(
                             strokeWidth: 2, color: AppTheme.warning),
                       ),
                       const SizedBox(width: 12),
                       Text(
-                        'BOARD LOST — ${_resumeLeftLabel(wd)} TO RECONNECT',
-                        style: const TextStyle(
+                        'Board lost — ${_resumeLeftLabel(wd)} to reconnect',
+                        style: TextStyle(
                           color: AppTheme.warning,
                           fontSize: 12,
                           fontWeight: FontWeight.w700,
-                          letterSpacing: 1.5,
                         ),
                       ),
                     ],
@@ -971,7 +855,7 @@ class _WardriveScreenState extends ConsumerState<WardriveScreen> with WidgetsBin
                   child: Row(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      const SizedBox(
+                      SizedBox(
                         width: 16, height: 16,
                         child: CircularProgressIndicator(
                             strokeWidth: 2, color: AppTheme.accent),
@@ -979,13 +863,12 @@ class _WardriveScreenState extends ConsumerState<WardriveScreen> with WidgetsBin
                       const SizedBox(width: 12),
                       Text(
                         wd.radioTransition == 'stopping'
-                            ? 'RADIO SHUTTING DOWN…'
-                            : 'RADIO STARTING UP…',
-                        style: const TextStyle(
+                            ? 'Radio shutting down…'
+                            : 'Radio starting up…',
+                        style: TextStyle(
                           color: AppTheme.accent,
                           fontSize: 12,
                           fontWeight: FontWeight.w700,
-                          letterSpacing: 1.5,
                         ),
                       ),
                     ],
@@ -1117,7 +1000,7 @@ class _WardriveScreenState extends ConsumerState<WardriveScreen> with WidgetsBin
                       FlockPanel(
                         detections: wd.droneDetections,
                         icon: Icons.flight,
-                        accent: const Color(0xFF4AFFEA),
+                        accent: AppTheme.accent,
                         onDetectionTap: (d) => _zoomToDetection(d),
                       ),
                     ],
@@ -1126,7 +1009,7 @@ class _WardriveScreenState extends ConsumerState<WardriveScreen> with WidgetsBin
                       FlockPanel(
                         detections: wd.detectorDetections,
                         icon: Icons.radar,
-                        accent: const Color(0xFF4A9EFF),
+                        accent: AppTheme.accent,
                         onDetectionTap: (d) => _zoomToDetection(d),
                       ),
                     ],
@@ -1406,7 +1289,7 @@ class _WardriveScreenState extends ConsumerState<WardriveScreen> with WidgetsBin
         point: LatLng(d.latitude!, d.longitude!),
         radius: heatRadiusM,
         useRadiusInMeter: true,
-        color: densityTint.withValues(alpha: wt.markerSaturation),
+        color: densityTint.withValues(alpha: 0.07),
         borderStrokeWidth: 0,
       ));
     }
@@ -1439,7 +1322,6 @@ class _WardriveScreenState extends ConsumerState<WardriveScreen> with WidgetsBin
           secondaryEngineColor: secColor,
           size: size,
           count: n,
-          neon: wt.neonClusters,
         ),
       ));
     }
@@ -1660,14 +1542,16 @@ class _WardriveScreenState extends ConsumerState<WardriveScreen> with WidgetsBin
   static double _metersPerPixel(double lat, double zoom) =>
       156543.03392 * cos(lat * pi / 180) / pow(2, zoom);
 
+  // Muted cividis-style ramp: lightness rises with density and the hues stay
+  // apart under the common forms of colour blindness.
   static const List<Color> _densityStops = [
-    Color(0xFF3B82F6), // blue     — singletons / very sparse
-    Color(0xFF06B6D4), // cyan
-    Color(0xFF22C55E), // green
-    Color(0xFFEAB308), // yellow
-    Color(0xFFF97316), // orange
-    Color(0xFFEF4444), // red
-    Color(0xFFEC4899), // magenta  — peak density
+    Color(0xFF4A5F80), // singletons / very sparse
+    Color(0xFF566F86),
+    Color(0xFF68818A),
+    Color(0xFF7F938A),
+    Color(0xFF9AA587),
+    Color(0xFFB8B67F),
+    Color(0xFFD6C477), // peak density
   ];
 
   static Color _densityLerp(double t) {
@@ -1700,7 +1584,7 @@ class _WardriveScreenState extends ConsumerState<WardriveScreen> with WidgetsBin
     final lost = wd.linkLostAt;
     if (lost == null) return '';
     final left = kWardriveResumeWindow - DateTime.now().difference(lost);
-    if (left.isNegative) return 'NO TIME';
+    if (left.isNegative) return 'No time';
     if (left.inMinutes >= 1) return '${left.inMinutes + 1}M';
     return '${left.inSeconds}S';
   }
@@ -1712,17 +1596,17 @@ class _WardriveScreenState extends ConsumerState<WardriveScreen> with WidgetsBin
     return switch (wd.state) {
       WardriveState.idle => const SizedBox.shrink(),
       WardriveState.running => Row(mainAxisSize: MainAxisSize.min, children: [
-          _OutlinePill(label: 'PAUSE', color: AppTheme.textSecondary,
+          _OutlinePill(label: 'Pause', color: AppTheme.textSecondary,
               onTap: () => ref.read(wardriveProvider).pauseSession()),
           const SizedBox(width: 12),
-          _Pill(label: 'STOP', color: AppTheme.error,
+          _Pill(label: 'Stop', color: AppTheme.error,
               onTap: () => stopWardriveSession(ref, origin: 'map')),
         ]),
       WardriveState.paused => Row(mainAxisSize: MainAxisSize.min, children: [
-          _Pill(label: 'RESUME', color: AppTheme.success,
+          _Pill(label: 'Resume', color: AppTheme.success,
               onTap: () => ref.read(wardriveProvider).resumeSession()),
           const SizedBox(width: 12),
-          _OutlinePill(label: 'STOP', color: AppTheme.error,
+          _OutlinePill(label: 'Stop', color: AppTheme.error,
               onTap: () => stopWardriveSession(ref, origin: 'map')),
         ]),
     };

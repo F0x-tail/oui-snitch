@@ -29,7 +29,7 @@ class _WardriveConfigTabState extends ConsumerState<_WardriveConfigTab> {
     return ListView(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
       children: [
-        const ConfigSectionHeader(label: 'WARDRIVE ACCOUNTS'),
+        const ConfigSectionHeader(label: 'Wardrive accounts'),
         const SizedBox(height: 10),
         const _WigleSection(),
         const SizedBox(height: 18),
@@ -38,7 +38,7 @@ class _WardriveConfigTabState extends ConsumerState<_WardriveConfigTab> {
         const SizedBox(height: 20),
         Row(
           children: [
-            const Expanded(child: ConfigSectionHeader(label: 'YOUR CAPTURE DATABASE')),
+            const Expanded(child: ConfigSectionHeader(label: 'Your capture database')),
             GestureDetector(
               behavior: HitTestBehavior.opaque,
               onTap: _reload,
@@ -53,14 +53,14 @@ class _WardriveConfigTabState extends ConsumerState<_WardriveConfigTab> {
           padding: const EdgeInsets.only(bottom: 10, left: 2),
           child: Text(
             'Counts below are from this app\'s own wardrive sessions only.',
-            style: TextStyle(color: t.textDim, fontSize: 11),
+            style: TextStyle(color: t.textDim, fontSize: 12),
           ),
         ),
         FutureBuilder<CollectionStats>(
           future: _statsFuture,
           builder: (context, snap) {
             if (!snap.hasData) {
-              return const Padding(
+              return Padding(
                 padding: EdgeInsets.symmetric(vertical: 24),
                 child: Center(
                   child: SizedBox(
@@ -153,24 +153,24 @@ class _CollectionStatsView extends ConsumerWidget {
           spacing: 8,
           runSpacing: 8,
           children: [
-            _MiniStatTile(icon: Icons.fingerprint, label: 'UNIQUE',
+            _MiniStatTile(icon: Icons.fingerprint, label: 'Unique',
                 value: _fmt(stats.totalUnique), color: AppTheme.accent),
-            _MiniStatTile(icon: Icons.wifi, label: 'WIFI',
+            _MiniStatTile(icon: Icons.wifi, label: 'Wi-Fi',
                 value: _fmt(stats.wifiUnique), color: AppTheme.wardrive),
             _MiniStatTile(icon: Icons.bluetooth, label: 'BLE',
-                value: _fmt(stats.bleUnique), color: const Color(0xFF4A9EFF)),
-            _MiniStatTile(icon: Icons.router, label: 'SSIDS',
+                value: _fmt(stats.bleUnique), color: AppTheme.info),
+            _MiniStatTile(icon: Icons.router, label: 'SSIDs',
                 value: _fmt(stats.ssidCount), color: AppTheme.skySpy),
-            _MiniStatTile(icon: Icons.route, label: 'SESSIONS',
+            _MiniStatTile(icon: Icons.route, label: 'Sessions',
                 value: '${stats.sessionCount}', color: AppTheme.success),
-            _MiniStatTile(icon: Icons.sensors, label: 'HITS',
+            _MiniStatTile(icon: Icons.sensors, label: 'Hits',
                 value: _fmt(stats.totalDetections), color: AppTheme.warning),
           ],
         ),
         const SizedBox(height: 18),
 
         if (stats.channelCounts.isNotEmpty) ...[
-          _StatBlockLabel('CHANNEL DISTRIBUTION', Icons.equalizer),
+          _StatBlockLabel('Channel distribution', Icons.equalizer),
           const SizedBox(height: 8),
           _ChannelChart(
             counts: {
@@ -196,7 +196,7 @@ class _CollectionStatsView extends ConsumerWidget {
         ],
 
         if (vendors.isNotEmpty) ...[
-          _StatBlockLabel('TOP VENDORS', Icons.factory),
+          _StatBlockLabel('Top vendors', Icons.factory),
           const SizedBox(height: 8),
           ...() {
             final maxV = vendors.first.value;
@@ -215,7 +215,7 @@ class _CollectionStatsView extends ConsumerWidget {
         ],
 
         if (flockVendors.isNotEmpty) ...[
-          _StatBlockLabel('TOP FLOCK VENDORS', Icons.videocam),
+          _StatBlockLabel('Top Flock vendors', Icons.videocam),
           const SizedBox(height: 8),
           ...() {
             final maxV = flockVendors.first.value;
@@ -250,7 +250,7 @@ class _CollectionStatsView extends ConsumerWidget {
                 ));
           }(),
           const SizedBox(height: 10),
-          _StatBlockLabel('TOP SIGNATURES', Icons.fingerprint),
+          _StatBlockLabel('Top signatures', Icons.fingerprint),
           const SizedBox(height: 8),
           ...() {
             final maxV = sigCounts.first.value;
@@ -269,7 +269,7 @@ class _CollectionStatsView extends ConsumerWidget {
         ],
 
         if (stats.authCounts.isNotEmpty) ...[
-          _StatBlockLabel('ENCRYPTION', Icons.lock_outline),
+          _StatBlockLabel('Encryption', Icons.lock_outline),
           const SizedBox(height: 8),
           ...() {
             final entries = stats.authCounts.entries.toList()
@@ -335,9 +335,8 @@ class _StatBlockLabel extends StatelessWidget {
         Icon(icon, size: 13, color: t.textDim),
         const SizedBox(width: 6),
         Text(label, style: TextStyle(
-          color: t.textSecondary, fontSize: 10,
-          fontWeight: FontWeight.w700, letterSpacing: 1.5,
-        )),
+          color: t.textSecondary, fontSize: 12,
+          fontWeight: FontWeight.w700)),
       ],
     );
   }
@@ -375,15 +374,14 @@ class _MiniStatTile extends StatelessWidget {
               Icon(icon, size: 13, color: color),
               const SizedBox(width: 5),
               Text(label, style: TextStyle(
-                color: t.textDim, fontSize: 8,
-                fontWeight: FontWeight.w700, letterSpacing: 1,
-              )),
+                color: t.textDim, fontSize: 12,
+                fontWeight: FontWeight.w700)),
             ],
           ),
           const SizedBox(height: 4),
           Text(value, style: TextStyle(
             color: t.textPrimary, fontSize: 18,
-            fontWeight: FontWeight.w700, fontFamily: 'monospace', height: 1,
+            fontWeight: FontWeight.w700, fontFamily: AppTheme.monoFamily, height: 1,
           )),
         ],
       ),
@@ -431,8 +429,8 @@ class _BarRow extends StatelessWidget {
       _CollectionStatsView._fmt(value),
       textAlign: TextAlign.right,
       style: TextStyle(
-        color: t.textPrimary, fontSize: 11,
-        fontFamily: 'monospace', fontWeight: FontWeight.w600,
+        color: t.textPrimary, fontSize: 12,
+        fontFamily: AppTheme.monoFamily, fontWeight: FontWeight.w600,
       ),
     );
 
@@ -445,7 +443,7 @@ class _BarRow extends StatelessWidget {
               Expanded(
                 child: Text(
                   label,
-                  style: TextStyle(color: t.textSecondary, fontSize: 11),
+                  style: TextStyle(color: t.textSecondary, fontSize: 12),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                 ),
@@ -466,7 +464,7 @@ class _BarRow extends StatelessWidget {
           width: 96,
           child: Text(
             label,
-            style: TextStyle(color: t.textSecondary, fontSize: 11),
+            style: TextStyle(color: t.textSecondary, fontSize: 12),
             overflow: TextOverflow.ellipsis,
           ),
         ),
@@ -498,19 +496,18 @@ class _ChannelChart extends StatelessWidget {
     final entries = counts.entries.toList()..sort((a, b) => a.key.compareTo(b.key));
     final maxV = entries.map((e) => e.value).reduce((a, b) => a > b ? a : b);
     final countStyle = TextStyle(
-      color: t.textDim, fontSize: 8, fontFamily: 'monospace',
+      color: t.textDim, fontSize: 12, fontFamily: AppTheme.monoFamily,
     );
     final chStyle = TextStyle(
-      color: t.textSecondary, fontSize: 8, fontFamily: 'monospace',
+      color: t.textSecondary, fontSize: 12, fontFamily: AppTheme.monoFamily,
     );
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(band, style: TextStyle(
-          color: t.textDim, fontSize: 9,
-          fontWeight: FontWeight.w600, letterSpacing: 1,
-        )),
+          color: t.textDim, fontSize: 12,
+          fontWeight: FontWeight.w600)),
         const SizedBox(height: 4),
         SizedBox(
           height: angled ? 92 : 64,

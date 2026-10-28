@@ -24,7 +24,7 @@ class SkySpyScreen extends ConsumerWidget {
     return Scaffold(
       backgroundColor: t.background,
       appBar: AppBar(
-        title: const Text('SKY SPY'),
+        title: const Text('Sky Spy'),
         actions: [
           Transform.scale(
             scale: 0.7,
@@ -110,17 +110,17 @@ class _DroneRow extends StatelessWidget {
         children: [
           Row(
             children: [
-              const Icon(Icons.flight, color: AppTheme.skySpy, size: 16),
+              Icon(Icons.flight, color: AppTheme.skySpy, size: 16),
               const SizedBox(width: 8),
               Expanded(child: Text(
                 group.uavId,
-                style: const TextStyle(color: AppTheme.skySpy, fontSize: 14, fontWeight: FontWeight.w600, fontFamily: 'monospace'),
+                style: TextStyle(color: AppTheme.skySpy, fontSize: 14, fontWeight: FontWeight.w600, fontFamily: AppTheme.monoFamily),
               )),
               Text('${detection.rssi} dBm',
-                  style: TextStyle(color: t.textDim, fontSize: 11, fontFamily: 'monospace')),
+                  style: TextStyle(color: t.textDim, fontSize: 12, fontFamily: AppTheme.monoFamily)),
               const SizedBox(width: 8),
               Text('${timeDiff.inSeconds}s ago',
-                  style: TextStyle(color: t.textDim, fontSize: 10)),
+                  style: TextStyle(color: t.textDim, fontSize: 12)),
             ],
           ),
           if (odid != null) ...[
@@ -136,18 +136,18 @@ class _DroneRow extends StatelessWidget {
               if (odid.droneLat != null && odid.droneLat != 0 && odid.droneLon != null)
                 _Chip('POS', '${odid.droneLat!.toStringAsFixed(4)}, ${odid.droneLon!.toStringAsFixed(4)}')
               else
-                _Chip('RANGE',
+                _Chip('Range',
                     '${rssiRangeLabel(detection.rssi, isBle: isBleMethod(detection.method))} RSSI'),
               if (odid.operatorId != null && odid.operatorId!.isNotEmpty)
-                _Chip('OP', odid.operatorId!),
+                _Chip('Operator', odid.operatorId!),
             ]),
             if (odid.selfId != null && odid.selfId!.isNotEmpty) ...[
               const SizedBox(height: 4),
-              _Chip('DESC', odid.selfId!),
+              _Chip('Description', odid.selfId!),
             ],
             if (odid.pilotLat != null && odid.pilotLat != 0 && odid.pilotLon != null) ...[
               const SizedBox(height: 4),
-              _Chip('PILOT', '${odid.pilotLat!.toStringAsFixed(4)}, ${odid.pilotLon!.toStringAsFixed(4)}'),
+              _Chip('Pilot', '${odid.pilotLat!.toStringAsFixed(4)}, ${odid.pilotLon!.toStringAsFixed(4)}'),
             ],
           ],
           const SizedBox(height: 8),
@@ -164,7 +164,7 @@ class _DroneRow extends StatelessWidget {
                   ),
                   child: Text(
                     '${group.macs[i].toUpperCase()} · ${_transport(group.methods[i])}',
-                    style: TextStyle(color: t.textDim, fontSize: 9, fontFamily: 'monospace'),
+                    style: TextStyle(color: t.textDim, fontSize: 12, fontFamily: AppTheme.monoFamily),
                   ),
                 ),
             ],
@@ -186,8 +186,8 @@ class _Chip extends StatelessWidget {
     return Padding(
       padding: const EdgeInsets.only(right: 12),
       child: Row(mainAxisSize: MainAxisSize.min, children: [
-        Text('$label ', style: TextStyle(color: t.textDim, fontSize: 9, letterSpacing: 0.5)),
-        Text(value, style: TextStyle(color: t.textPrimary, fontSize: 11, fontFamily: 'monospace')),
+        Text('$label ', style: TextStyle(color: t.textDim, fontSize: 12)),
+        Text(value, style: TextStyle(color: t.textPrimary, fontSize: 12, fontFamily: AppTheme.monoFamily)),
       ]),
     );
   }

@@ -132,10 +132,8 @@ class _StatusBarState extends ConsumerState<StatusBar> {
                     overflow: TextOverflow.ellipsis,
                     maxLines: 1,
                     style: TextStyle(
-                      fontSize: 10,
+                      fontSize: 12,
                       fontWeight: FontWeight.w600,
-                      letterSpacing: 2,
-                      fontFamily: 'monospace',
                       color: state.isConnected
                           ? AppTheme.accent
                           : t.textDim,
@@ -227,12 +225,6 @@ class _ConnectionChip extends StatelessWidget {
               decoration: BoxDecoration(
                 color: color,
                 shape: BoxShape.circle,
-                boxShadow: [
-                  BoxShadow(
-                    color: color.withValues(alpha: 0.4),
-                    blurRadius: 4,
-                  ),
-                ],
               ),
             ),
           const SizedBox(width: 6),
@@ -240,9 +232,8 @@ class _ConnectionChip extends StatelessWidget {
             _label,
             style: TextStyle(
               color: color,
-              fontSize: 9,
+              fontSize: 12,
               fontWeight: FontWeight.w700,
-              letterSpacing: 1,
             ),
           ),
         ],
@@ -264,13 +255,13 @@ class _ConnectionChip extends StatelessWidget {
 
   String get _label {
     return switch (state) {
-      NodeConnectionState.ready => 'LIVE',
-      NodeConnectionState.connecting => 'LINKING',
-      NodeConnectionState.negotiating => 'MTU',
-      NodeConnectionState.syncing => 'SYNC',
-      NodeConnectionState.reconnecting => 'LOST',
-      NodeConnectionState.scanning => 'SCAN',
-      _ => 'OFFLINE',
+      NodeConnectionState.ready => 'Connected',
+      NodeConnectionState.connecting => 'Connecting',
+      NodeConnectionState.negotiating => 'Setting up',
+      NodeConnectionState.syncing => 'Syncing',
+      NodeConnectionState.reconnecting => 'Reconnecting',
+      NodeConnectionState.scanning => 'Searching',
+      _ => 'Not connected',
     };
   }
 }
@@ -297,9 +288,8 @@ class _InfoChip extends StatelessWidget {
           label,
           style: TextStyle(
             color: color,
-            fontSize: 10,
+            fontSize: 12,
             fontWeight: FontWeight.w500,
-            fontFamily: 'monospace',
           ),
         ),
       ],

@@ -95,7 +95,7 @@ class _LeaderPainter extends CustomPainter {
 
 const String kDroneSvgAsset = 'assets/icons/drone.svg';
 const String kPilotSvgAsset = 'assets/icons/pilot.svg';
-const Color kDroneFreshRing = Color(0xFF7CFF4F);
+const Color kDroneFreshRing = Color(0xFF8CC084);
 
 LatLng? droneRidPoint(Detection d) {
   final o = d.odid;
@@ -171,13 +171,8 @@ class DronePin extends StatelessWidget {
                     color: Colors.black.withValues(alpha: 0.8),
                     width: 1.6,
                   ),
-                  boxShadow: [
+                  boxShadow: const [
                     BoxShadow(
-                      color: color.withValues(alpha: fresh ? 0.85 : 0.5),
-                      blurRadius: fresh ? 16 : 9,
-                      spreadRadius: fresh ? 2 : 1,
-                    ),
-                    const BoxShadow(
                       color: Color(0x77000000),
                       blurRadius: 4,
                       offset: Offset(0, 2),
@@ -256,7 +251,7 @@ class DroneRangePin extends StatelessWidget {
               label,
               style: const TextStyle(
                 color: Colors.white,
-                fontSize: 10,
+                fontSize: 12,
                 fontWeight: FontWeight.w800,
               ),
             ),
@@ -297,11 +292,6 @@ class PilotPin extends StatelessWidget {
                 width: 1.4,
               ),
               boxShadow: [
-                BoxShadow(
-                  color: color.withValues(alpha: 0.45),
-                  blurRadius: 7,
-                  spreadRadius: 0.5,
-                ),
                 const BoxShadow(
                   color: Color(0x66000000),
                   blurRadius: 3,

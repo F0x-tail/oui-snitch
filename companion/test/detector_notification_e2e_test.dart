@@ -19,7 +19,7 @@ void main() {
     // The description alone ("Nokia router", or an imported list's "IFI-3714")
     // says nothing in the shade about why the phone buzzed.
     expect(title, 'Watchlist: Nokia router');
-    expect(subtitle, 'Detector · WATCHLIST');
+    expect(subtitle, 'Detector · Watchlist');
     // Body contract changed deliberately: proximity-led, and the MAC is no
     // longer in the notification (it stays in the detection list and export).
     expect(body, 'far (-87 dBm) on channel 6');
@@ -36,7 +36,7 @@ void main() {
     );
     final (title, subtitle, body, _) = NotificationService.detectionNotificationText(det)!;
     expect(title, 'Probe request for "Villasenor"');
-    expect(subtitle, 'Detector · PROBE');
+    expect(subtitle, 'Detector · Probe');
     expect(body, 'far (-89 dBm) on channel 6');
     expect(body, isNot(contains('5C:FC:E1')), reason: 'MAC must not leak into the shade');
   });
@@ -58,7 +58,7 @@ void main() {
     );
     final (title, subtitle, body, channel) = NotificationService.detectionNotificationText(det)!;
     expect(title, 'Pwnagotchi');
-    expect(subtitle, 'Detector · PWNAGOTCHI');
+    expect(subtitle, 'Detector · Pwnagotchi');
     expect(body, 'pwny, nearby (-61 dBm) on channel 6 · node node2');
     expect(body, isNot(contains('DE:AD:BE')), reason: 'MAC must not leak into the shade');
     expect(channel, NotifChannel.detector);

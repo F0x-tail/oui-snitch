@@ -1,10 +1,13 @@
 // SPDX-License-Identifier: MIT
 import 'package:flutter/material.dart';
 
+import 'package:oui_spy/theme/app_theme.dart';
+
 /// All scan engines available in the OUI-SNITCH firmware.
 enum Engine {
-  // Mid-tone hues: vivid on the dark background, still legible on white.
-  detector('Detector', 'WiFi + BLE watchlist alerting', Color(0xFF3286E6), 0x01),
+  // Map colours: muted mid-tones, readable on light and dark map tiles, after
+  // the Okabe-Ito colour-blind-safe set.
+  detector('Detector', 'WiFi + BLE watchlist alerting', Color(0xFF5E8FC0), 0x01),
   /// Slot 1. Previously the Flock BLE engine, removed when the community BLE
   /// method stopped working (the Wi-Fi IE fingerprint is the reliable path).
   /// The slot was held reserved because `Engine.index` IS the wire-protocol
@@ -13,23 +16,27 @@ enum Engine {
   /// commands, including on mesh nodes running other builds — and is now
   /// reused for duty-equipment detection. Historical rows stored as 'flockBle'
   /// are mapped on read; see detectionFromDbRow.
-  axon('Axon', 'Axon / TASER duty equipment', Color(0xFF9A35E6), 0x02),
+  axon('Axon', 'Axon / TASER duty equipment', Color(0xFF9C7DC4), 0x02),
   flockWifi(
-      'Flock WiFi', 'Flock Safety WiFi promiscuous', Color(0xFFE63577), 0x04),
-  foxhunter('Foxhunter', 'WiFi + BLE proximity tracker', Color(0xFF1FA866), 0x08),
-  skySpy('Sky Spy', 'FAA Remote ID / ODID detection', Color(0xFF15A89B), 0x10),
+      'Flock WiFi', 'Flock Safety WiFi promiscuous', Color(0xFFC7799F), 0x04),
+  foxhunter('Foxhunter', 'WiFi + BLE proximity tracker', Color(0xFF4E9E80), 0x08),
+  skySpy('Sky Spy', 'FAA Remote ID / ODID detection', Color(0xFF6CB4D4), 0x10),
   uniPwn(
-      'UniPwn', 'Unitree robot exploitation', Color(0xFFE63535), 0x20),
+      'UniPwn', 'Unitree robot exploitation', Color(0xFFCF6B44), 0x20),
   wardrive(
-      'Wardrive', 'WiGLE-style WiFi + BLE capture', Color(0xFFE67435), 0x40),
+      'Wardrive', 'WiGLE-style WiFi + BLE capture', Color(0xFFD6A24C), 0x40),
   pcap(
-      'PCAP', 'WiFi/BLE PCAP capture & audit', Color(0xFF13A884), 0x80);
+      'PCAP', 'WiFi/BLE PCAP capture & audit', Color(0xFF8E9A5A), 0x80);
 
-  const Engine(this.label, this.description, this.color, this.bitmask);
+  const Engine(this.label, this.description, this.mapColor, this.bitmask);
 
   final String label;
   final String description;
-  final Color color;
+  /// Engines share one tint in the app and are told apart by their icon.
+  Color get color => AppTheme.accent;
+
+  /// On the map colour is the only cue, so each engine keeps its own.
+  final Color mapColor;
   final int bitmask;
 
   bool get isBle =>

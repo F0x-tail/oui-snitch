@@ -229,16 +229,15 @@ class _GeofenceScreenState extends ConsumerState<GeofenceScreen> {
                     const SizedBox(width: 12),
                     Icon(Icons.fence, size: 16, color: AppTheme.warning),
                     const SizedBox(width: 6),
-                    Text('GEOFENCE EXCLUSION', style: TextStyle(
+                    Text('Geofence exclusion', style: TextStyle(
                       color: t.textPrimary, fontSize: 13,
-                      fontWeight: FontWeight.w700, letterSpacing: 1,
-                    )),
+                      fontWeight: FontWeight.w700)),
                     const Spacer(),
                     if (_geofences.isNotEmpty)
                       Text('${_geofences.where((g) => g.enabled).length} active',
                         style: TextStyle(
-                          color: AppTheme.warning, fontSize: 10,
-                          fontFamily: 'monospace', fontWeight: FontWeight.w600,
+                          color: AppTheme.warning, fontSize: 12,
+                          fontFamily: AppTheme.monoFamily, fontWeight: FontWeight.w600,
                         ),
                       ),
                   ],
@@ -461,16 +460,15 @@ class _DrawingToolbar extends StatelessWidget {
               ),
               const SizedBox(width: 6),
               Text(
-                isCircle ? 'CIRCLE' : 'POLYGON',
-                style: const TextStyle(
-                  color: AppTheme.accent, fontSize: 10,
-                  fontWeight: FontWeight.w700, letterSpacing: 1,
-                ),
+                isCircle ? 'Circle' : 'Polygon',
+                style: TextStyle(
+                  color: AppTheme.accent, fontSize: 12,
+                  fontWeight: FontWeight.w700),
               ),
               const SizedBox(width: 8),
               Expanded(
                 child: Text(hint, style: TextStyle(
-                  color: t.textDim, fontSize: 10,
+                  color: t.textDim, fontSize: 12,
                 )),
               ),
             ],
@@ -497,7 +495,7 @@ class _DrawingToolbar extends StatelessWidget {
                 ),
                 focusedBorder: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(6),
-                  borderSide: const BorderSide(color: AppTheme.accent),
+                  borderSide: BorderSide(color: AppTheme.accent),
                 ),
               ),
             ),
@@ -507,10 +505,9 @@ class _DrawingToolbar extends StatelessWidget {
             const SizedBox(height: 6),
             Row(
               children: [
-                Text('RADIUS', style: TextStyle(
-                  color: t.textDim, fontSize: 8,
-                  fontWeight: FontWeight.w600, letterSpacing: 1,
-                )),
+                Text('Radius', style: TextStyle(
+                  color: t.textDim, fontSize: 12,
+                  fontWeight: FontWeight.w600)),
                 Expanded(
                   child: SliderTheme(
                     data: SliderThemeData(overlayShape: SliderComponentShape.noOverlay),
@@ -530,9 +527,9 @@ class _DrawingToolbar extends StatelessWidget {
                         ? '${(circleRadiusM / 1000).toStringAsFixed(1)}km'
                         : '${circleRadiusM.round()}m',
                     textAlign: TextAlign.right,
-                    style: const TextStyle(
-                      color: AppTheme.accent, fontSize: 10,
-                      fontFamily: 'monospace', fontWeight: FontWeight.w600,
+                    style: TextStyle(
+                      color: AppTheme.accent, fontSize: 12,
+                      fontFamily: AppTheme.monoFamily, fontWeight: FontWeight.w600,
                     ),
                   ),
                 ),
@@ -544,12 +541,12 @@ class _DrawingToolbar extends StatelessWidget {
           Row(
             children: [
               if (!isCircle && polyPointCount > 0)
-                _SmallBtn(label: 'UNDO', color: AppTheme.warning, onTap: onUndo),
+                _SmallBtn(label: 'Undo', color: AppTheme.warning, onTap: onUndo),
               const Spacer(),
-              _SmallBtn(label: 'CANCEL', color: AppTheme.error, onTap: onCancel),
+              _SmallBtn(label: 'Cancel', color: AppTheme.error, onTap: onCancel),
               const SizedBox(width: 8),
               _SmallBtn(
-                label: 'SAVE',
+                label: 'Save',
                 color: canSave ? AppTheme.success : AppTheme.textDim,
                 onTap: canSave ? onSave : null,
               ),
@@ -580,8 +577,7 @@ class _SmallBtn extends StatelessWidget {
         ),
         child: Text(label, style: TextStyle(
           color: color.withValues(alpha: onTap != null ? 1.0 : 0.4),
-          fontSize: 10, fontWeight: FontWeight.w700, letterSpacing: 0.5,
-        )),
+          fontSize: 12, fontWeight: FontWeight.w700)),
       ),
     );
   }
@@ -626,13 +622,13 @@ class _BottomPanel extends StatelessWidget {
             children: [
               _DrawBtn(
                 icon: Icons.circle_outlined,
-                label: 'CIRCLE',
+                label: 'Circle',
                 onTap: onStartCircle,
               ),
               const SizedBox(width: 12),
               _DrawBtn(
                 icon: Icons.pentagon_outlined,
-                label: 'POLYGON',
+                label: 'Polygon',
                 onTap: onStartPolygon,
               ),
             ],
@@ -644,7 +640,7 @@ class _BottomPanel extends StatelessWidget {
               child: Text(
                 'No exclusion zones.\nNetworks inside zones are hidden from wardrive output.',
                 textAlign: TextAlign.center,
-                style: TextStyle(color: t.textDim, fontSize: 11),
+                style: TextStyle(color: t.textDim, fontSize: 12),
               ),
             )
           else if (geofences.isNotEmpty)
@@ -690,10 +686,9 @@ class _DrawBtn extends StatelessWidget {
           children: [
             Icon(icon, size: 16, color: AppTheme.accent),
             const SizedBox(width: 6),
-            Text(label, style: const TextStyle(
-              color: AppTheme.accent, fontSize: 11,
-              fontWeight: FontWeight.w700, letterSpacing: 0.5,
-            )),
+            Text(label, style: TextStyle(
+              color: AppTheme.accent, fontSize: 12,
+              fontWeight: FontWeight.w700)),
           ],
         ),
       ),
@@ -751,10 +746,10 @@ class _GeofenceRow extends StatelessWidget {
                 children: [
                   Text(g.name, style: TextStyle(
                     color: enabled ? t.textPrimary : t.textDim,
-                    fontSize: 11, fontWeight: FontWeight.w600,
+                    fontSize: 12, fontWeight: FontWeight.w600,
                   )),
                   Text(subtitle, style: TextStyle(
-                    color: t.textDim, fontSize: 9,
+                    color: t.textDim, fontSize: 12,
                   )),
                 ],
               ),
@@ -779,11 +774,10 @@ class _GeofenceRow extends StatelessWidget {
                   ),
                 ),
                 child: Text(
-                  enabled ? 'ON' : 'OFF',
+                  enabled ? 'On' : 'Off',
                   style: TextStyle(
                     color: enabled ? AppTheme.success : AppTheme.error,
                     fontSize: 14, fontWeight: FontWeight.w800,
-                    letterSpacing: 1,
                   ),
                 ),
               ),

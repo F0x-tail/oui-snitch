@@ -227,17 +227,17 @@ class _EngineCardState extends ConsumerState<EngineCard>
   String get _stateLabel {
     // Unconfirmed: show the intent with an ellipsis so the user can see the
     // tile is waiting on the board, not reporting a confirmed state.
-    if (_pending) return _optimisticValue! ? 'STARTING…' : 'STOPPING…';
+    if (_pending) return _optimisticValue! ? 'Starting…' : 'Stopping…';
     return switch (widget.engineState) {
-      EngineState.disabled => 'OFF',
-      EngineState.idle => 'IDLE',
-      EngineState.scanning => 'SCAN',
-      EngineState.active => 'ACTIVE',
-      EngineState.alerting => 'ALERT',
-      EngineState.targetSelected => 'TARGET',
-      EngineState.connecting => 'LINK',
-      EngineState.exploiting => 'EXPLOIT',
-      EngineState.complete => 'DONE',
+      EngineState.disabled => 'Off',
+      EngineState.idle => 'Waiting',
+      EngineState.scanning => 'Scanning',
+      EngineState.active => 'Running',
+      EngineState.alerting => 'Alert',
+      EngineState.targetSelected => 'Target set',
+      EngineState.connecting => 'Connecting',
+      EngineState.exploiting => 'Testing',
+      EngineState.complete => 'Done',
     };
   }
 
@@ -283,9 +283,6 @@ class _EngineCardState extends ConsumerState<EngineCard>
                 color: active ? color.withValues(alpha: 0.35) : t.border,
                 width: active ? 1.0 : 0.5,
               ),
-              boxShadow: hasActivity
-                  ? [BoxShadow(color: color.withValues(alpha: 0.08 + glow), blurRadius: 20, spreadRadius: -2)]
-                  : null,
             ),
             child: Row(
               children: [
@@ -297,9 +294,6 @@ class _EngineCardState extends ConsumerState<EngineCard>
                         ? color.withValues(alpha: 0.15 + glow)
                         : t.border.withValues(alpha: 0.3),
                     borderRadius: BorderRadius.circular(10),
-                    boxShadow: hasActivity
-                        ? [BoxShadow(color: color.withValues(alpha: 0.15 + glow), blurRadius: 12)]
-                        : null,
                   ),
                   child: Icon(widget.engine.icon, color: active ? color : t.textDim, size: 24),
                 ),
@@ -309,18 +303,17 @@ class _EngineCardState extends ConsumerState<EngineCard>
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        widget.engine.label.toUpperCase(),
+                        widget.engine.label,
                         style: TextStyle(
                           color: active ? color : t.textPrimary,
                           fontSize: 15,
                           fontWeight: FontWeight.w700,
-                          letterSpacing: 1.5,
                         ),
                       ),
                       const SizedBox(height: 2),
                       Text(
                         _engineDescription,
-                        style: TextStyle(color: t.textSecondary, fontSize: 11),
+                        style: TextStyle(color: t.textSecondary, fontSize: 12),
                       ),
                       const SizedBox(height: 8),
                       Row(
@@ -332,7 +325,7 @@ class _EngineCardState extends ConsumerState<EngineCard>
                                   ? t.textPrimary : t.textSecondary,
                               fontSize: 24,
                               fontWeight: FontWeight.w200,
-                              fontFamily: 'monospace',
+                              fontFamily: AppTheme.monoFamily,
                               height: 1,
                             ),
                           ),
@@ -344,7 +337,7 @@ class _EngineCardState extends ConsumerState<EngineCard>
                                 color: color.withValues(alpha: 0.8),
                                 fontSize: 12,
                                 fontWeight: FontWeight.w600,
-                                fontFamily: 'monospace',
+                                fontFamily: AppTheme.monoFamily,
                               ),
                             ),
                           ],
@@ -406,9 +399,6 @@ class _EngineCardState extends ConsumerState<EngineCard>
                 color: active ? color.withValues(alpha: 0.3) : t.border,
                 width: active ? 1.0 : 0.5,
               ),
-              boxShadow: hasActivity
-                  ? [BoxShadow(color: color.withValues(alpha: 0.06 + glow), blurRadius: 16, spreadRadius: -2)]
-                  : null,
             ),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -423,9 +413,6 @@ class _EngineCardState extends ConsumerState<EngineCard>
                             ? color.withValues(alpha: 0.12 + glow)
                             : t.border.withValues(alpha: 0.3),
                         borderRadius: BorderRadius.circular(10),
-                        boxShadow: hasActivity
-                            ? [BoxShadow(color: color.withValues(alpha: 0.12 + glow), blurRadius: 8)]
-                            : null,
                       ),
                       child: Icon(widget.engine.icon, color: active ? color : t.textDim, size: 18),
                     ),
@@ -443,18 +430,17 @@ class _EngineCardState extends ConsumerState<EngineCard>
                 ),
                 const SizedBox(height: 10),
                 Text(
-                  widget.engine.label.toUpperCase(),
+                  widget.engine.label,
                   style: TextStyle(
                     color: active ? color : t.textPrimary,
                     fontSize: 13,
                     fontWeight: FontWeight.w700,
-                    letterSpacing: 1.2,
                   ),
                 ),
                 const SizedBox(height: 2),
                 Text(
                   widget.engine.description,
-                  style: TextStyle(color: t.textSecondary, fontSize: 10),
+                  style: TextStyle(color: t.textSecondary, fontSize: 12),
                   maxLines: 2,
                   overflow: TextOverflow.ellipsis,
                 ),
@@ -469,7 +455,7 @@ class _EngineCardState extends ConsumerState<EngineCard>
                             ? t.textPrimary : t.textSecondary,
                         fontSize: 26,
                         fontWeight: FontWeight.w200,
-                        fontFamily: 'monospace',
+                        fontFamily: AppTheme.monoFamily,
                         height: 1,
                       ),
                     ),
@@ -481,9 +467,9 @@ class _EngineCardState extends ConsumerState<EngineCard>
                           '${widget.rate}/min',
                           style: TextStyle(
                             color: color.withValues(alpha: 0.8),
-                            fontSize: 11,
+                            fontSize: 12,
                             fontWeight: FontWeight.w600,
-                            fontFamily: 'monospace',
+                            fontFamily: AppTheme.monoFamily,
                           ),
                         ),
                       ),
@@ -546,17 +532,16 @@ class _EngineCardState extends ConsumerState<EngineCard>
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
                       Text(
-                        widget.engine.label.toUpperCase(),
+                        widget.engine.label,
                         style: TextStyle(
                           color: active ? color : t.textPrimary,
-                          fontSize: 11,
+                          fontSize: 12,
                           fontWeight: FontWeight.w700,
-                          letterSpacing: 1,
                         ),
                       ),
                       Text(
                         widget.engine.description,
-                        style: TextStyle(color: t.textSecondary, fontSize: 9),
+                        style: TextStyle(color: t.textSecondary, fontSize: 12),
                         overflow: TextOverflow.ellipsis,
                       ),
                     ],
@@ -569,7 +554,7 @@ class _EngineCardState extends ConsumerState<EngineCard>
                       color: active ? t.textPrimary : t.textSecondary,
                       fontSize: 18,
                       fontWeight: FontWeight.w300,
-                      fontFamily: 'monospace',
+                      fontFamily: AppTheme.monoFamily,
                     ),
                   ),
                   const SizedBox(width: 6),
@@ -621,10 +606,9 @@ class _EngineCardState extends ConsumerState<EngineCard>
               live ? 'AUTO ${(s.autoRemainingMs / 1000).ceil()}s' : 'AUTO ${s.autoDurationSec}s',
               style: TextStyle(
                 color: live ? AppTheme.success : AppTheme.accent,
-                fontSize: 9,
+                fontSize: 12,
                 fontWeight: FontWeight.bold,
-                letterSpacing: 1,
-                fontFamily: 'monospace',
+                fontFamily: AppTheme.monoFamily,
               ),
             ),
           ),
@@ -699,9 +683,8 @@ class _EngineCardState extends ConsumerState<EngineCard>
                 _stateLabel,
                 style: TextStyle(
                   color: _stateColor(active, t),
-                  fontSize: 10,
+                  fontSize: 12,
                   fontWeight: FontWeight.w700,
-                  letterSpacing: 0.5,
                 ),
               ),
             ),
@@ -720,11 +703,11 @@ class _EngineCardState extends ConsumerState<EngineCard>
                     const SizedBox(width: 3),
                     Text(
                       '+${widget.nodeCount}',
-                      style: const TextStyle(
+                      style: TextStyle(
                         color: AppTheme.flockBle,
-                        fontSize: 9,
+                        fontSize: 12,
                         fontWeight: FontWeight.w700,
-                        fontFamily: 'monospace',
+                        fontFamily: AppTheme.monoFamily,
                       ),
                     ),
                   ],
@@ -739,8 +722,8 @@ class _EngineCardState extends ConsumerState<EngineCard>
             _formatLastSeen(widget.lastDetection!),
             style: TextStyle(
               color: t.textSecondary,
-              fontSize: 10,
-              fontFamily: 'monospace',
+              fontSize: 12,
+              fontFamily: AppTheme.monoFamily,
             ),
           ),
         ],

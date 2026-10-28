@@ -11,7 +11,7 @@ double barIconSize(BuildContext context) {
 double barGap(BuildContext context, [double m = 1]) =>
     barIconSize(context) * 0.35 * m;
 
-const kPillPalette = <Color>[
+List<Color> get kPillPalette => <Color>[
   AppTheme.accent,
   AppTheme.flockBle,
   AppTheme.wardrive,
@@ -26,12 +26,12 @@ const kPillPalette = <Color>[
 
 Color pillColor(int i) => kPillPalette[i % kPillPalette.length];
 
-const kPillAll = AppTheme.accent;
-const kPillBle = AppTheme.flockBle;
-const kPillWifi = AppTheme.wardrive;
+Color get kPillAll => AppTheme.accent;
+Color get kPillBle => AppTheme.flockBle;
+Color get kPillWifi => AppTheme.wardrive;
 
 (String, Color) wifiAuthMeta(int mode) => switch (mode) {
-      0 => ('OPEN', AppTheme.error),
+      0 => ('Open', AppTheme.error),
       1 => ('WEP', AppTheme.warning),
       2 => ('WPA', AppTheme.warning),
       3 => ('WPA2', AppTheme.success),
@@ -47,7 +47,6 @@ TextStyle barLabelStyle(BuildContext context, Color color,
   return base.copyWith(
     color: color,
     fontWeight: bold ? FontWeight.w700 : FontWeight.w600,
-    letterSpacing: 0.8,
   );
 }
 
@@ -56,7 +55,6 @@ TextStyle barLeadingStyle(BuildContext context, Color color) {
   return base.copyWith(
     color: color,
     fontWeight: FontWeight.w700,
-    letterSpacing: 1.2,
   );
 }
 
@@ -417,8 +415,7 @@ class CommandSheet extends StatelessWidget {
                   Expanded(
                     child: Text(
                       title,
-                      style: barLabelStyle(context, t.textDim)
-                          .copyWith(letterSpacing: 2.5),
+                      style: barLabelStyle(context, t.textDim),
                     ),
                   ),
                   ?trailing,
@@ -495,7 +492,7 @@ class CommandSheetTile extends StatelessWidget {
       leading: Icon(icon, size: barIconSize(context), color: fg),
       title: Text(
         label,
-        style: barLabelStyle(context, fg).copyWith(letterSpacing: 1),
+        style: barLabelStyle(context, fg),
       ),
       subtitle: subtitle == null
           ? null
@@ -527,7 +524,7 @@ class CommandSheetGroup extends StatelessWidget {
           padding: EdgeInsets.only(bottom: gap, top: gap * 0.5),
           child: Text(
             label,
-            style: barLabelStyle(context, t.textDim).copyWith(letterSpacing: 2),
+            style: barLabelStyle(context, t.textDim),
           ),
         ),
         child,
@@ -667,12 +664,12 @@ Future<void> showSortSheet<T>({
     context: context,
     builder: (ctx) => StatefulBuilder(
       builder: (ctx, setSheet) => CommandSheet(
-        title: 'SORT',
+        title: 'Sort',
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             CommandSheetGroup(
-              label: 'ORDER BY',
+              label: 'Order by',
               child: Wrap(
                 spacing: barGap(ctx),
                 runSpacing: barGap(ctx),
@@ -693,7 +690,7 @@ Future<void> showSortSheet<T>({
             const Divider(height: 1),
             CommandSheetTile(
               icon: ascending() ? Icons.arrow_upward : Icons.arrow_downward,
-              label: ascending() ? 'ASCENDING' : 'DESCENDING',
+              label: ascending() ? 'Ascending' : 'Descending',
               subtitle: hint?.call(),
               color: AppTheme.accent,
               onTap: () {
@@ -733,7 +730,7 @@ class CommandHeader extends StatelessWidget {
       padding: EdgeInsets.fromLTRB(gap * 2, gap * 1.5, gap * 2, gap * 1.5),
       child: Row(
         children: [
-          Text(title, style: style?.copyWith(letterSpacing: 3, color: t.textDim, fontWeight: FontWeight.w700)),
+          Text(title, style: style?.copyWith(color: t.textDim, fontWeight: FontWeight.w700)),
           SizedBox(width: gap),
           Expanded(
             child: SingleChildScrollView(
@@ -744,7 +741,7 @@ class CommandHeader extends StatelessWidget {
           for (final i in indicators) ...[i, SizedBox(width: gap * 0.5)],
           Text(
             count,
-            style: style?.copyWith(color: AppTheme.accent, fontFamily: 'monospace', fontWeight: FontWeight.w700),
+            style: style?.copyWith(color: AppTheme.accent, fontFamily: AppTheme.monoFamily, fontWeight: FontWeight.w700),
           ),
           if (actions.isNotEmpty) SizedBox(width: gap * 0.5),
           for (final a in actions)
@@ -789,8 +786,7 @@ class CommandEmptyState extends StatelessWidget {
             SizedBox(height: gap * 1.5),
             Text(
               title,
-              style: barLabelStyle(context, t.textDim)
-                  .copyWith(letterSpacing: 2),
+              style: barLabelStyle(context, t.textDim),
             ),
             SizedBox(height: gap * 0.75),
             Text(

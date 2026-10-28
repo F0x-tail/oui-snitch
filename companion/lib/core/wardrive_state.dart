@@ -47,13 +47,8 @@ enum WardriveTarget {
   final String description;
   final IconData icon;
 
-  Color get color => switch (this) {
-    WardriveTarget.flock => const Color(0xFFB44AFF),
-    WardriveTarget.drone => const Color(0xFF4AFFEA),
-    WardriveTarget.wigle => const Color(0xFFFFAA4A),
-    WardriveTarget.detector => const Color(0xFF4A9EFF),
-    WardriveTarget.wigleFlock => const Color(0xFF4A9EFF),
-  };
+  /// One tint for every target; the icon and label tell them apart.
+  Color get color => AppTheme.accent;
 
   List<Engine> engines(WardriveRadio radio) => switch (this) {
     // Flock is Wi-Fi only now. The BLE engine was removed from the firmware:

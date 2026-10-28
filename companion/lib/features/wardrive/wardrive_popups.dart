@@ -41,15 +41,13 @@ class _ScanningPillState extends State<_ScanningPill>
               decoration: BoxDecoration(
                 color: widget.color,
                 shape: BoxShape.circle,
-                boxShadow: [BoxShadow(
-                    color: widget.color.withValues(alpha: 0.6), blurRadius: 6)],
               ),
             ),
           ),
           const SizedBox(width: 8),
           Text(widget.label, style: TextStyle(
-            color: widget.color, fontSize: 11,
-            fontWeight: FontWeight.w700, letterSpacing: 1)),
+            color: widget.color, fontSize: 12,
+            fontWeight: FontWeight.w700)),
         ],
       ),
     );
