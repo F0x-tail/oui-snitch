@@ -13,6 +13,7 @@
 #include "odid_wifi.h"
 #include "dedup_ring.h"
 #include "wifi_frame.h"
+#include "drone_oui.h"
 
 #define MAX_UAVS 32
 
@@ -197,12 +198,7 @@ static bool odidIsPlausible(const ODID_UAS_Data* u) {
 // ID, or whose Remote ID was missed (in flight it is often Wi-Fi, easy to miss
 // on the wrong channel). Remote ID stays the authoritative identifier; this
 // only reports the airframe's own MAC, so it is a weaker, unverified signal.
-struct DroneVendorOui { uint8_t b[3]; const char* vendor; };
-static const DroneVendorOui DRONE_VENDOR_OUIS[] = {
-    {{0x38,0x1d,0x14}, "Skydio"},   // Skydio Inc. (IEEE MA-L)
-};
-static const int DRONE_VENDOR_OUI_COUNT =
-    sizeof(DRONE_VENDOR_OUIS) / sizeof(DRONE_VENDOR_OUIS[0]);
+// The table (tools/gen_drone_oui.py, from the IEEE registry) is in drone_oui.h.
 
 static const char* droneVendorLookup(const uint8_t* mac) {
     if (mac[0] & 0x02) return nullptr;      // locally administered / random
