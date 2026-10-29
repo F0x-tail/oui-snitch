@@ -1186,8 +1186,9 @@ class _WardriveScreenState extends ConsumerState<WardriveScreen> with WidgetsBin
             : 0.0);
     final mPerPx = _metersPerPixel(meanLat, zoom);
     final pixelBucketRadius = 28.0;
-    final bucketRadiusM = max(wd.markerDistanceM.toDouble(),
-        pixelBucketRadius * mPerPx);
+    // At least 10 m, so markers a few metres apart still merge when zoomed
+    // right in; otherwise the 28 px on screen decide.
+    final bucketRadiusM = max(10.0, pixelBucketRadius * mPerPx);
     final cellM = bucketRadiusM * 2.0;
     final cosMean = cos(meanLat * pi / 180);
 

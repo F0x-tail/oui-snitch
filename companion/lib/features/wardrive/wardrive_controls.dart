@@ -20,43 +20,6 @@ class _IdleControls extends StatelessWidget {
         // disagreed — the same duplication already removed from HOME. The map
         // shows what is running; it does not decide it.
         const SizedBox(height: 6),
-        Container(
-          margin: const EdgeInsets.symmetric(horizontal: 24),
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-          decoration: BoxDecoration(
-            color: th.background.withValues(alpha: 0.92),
-            borderRadius: BorderRadius.circular(10),
-            border: Border.all(color: th.border, width: 0.5),
-          ),
-          child: Row(
-            children: [
-              Icon(Icons.straighten, size: 12, color: th.textDim),
-              const SizedBox(width: 6),
-              Text('Dist', style: TextStyle(
-                color: th.textDim, fontSize: 12,
-                fontWeight: FontWeight.w600)),
-              Expanded(
-                child: SliderTheme(
-                  data: SliderThemeData(overlayShape: SliderComponentShape.noOverlay),
-                  child: Slider(
-                    value: wd.markerDistanceM,
-                    min: 1, max: 100,
-                    activeColor: AppTheme.accent,
-                    inactiveColor: th.border,
-                    onChanged: (v) {
-                      ref.read(wardriveProvider).markerDistanceM = v;
-                    },
-                  ),
-                ),
-              ),
-              Text('${wd.markerDistanceM.round()}m', style: TextStyle(
-                color: AppTheme.accent, fontSize: 12,
-                fontFamily: AppTheme.monoFamily, fontWeight: FontWeight.w600,
-              )),
-            ],
-          ),
-        ),
-        const SizedBox(height: 10),
         Row(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [

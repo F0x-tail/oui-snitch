@@ -454,7 +454,6 @@ class WardriveController extends ChangeNotifier {
   WardriveRadio radio = WardriveRadio.both;
   bool flockFilter = false;
   bool detectorFilter = false;
-  double _markerDistanceM = 10.0;
 
   int _wifiRssiRelogDb = 20;
   int get wifiRssiRelogDb => _wifiRssiRelogDb;
@@ -539,12 +538,6 @@ class WardriveController extends ChangeNotifier {
   void _pushWifiBand() {
     if (!isActive) return;
     _ble.sendWifiBand(wifiBandMask);
-  }
-
-  double get markerDistanceM => _markerDistanceM;
-  set markerDistanceM(double v) {
-    _markerDistanceM = v;
-    notifyListeners();
   }
 
   int rawWifiCount = 0;
