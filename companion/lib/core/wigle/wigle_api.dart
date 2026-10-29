@@ -95,6 +95,21 @@ class WigleApi {
     return WigleUploadResult.fromJson(data);
   }
 
+  /// The account's uploads, newest first (`/file/transactions`). [pageStart]
+  /// is the offset; WiGLE returns up to [pageSize] at a time.
+  Future<List<WigleTransaction>> getTransactions({int pageStart = 0, int pageSize = 100}) async {
+    final resp = await _guard(() => _dio.get('/file/transactions',
+        queryParameters: {'pagestart': pageStart, 'pageend': pageSize}));
+    final data = resp.data as Map<String, dynamic>;
+    if (data['success'] != true) {
+      throw WigleApiException(data['message']?.toString() ?? 'Could not list uploads');
+    }
+    return [
+      for (final r in (data['results'] as List? ?? const []))
+        WigleTransaction.fromJson(r as Map<String, dynamic>),
+    ];
+  }
+
   /// Get user's rank / standings.
   Future<WigleRanking> getRanking() async {
     final resp = await _guard(() => _dio.get('/stats/user'));
@@ -248,4 +263,51 @@ class WigleRanking {
       discoveredCell: (stats['discoveredCell'] as int?) ?? 0,
     );
   }
+}
+
+/// One upload as WiGLE records it (TransLog in api.wigle.net/swagger.json).
+class WigleTransaction {
+  const WigleTransaction({
+    required this.transactionId,
+    required this.fileName,
+    required this.fileSize,
+    required this.status,
+    required this.wifiNew,
+    required this.wifiTotal,
+    required this.btNew,
+    required this.btTotal,
+  });
+
+  final String transactionId;
+  final String fileName;
+  final int fileSize;
+  final String status;
+  /// Wi-Fi networks new to WiGLE, with a position, and all of them.
+  final int wifiNew;
+  final int wifiTotal;
+  final int btNew;
+  final int btTotal;
+
+  int get newNetworks => wifiNew + btNew;
+  int get totalNetworks => wifiTotal + btTotal;
+
+  factory WigleTransaction.fromJson(Map<String, dynamic> j) => WigleTransaction(
+        transactionId: (j['transid'] as String?) ?? '',
+        fileName: (j['fileName'] as String?) ?? '',
+        fileSize: (j['fileSize'] as num?)?.toInt() ?? 0,
+        status: (j['status'] as String?) ?? '',
+        wifiNew: (j['discoveredGps'] as num?)?.toInt() ?? 0,
+        wifiTotal: (j['totalGps'] as num?)?.toInt() ?? 0,
+        btNew: (j['btDiscoveredGps'] as num?)?.toInt() ?? 0,
+        btTotal: (j['btTotalGps'] as num?)?.toInt() ?? 0,
+      );
+}
+
+/// The upload of [fileName] among [uploads], if WiGLE has it. Matched on the
+/// name's end because WiGLE may keep a path or prefix in front of it.
+WigleTransaction? findUpload(Iterable<WigleTransaction> uploads, String fileName) {
+  for (final u in uploads) {
+    if (u.fileName.endsWith(fileName)) return u;
+  }
+  return null;
 }

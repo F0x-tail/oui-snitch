@@ -715,6 +715,20 @@ class _SessionHistorySheetState extends ConsumerState<_SessionHistorySheet> {
   }
 
   @override
+  void initState() {
+    super.initState();
+    // Check WiGLE's own upload list, so sessions it already holds show as
+    // uploaded even if this phone lost its local record of it.
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      if (!mounted) return;
+      final wigle = ref.read(wigleProvider);
+      if (!wigle.isLoggedIn) return;
+      final sessions = await ref.read(databaseProvider).getWardriveSessions();
+      await wigle.reconcileWithWigle(ref.read(wardriveProvider), [for (final s in sessions) s.id]);
+    });
+  }
+
+  @override
   Widget build(BuildContext context) {
     final t = AppTheme.of(context);
     final db = ref.watch(databaseProvider);
@@ -846,6 +860,7 @@ class _SessionHistorySheetState extends ConsumerState<_SessionHistorySheet> {
                               ? () => _uploadToWigle(context, ref, sid)
                               : null,
                           wigleUploaded: wigle.isUploaded(sid),
+                          wigleNew: wigle.wigleRecord(sid)?.newNetworks,
                           wigleUploading: wigle.isUploading(sid),
                           onUploadWdgwars: wdg.isLoggedIn
                               ? () => _uploadToWdgwars(context, ref, sid)
@@ -1217,6 +1232,7 @@ class _SessionRow extends ConsumerWidget {
     this.selected = false,
     this.onUploadWigle,
     this.wigleUploaded = false,
+    this.wigleNew,
     this.wigleUploading = false,
     this.onUploadWdgwars,
     this.wdgwarsUploaded = false,
@@ -1227,6 +1243,8 @@ class _SessionRow extends ConsumerWidget {
     this.droneCountFuture,
     this.wifiBleFuture,
   });
+  /// Networks WiGLE counted as new from this upload, once known.
+  final int? wigleNew;
   final Session session;
   final VoidCallback onTap;
   final VoidCallback onShare;
@@ -1456,7 +1474,9 @@ class _SessionRow extends ConsumerWidget {
                             : Icons.cloud_upload_outlined),
                     label: wigleUploading
                         ? 'Sending'
-                        : (wigleUploaded ? 'Sent' : 'WiGLE'),
+                        : (wigleUploaded
+                            ? (wigleNew != null ? 'Sent · $wigleNew new' : 'Sent')
+                            : 'WiGLE'),
                     color: wigleUploading
                         ? AppTheme.warning
                         : (wigleUploaded ? AppTheme.success : AppTheme.warning),

@@ -30,6 +30,9 @@ class WigleProvider extends ChangeNotifier {
   WigleUserStats? _stats;
   String? _error;
   final Set<String> _uploadedSessions = {};
+  /// What WiGLE reports for sessions it has, from the last reconcile.
+  final Map<String, WigleTransaction> _onWigle = {};
+  DateTime? _lastReconcile;
   final Map<String, bool> _uploadingMap = {};
   bool _donate = true;
 
@@ -55,6 +58,57 @@ class WigleProvider extends ChangeNotifier {
   }
 
   bool isUploaded(String sessionId) => _uploadedSessions.contains(sessionId);
+
+  /// WiGLE's own record of a session's upload, once reconciled.
+  WigleTransaction? wigleRecord(String sessionId) => _onWigle[sessionId];
+
+  /// Marks the sessions WiGLE already holds, by matching their CSV file
+  /// names against the account's upload list. The local record alone is not
+  /// enough: a reinstall or a database restore loses or rolls it back, and a
+  /// session uploaded then would be uploaded again. Throttled because the
+  /// API is rate limited; [force] skips the throttle.
+  Future<void> reconcileWithWigle(WardriveController wd, Iterable<String> sessionIds,
+      {bool force = false}) async {
+    final api = _api;
+    if (api == null) return;
+    final now = DateTime.now();
+    if (!force && _lastReconcile != null &&
+        now.difference(_lastReconcile!) < const Duration(minutes: 10)) {
+      return;
+    }
+    _lastReconcile = now;
+    try {
+      // The two newest pages; older sessions are almost always on record
+      // locally already.
+      final uploads = [
+        ...await api.getTransactions(),
+        ...await api.getTransactions(pageStart: 100),
+      ];
+      var changed = false;
+      for (final sid in sessionIds) {
+        final match = findUpload(uploads, await wd.csvFilenameFor(sid));
+        if (match == null) continue;
+        _onWigle[sid] = match;
+        changed = true;
+        if (_uploadedSessions.add(sid)) {
+          await _db.insertWigleUpload(WigleUploadsCompanion(
+            sessionId: drift.Value(sid),
+            uploadedAt: drift.Value(now.millisecondsSinceEpoch),
+            transactionId: drift.Value(match.transactionId),
+            networksAccepted: drift.Value(match.totalNetworks),
+            networksNew: drift.Value(match.newNetworks),
+            status: drift.Value('on WiGLE (${match.status})'),
+          ));
+          DebugLog.log('WIGLE: $sid already on WiGLE as ${match.transactionId}');
+        }
+      }
+      if (changed) notifyListeners();
+    } on WigleApiException catch (e) {
+      DebugLog.log('WIGLE: reconcile failed: $e');
+    } catch (e) {
+      DebugLog.log('WIGLE: reconcile failed: $e');
+    }
+  }
   bool isUploading(String sessionId) => _uploadingMap[sessionId] == true;
 
   Future<void> _loadCredentials() async {
@@ -158,6 +212,16 @@ class WigleProvider extends ChangeNotifier {
 
     _uploadingMap[sessionId] = true;
     notifyListeners();
+
+    // Last check against WiGLE itself before sending, so a lost local record
+    // cannot cause a second upload of the same file.
+    await reconcileWithWigle(wd, [sessionId], force: true);
+    if (_uploadedSessions.contains(sessionId)) {
+      _error = 'Already on WiGLE';
+      _uploadingMap.remove(sessionId);
+      notifyListeners();
+      return null;
+    }
 
     try {
       final file = await wd.getCsvFile(sessionId);

@@ -1446,6 +1446,9 @@ class WardriveController extends ChangeNotifier {
     return null;
   }
 
+  /// The name a session's CSV is written and uploaded under.
+  Future<String> csvFilenameFor(String sid) => _csvFilename(sid);
+
   /// Build a human-readable CSV filename from session start time.
   Future<String> _csvFilename(String sid) async {
     final session = await _db.getSessionById(sid);
