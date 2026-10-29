@@ -35,6 +35,7 @@ IconData detectorMethodIcon(String method) => switch (method) {
       // Consumer surveillance cameras (Ring, Nest, Wyze, Arlo...). Distinct
       // from the Flock videocam so the two are not confused on the map.
       'camera' => Icons.photo_camera,
+      'stream' => Icons.videocam,
       'glasses' => Icons.visibility,
       'axon' => Icons.local_police,
       'mesh' => Icons.hub,

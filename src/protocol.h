@@ -202,6 +202,7 @@ enum EngineState : uint8_t {
 #define METHOD_DET_EVILTWIN    10
 #define METHOD_DET_PINEAPPLE   11
 #define METHOD_DET_MESH        12
+#define METHOD_DET_STREAM      13  // sustained video-shaped uplink (traffic shape)
 
 // Signature bits are grouped by category rather than one per device, so the
 // eight bits cover far more than eight devices. SIG_HACKTOOLS folds together

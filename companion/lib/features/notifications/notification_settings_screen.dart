@@ -156,6 +156,7 @@ const _mutableMethods = <(String, String)>[
   ('deauth_storm', 'Deauth floods'),
   ('mesh', 'Mesh nodes'),
   ('camera', 'Cameras'),
+  ('stream', 'Streaming devices'),
   ('tracker', 'Trackers'),
 ];
 

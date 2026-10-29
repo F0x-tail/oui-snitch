@@ -910,6 +910,7 @@ String methodLabel(String method) => switch (method) {
   'glasses' => 'Meta glasses',
   'axon' => 'Axon',
   'camera' => 'Camera',
+  'stream' => 'Streaming',
   'evil_twin' => 'Evil twin',
   'pineapple' => 'Karma AP',
   'mesh' => 'Mesh node',

@@ -57,6 +57,7 @@ static const unsigned long DWELL_MS = 120;
 static DedupRing<32, 3000> dedup;
 static DedupRingISR<32, 3000> wifiDedupISR;
 static DedupRing<32, 10000> sigDedup;
+static DedupRingISR<16, 300000> streamDedupISR;
 static DedupRingISR<32, 8000> probeDedup;
 static DedupRingISR<16, 8000> axonDedupISR;
 
@@ -874,6 +875,118 @@ void IRAM_ATTR detectorCheckWifiSignaturesISR(const uint8_t* payload, int len, i
     detectorSigFrameISR(payload, len, rssi, channel);
 }
 
+// Streaming-camera detection by traffic shape.
+//
+// Video stays encrypted, but its shape does not: a camera streaming sends
+// long runs of near-MTU data frames from one station, second after second.
+// Uplink only (ToDS), so a TV streaming *down* never counts. One cue alone
+// is not enough — a laptop on a video call has the same shape — so:
+//   - camera-vendor OUI + 3 qualifying windows (~6 s)  -> HIGH
+//   - factory (globally administered) MAC, which phones rarely use on a
+//     network, streaming in qualifying windows spread over >= 60 s -> SUSPECTED
+// The detector holds its channel while a stream builds, at most 12 s per
+// station per burst, so one busy neighbour cannot pin it.
+#define STREAM_SLOTS         8
+#define STREAM_WIN_MS        2000
+#define STREAM_MIN_FRAMES    60
+#define STREAM_BIG_LEN       1000
+#define STREAM_MIN_BIG_PCT   50
+#define STREAM_CAM_WINDOWS   3
+#define STREAM_GENERIC_WINS  5
+#define STREAM_GENERIC_SPAN  60000
+#define STREAM_STREAK_GAP    300000
+#define STREAM_HOLD_MAX_MS   12000
+struct StreamTrk {
+    uint8_t  sta[6];
+    bool     used;
+    uint32_t winStart, lastMs;
+    uint16_t frames, big;
+    uint8_t  wins;
+    uint32_t firstQualMs, lastQualMs, holdStartMs;
+    int8_t   rssi;
+    uint8_t  ch;
+};
+static StreamTrk s_trk[STREAM_SLOTS];
+
+// Data frames only when camera detection is on: they are most of the air
+// traffic, and nothing else in the detector reads them.
+static uint32_t detectorWifiMask(void) {
+    return WIFI_PROMIS_FILTER_MASK_MGMT | ((sigMask & SIG_CAMERA) ? WIFI_PROMIS_FILTER_MASK_DATA : 0);
+}
+
+static void IRAM_ATTR streamAlert(const StreamTrk* t, const char* camVendor, uint32_t now) {
+    if (streamDedupISR.check(t->sta)) return;
+    DetectionEvent evt = {};
+    evt.engine_id = ENGINE_DETECTOR;
+    memcpy(evt.mac, t->sta, 6);
+    evt.rssi = t->rssi;
+    evt.channel = t->ch;
+    evt.timestamp_ms = now;
+    evt.method = METHOD_DET_STREAM;
+    evt.ext.detector.confidence = camVendor ? DET_CONF_HIGH : DET_CONF_SUSPECTED;
+    if (camVendor) {
+        snprintf(evt.ext.detector.filter_desc, sizeof(evt.ext.detector.filter_desc),
+                 "Streaming camera (%s)", camVendor);
+    } else {
+        strncpy(evt.ext.detector.filter_desc, "Streaming device, maybe camera",
+                sizeof(evt.ext.detector.filter_desc) - 1);
+    }
+    pushDetectionFromISR(&evt);
+}
+
+static void IRAM_ATTR streamAccount(const uint8_t* p, int len, int rssi, uint8_t ch) {
+    // Data frame (type 2), ToDS set, FromDS clear: a station sending up.
+    if (((p[0] >> 2) & 0x03) != 2 || (p[1] & 0x03) != 0x01) return;
+    if (p[0] & 0x40) return;                       // null / QoS-null: no payload
+    const uint8_t* sta = &p[10];
+    uint32_t now = millis();
+
+    StreamTrk* t = nullptr;
+    StreamTrk* victim = &s_trk[0];
+    for (int i = 0; i < STREAM_SLOTS; i++) {
+        if (s_trk[i].used && memcmp(s_trk[i].sta, sta, 6) == 0) { t = &s_trk[i]; break; }
+        if (!s_trk[i].used || s_trk[i].lastMs < victim->lastMs) victim = &s_trk[i];
+    }
+    if (!t) {
+        t = victim;
+        memset(t, 0, sizeof(*t));
+        memcpy(t->sta, sta, 6);
+        t->used = true;
+        t->winStart = now;
+    }
+    if (now - t->lastMs > 4000) {                  // gap: start a fresh window
+        t->winStart = now; t->frames = 0; t->big = 0; t->holdStartMs = 0;
+    }
+    t->lastMs = now;
+    t->rssi = (int8_t)rssi;
+    t->ch = ch;
+    if (t->frames < 0xFFFF) t->frames++;
+    if (len >= STREAM_BIG_LEN && t->big < 0xFFFF) t->big++;
+
+    if (t->big >= 8) {
+        if (!t->holdStartMs) t->holdStartMs = now;
+        if (now - t->holdStartMs < STREAM_HOLD_MAX_MS) g_detHoldUntil = now + 1500;
+    }
+
+    if (now - t->winStart < STREAM_WIN_MS) return;
+    bool qual = t->frames >= STREAM_MIN_FRAMES &&
+                (uint32_t)t->big * 100 >= (uint32_t)t->frames * STREAM_MIN_BIG_PCT;
+    t->winStart = now; t->frames = 0; t->big = 0;
+    if (!qual) return;
+    if (t->wins && now - t->lastQualMs > STREAM_STREAK_GAP) t->wins = 0;
+    if (!t->wins) t->firstQualMs = now;
+    if (t->wins < 0xFF) t->wins++;
+    t->lastQualMs = now;
+
+    const char* camVendor = cameraMatchOuiISR(sta);
+    if (camVendor && t->wins >= STREAM_CAM_WINDOWS) {
+        streamAlert(t, camVendor, now);
+    } else if (!(sta[0] & 0x02) && t->wins >= STREAM_GENERIC_WINS &&
+               now - t->firstQualMs >= STREAM_GENERIC_SPAN) {
+        streamAlert(t, nullptr, now);
+    }
+}
+
 static void IRAM_ATTR wifiSnifferCb(void* buf, wifi_promiscuous_pkt_type_t type) {
     g_engRawSeen++;
     if (!scanning || !wifiActive) return;
@@ -883,6 +996,11 @@ static void IRAM_ATTR wifiSnifferCb(void* buf, wifi_promiscuous_pkt_type_t type)
     uint8_t* p = pkt->payload;
     int len = wifiFrameLen(pkt->rx_ctrl.sig_len);
     if (len < 24) return;
+
+    if (type == WIFI_PKT_DATA) {
+        if (sigMask & SIG_CAMERA) streamAccount(p, len, pkt->rx_ctrl.rssi, pkt->rx_ctrl.channel);
+        return;
+    }
 
     if (detectorSigFrameISR(p, len, pkt->rx_ctrl.rssi, pkt->rx_ctrl.channel)) return;
 
@@ -1065,9 +1183,12 @@ void detectorSetFilters(const uint8_t* data, size_t len) {
 void detectorSetSigMask(uint8_t mask) {
     const uint8_t wifiBits = SIG_DEAUTH | SIG_PROBE | SIG_HACKTOOLS | SIG_AXON | SIG_CAMERA;
     bool prevWifi = (sigMask & wifiBits) != 0;
+    bool prevCam = (sigMask & SIG_CAMERA) != 0;
     sigMask = mask;
     bool newWifi = (sigMask & wifiBits) != 0;
-    if (scanning && prevWifi != newWifi &&
+    bool newCam = (sigMask & SIG_CAMERA) != 0;
+    // The camera bit also decides whether data frames are captured.
+    if (scanning && (prevWifi != newWifi || prevCam != newCam) &&
         engineGetState(ENGINE_WARDRIVE) == ESTATE_DISABLED) {
         detectorStop();
         detectorStart();
@@ -1114,7 +1235,7 @@ static void detectorStart(void) {
         }
         wifiSnifferApplyPs();
         wifiApplyRegdomain();
-        wifiCoexRegister(wifiSnifferCb, WIFI_PROMIS_FILTER_MASK_MGMT);
+        wifiCoexRegister(wifiSnifferCb, detectorWifiMask());
         channelIdx = 0;
         while (channelIdx < channelCount - 1 && !wifiChanEnabled(channels[channelIdx])) channelIdx++;
         esp_wifi_set_channel(channels[channelIdx], WIFI_SECOND_CHAN_NONE);
@@ -1180,7 +1301,7 @@ void detectorHostSuspend(bool suspend) {
             (sigMask & (SIG_DEAUTH | SIG_PROBE | SIG_HACKTOOLS | SIG_AXON | SIG_CAMERA))) {
             if (!meshIsEnabled()) WiFi.mode(WIFI_STA);
             wifiSnifferApplyPs();
-            wifiCoexRegister(wifiSnifferCb, WIFI_PROMIS_FILTER_MASK_MGMT);
+            wifiCoexRegister(wifiSnifferCb, detectorWifiMask());
             wifiActive = true;
         }
     }
