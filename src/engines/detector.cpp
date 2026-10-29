@@ -420,22 +420,27 @@ static void detectorCheckSignatures(NimBLEAdvertisedDevice* dev, const uint8_t* 
         }
     }
     if (sigMask & SIG_TRACKER) {
-        // Samsung SmartTag / SmartTag+ and Tile both advertise a fixed 16-bit
-        // service UUID, so the UUID alone identifies the family.
+        // Samsung SmartTag / SmartTag+ and Tile advertise fixed 16-bit service
+        // UUIDs assigned to them by the Bluetooth SIG, so the UUID alone
+        // identifies the family. Tile holds three: 0xFEED, 0xFEEC and 0xFD84.
         if (dev->isAdvertisingService(NimBLEUUID((uint16_t)0xFD5A))) {
             trackerObserve(mac, rssi, TRK_FAM_SAMSUNG);
             return;
         }
-        if (dev->isAdvertisingService(NimBLEUUID((uint16_t)0xFEED))) {
+        if (dev->isAdvertisingService(NimBLEUUID((uint16_t)0xFEED)) ||
+            dev->isAdvertisingService(NimBLEUUID((uint16_t)0xFEEC)) ||
+            dev->isAdvertisingService(NimBLEUUID((uint16_t)0xFD84))) {
             trackerObserve(mac, rssi, TRK_FAM_TILE);
             return;
         }
         // Google's Find My Device network rides the Eddystone UUID (0xFEAA), so
         // the UUID on its own would also match ordinary Eddystone beacons. The
-        // FMDN frame is distinguished by its 0x40 frame type.
+        // FMDN frame is distinguished by its frame type: 0x40 normally, 0x41
+        // while unwanted-tracking protection mode is on (the tag is separated
+        // from its owner and keeps a fixed address).
         if (dev->isAdvertisingService(NimBLEUUID((uint16_t)0xFEAA))) {
             std::string sd = dev->getServiceData(NimBLEUUID((uint16_t)0xFEAA));
-            if (sd.size() >= 1 && (uint8_t)sd[0] == 0x40) {
+            if (sd.size() >= 1 && ((uint8_t)sd[0] == 0x40 || (uint8_t)sd[0] == 0x41)) {
                 trackerObserve(mac, rssi, TRK_FAM_GOOGLE);
                 return;
             }

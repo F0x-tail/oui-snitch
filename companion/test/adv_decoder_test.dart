@@ -69,6 +69,11 @@ void main() {
     expect(f.any((x) => x.label.startsWith('Eddystone')), isFalse);
   });
 
+  test('find hub 0x40 frame says protection mode is off, not that the owner is near', () {
+    final f = AdvPayloadDecoder.decodeService(ServiceDataRecord('FEAA', '40${'11' * 20}00'));
+    expect(f.firstWhere((x) => x.label == 'Find Hub').value, 'unwanted-tracking mode off');
+  });
+
   test('eddystone url expands scheme and suffix', () {
     final f = AdvPayloadDecoder.decodeService(ServiceDataRecord('FEAA', '10C501${_ascii('example')}07'));
     expect(f.single.value, 'https://www.example.com');

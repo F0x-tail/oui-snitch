@@ -57,4 +57,11 @@ void main() {
     expect(g.confidence, Confidence.high);
     expect(g.headline, 'Most likely AirPods (2nd generation)');
   });
+
+  test('tile uuids are the three the SIG assigns to Tile, not Jawbone FEDD', () {
+    for (final u in ['FEED', 'FEEC', 'FD84']) {
+      expect(DeviceExplain.uuidGloss(u), 'Tile tracker', reason: u);
+    }
+    expect(DeviceExplain.uuidGloss('FEDD'), isNot('Tile tracker'));
+  });
 }

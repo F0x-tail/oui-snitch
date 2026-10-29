@@ -176,7 +176,7 @@ class AdvPayloadDecoder {
               RoleHint(
                 'tag',
                 'a Google Find Hub tag',
-                frame == 0x41 ? 'Find Hub separated (unwanted-tracking) frame.' : 'Find Hub nearby frame.',
+                frame == 0x41 ? 'Find Hub separated (unwanted-tracking) frame.' : 'Find Hub frame.',
                 8,
               ),
             );
@@ -552,7 +552,7 @@ class AdvPayloadDecoder {
         return const [AdvField('Eddystone-EID', 'ephemeral ID (rotating)')];
       case 0x40:
       case 0x41:
-        final mode = frame == 0x41 ? 'separated (unwanted-tracking mode)' : 'nearby / with owner';
+        final mode = frame == 0x41 ? 'separated (unwanted-tracking mode)' : 'unwanted-tracking mode off';
         final eidLen = bytes.length >= 33
             ? 32
             : bytes.length >= 21
