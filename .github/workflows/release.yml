@@ -31,14 +31,14 @@ jobs:
           FW=$(sed -n 's/.*#define FW_VERSION  *"\([0-9.]*\)".*/\1/p' src/protocol.h)
           FWNUM=$(sed -n 's/.*#define FW_VERSION_NUM  *\(0x[0-9a-fA-F]*\).*/\1/p' src/protocol.h)
           PUB=$(sed -n 's/^version: *\([0-9.]*\)+.*/\1/p' companion/pubspec.yaml)
-          APP=$(sed -n "s/.*appVersion = '\([0-9.]*\)'.*/\1/p" companion/lib/features/config/device_config.dart)
+          APP=$(sed -n "s/.*kAppVersion = '\([0-9.]*\)'.*/\1/p" companion/lib/core/app_version.dart)
 
           rc=0
           check() { [ "$2" = "$3" ] || { echo "::error::$1 is '$2', tag wants '$3'"; rc=1; }; }
           check "src/protocol.h FW_VERSION"          "$FW"    "$V"
           check "src/protocol.h FW_VERSION_NUM"      "$FWNUM" "$WANT_NUM"
           check "companion/pubspec.yaml"             "$PUB"   "$V"
-          check "device_config.dart appVersion"      "$APP"   "$V"
+          check "app_version.dart kAppVersion"       "$APP"   "$V"
           [ $rc -eq 0 ] && echo "all version sources = $V"
           exit $rc
 

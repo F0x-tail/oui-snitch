@@ -179,6 +179,9 @@ class BleManager {
   String _sessionId = '';
   String _nodeId = '';
   String _board = '';
+  String _firmwareVersion = '';
+  /// FW_VERSION as the board reported it on connect; empty before that.
+  String get firmwareVersion => _firmwareVersion;
   String _role = '';
   String? _lastDeviceId;
   String? _primaryDeviceId;
@@ -872,6 +875,7 @@ class BleManager {
     );
     final infoData = await _deviceInfoChar!.read();
     final parts = _parseDeviceInfo(infoData);
+    _firmwareVersion = parts.isNotEmpty ? parts[0] : '';
     _nodeId = parts.length > 1 ? parts[1] : '';
     _board = parts.length > 2 ? parts[2] : '';
     _role = parts.length > 3 ? parts[3] : '';

@@ -12,6 +12,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 import 'package:latlong2/latlong.dart';
+import 'package:oui_spy/core/app_version.dart';
 import 'package:oui_spy/core/app_state.dart';
 import 'package:oui_spy/core/classify/device_registry.dart';
 import 'package:oui_spy/core/prefs.dart';

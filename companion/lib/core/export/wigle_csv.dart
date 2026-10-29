@@ -1,139 +1,130 @@
 // SPDX-License-Identifier: MIT
 import 'package:intl/intl.dart';
+import 'package:oui_spy/core/app_version.dart';
 import 'package:oui_spy/core/geofence/geofence_filter.dart';
 import 'package:oui_spy/core/ignore_list_state.dart';
 import 'package:oui_spy/core/models/detection.dart';
 import 'package:oui_spy/core/models/engine.dart';
 import 'package:oui_spy/core/radio_classifier.dart';
 
+/// WiGLE CSV v1.6 (https://api.wigle.net/csvFormat.html).
+///
+/// Only wardrive observations are written. A session also holds tracker,
+/// deauth, camera and drone detections; written as rows they would reach
+/// WiGLE as networks, some carrying the MAC of a person's phone.
 class WigleCsv {
   const WigleCsv._();
 
-  static const _version = '1.0.0';
   static final _dateFormat = DateFormat('yyyy-MM-dd HH:mm:ss');
 
-  static String generate(List<Detection> detections, {IgnoreListState? ignoreList, GeofenceFilter? geofenceFilter, String board = ''}) {
+  /// RFC 4180 records end in CRLF.
+  static const _eol = '\r\n';
+
+  static bool isWardriveObservation(Detection d) =>
+      d.engine == Engine.wardrive && (d.method == 'wifi_ap' || d.method == 'ble_adv');
+
+  static String generate(
+    List<Detection> detections, {
+    IgnoreListState? ignoreList,
+    GeofenceFilter? geofenceFilter,
+    String board = '',
+    String firmwareVersion = '',
+  }) {
     final buffer = StringBuffer();
 
     final b = board.toLowerCase();
     final device = b.contains('c5') ? 'ESP32-C5'
                  : b.contains('c3') ? 'ESP32-C3'
                  : 'ESP32-S3';
-    final boardName = b.contains('devkit') ? 'DevKitC' : 'XIAO';
+    final (boardName, brand) = b.contains('devkit') ? ('DevKitC', 'Espressif')
+        : b.contains('dongle') ? ('T-Dongle-S3', 'LILYGO')
+        : ('XIAO', 'Seeed Studio');
 
-    // Pre-header
-    buffer.writeln(
+    // Pre-header: release is the device's own software, the firmware here.
+    buffer.write(
       'WigleWifi-1.6,'
-      'appRelease=$_version,'
+      'appRelease=$kAppVersion,'
       'model=OUI-SNITCH,'
-      'release=$_version,'
+      'release=${firmwareVersion.isEmpty ? 'unknown' : firmwareVersion},'
       'device=$device,'
-      'display=companion,'
+      'display=none,'
       'board=$boardName,'
-      'brand=colonelpanic,'
+      'brand=$brand,'
       'star=Sol,'
       'body=3,'
-      'subBody=0',
+      'subBody=0$_eol',
     );
 
-    // Column headers (line 2)
-    buffer.writeln(
+    buffer.write(
       'MAC,SSID,AuthMode,FirstSeen,Channel,Frequency,RSSI,'
       'CurrentLatitude,CurrentLongitude,AltitudeMeters,'
-      'AccuracyMeters,RCOIs,MfgrId,Type',
+      'AccuracyMeters,RCOIs,MfgrId,Type$_eol',
     );
 
-    // Data rows
     for (final d in detections) {
+      if (!isWardriveObservation(d)) continue;
       if (d.latitude == null || d.longitude == null) continue;
 
-      if (ignoreList != null) {
-        final isBle = d.isBleDetection;
-        if (ignoreList.shouldSuppress(
-          mac: d.macAddress,
-          ssid: d.ssid.isNotEmpty ? d.ssid : d.deviceName,
-          isBle: isBle,
-        )) {
-          continue;
-        }
+      final isBle = d.isBleDetection;
+      if (ignoreList != null &&
+          ignoreList.shouldSuppress(
+            mac: d.macAddress,
+            ssid: d.ssid.isNotEmpty ? d.ssid : d.deviceName,
+            isBle: isBle,
+          )) {
+        continue;
       }
-
-      // Geofence exclusion: skip detections inside wardrive-exclusion zones
       if (geofenceFilter != null &&
           geofenceFilter.isExcludedNullable(d.latitude, d.longitude)) {
         continue;
       }
 
-      final mac = d.macAddress;
-      final isBleDevice = d.isBleDetection;
-      final String rawSsid;
-      if (d.engine == Engine.skySpy) {
-        rawSsid = d.odid?.uavId ?? d.deviceName;
-      } else if (isBleDevice) {
-        rawSsid = d.deviceName;
-      } else {
-        rawSsid = d.ssid;
-      }
-      final ssid = _escapeCsv(rawSsid);
-      final authMode = _capabilities(d);
+      final name = _escapeCsv(isBle ? d.deviceName : d.ssid);
+      final auth = isBle ? '[LE]' : authTag(d.wardrive?.authMode);
       final firstSeen = _dateFormat.format(d.appTimestamp.toUtc());
-      final channel = d.channel;
-      final frequency = _frequency(d);
-      final rssi = d.rssi;
-      final lat = d.latitude!;
-      final lon = d.longitude!;
-      final alt = d.altitude ?? 0.0;
-      final acc = d.accuracy ?? 0.0;
-      final type = _type(d);
+      // Bluetooth: channel 0 and no frequency, as in the spec's own example.
+      final channel = isBle ? 0 : d.channel;
+      final frequency = isBle ? '' : _frequency(d.channel);
+      final alt = (d.altitude ?? 0).round();
+      // Accuracy is an estimate in metres; 0 would claim a perfect fix.
+      final acc = d.accuracy;
+      final accText = acc != null && acc > 0 ? '$acc' : '';
+      final type = isBle ? 'BLE' : 'WIFI';
 
-      buffer.writeln(
-        '$mac,$ssid,$authMode,$firstSeen,$channel,'
-        '$frequency,$rssi,$lat,$lon,$alt,$acc,,,$type',
+      buffer.write(
+        '${d.macAddress},$name,$auth,$firstSeen,$channel,'
+        '$frequency,${d.rssi},${d.latitude},${d.longitude},$alt,$accText,,,$type$_eol',
       );
     }
 
     return buffer.toString();
   }
 
-  static String _capabilities(Detection d) {
-    if (d.isBleDetection) return '[LE]';
-    return authTag(d.wardrive?.authMode);
-  }
-
-  /// WiGLE AuthMode for the board's auth_mode code. A code we cannot name is
-  /// written as unknown: it used to become WPA2, which put a guess into the
-  /// map as if it had been observed.
+  /// AuthMode as Android's ScanResult.capabilities writes it, which the spec
+  /// names as the format (AOSP InformationElementUtil
+  /// .generateCapabilitiesString). The board does not send the pairwise
+  /// cipher, so the cipher segment is left out, as Android does when it has
+  /// none. A code we cannot name is left blank: "[ESS]" alone would claim an
+  /// open network.
   static String authTag(int? auth) => switch (auth) {
-        0 => '[OPEN]',
-        1 => '[WEP]',
-        2 => '[WPA_PSK]',
-        3 => '[WPA2_PSK]',
-        4 => '[WPA_WPA2_PSK]',
-        5 => '[WPA2_EAP]',
-        6 => '[WPA3_SAE]',
-        7 => '[WPA2_PSK][WPA3_SAE]',
-        8 => '[OWE]',
-        9 => '[WPA3_EAP]',
-        _ => '[UNKNOWN]',
+        0 => '[ESS]',
+        1 => '[WEP][ESS]',
+        2 => '[WPA-PSK][ESS]',
+        3 => '[WPA2-PSK][RSN-PSK][ESS]',
+        4 => '[WPA-PSK][WPA2-PSK][RSN-PSK][ESS]',
+        5 => '[WPA2-EAP/SHA1][RSN-EAP/SHA1][ESS]',
+        6 => '[RSN-SAE][ESS]',
+        7 => '[WPA2-PSK][RSN-PSK+SAE][ESS]',
+        8 => '[RSN-OWE][ESS]',
+        9 => '[RSN-EAP_SUITE_B_192][ESS]',
+        _ => '',
       };
 
-
-  static String _frequency(Detection d) {
-    final isBle = d.isBleDetection;
-    if (isBle) return '0';
-    if (d.channel >= 1 && d.channel <= 13) return '${2407 + d.channel * 5}';
-    if (d.channel == 14) return '2484';
-    if (d.channel >= 36 && d.channel <= 177) {
-      return '${5000 + d.channel * 5}';
-    }
-    return '0';
-  }
-
-  /// WiGLE type field.
-  static String _type(Detection d) {
-    final isBle = d.isBleDetection;
-    if (isBle) return 'BLE';
-    return 'WIFI';
+  static String _frequency(int ch) {
+    if (ch >= 1 && ch <= 13) return '${2407 + ch * 5}';
+    if (ch == 14) return '2484';
+    if (ch >= 36 && ch <= 177) return '${5000 + ch * 5}';
+    return '';
   }
 
   static String _escapeCsv(String value) {

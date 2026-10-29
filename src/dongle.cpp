@@ -482,18 +482,20 @@ static void csvEscape(const char* in, char* out, size_t outLen) {
 
 static const char* wigleAuth(const DetectionEvent* e, bool isBle) {
     if (isBle) return "[LE]";
+    // Android ScanResult.capabilities, which WiGLE CSV 1.6 names as the
+    // AuthMode format; same mapping as the app's WigleCsv.authTag.
     switch (e->ext.wardrive.auth_mode) {
-        case 0: return "[OPEN]";
-        case 1: return "[WEP]";
-        case 2: return "[WPA_PSK]";
-        case 3: return "[WPA2_PSK]";
-        case 4: return "[WPA_WPA2_PSK]";
-        case 5: return "[WPA2_EAP]";
-        case 6: return "[WPA3_SAE]";
-        case 7: return "[WPA2_PSK][WPA3_SAE]";
-        case 8: return "[OWE]";
-        case 9: return "[WPA3_EAP]";
-        default: return "[UNKNOWN]";
+        case 0: return "[ESS]";
+        case 1: return "[WEP][ESS]";
+        case 2: return "[WPA-PSK][ESS]";
+        case 3: return "[WPA2-PSK][RSN-PSK][ESS]";
+        case 4: return "[WPA-PSK][WPA2-PSK][RSN-PSK][ESS]";
+        case 5: return "[WPA2-EAP/SHA1][RSN-EAP/SHA1][ESS]";
+        case 6: return "[RSN-SAE][ESS]";
+        case 7: return "[WPA2-PSK][RSN-PSK+SAE][ESS]";
+        case 8: return "[RSN-OWE][ESS]";
+        case 9: return "[RSN-EAP_SUITE_B_192][ESS]";
+        default: return "";
     }
 }
 
@@ -537,8 +539,8 @@ static void openCsvFiles(void) {
     s_wigleCsv = DONGLE_SD.open(path, FILE_WRITE);
     if (s_wigleCsv) {
         s_wigleCsv.printf("WigleWifi-1.6,appRelease=%s,model=OUI-SNITCH,release=%s,"
-                          "device=%s,display=firmware,board=%s,brand=colonelpanic,"
-                          "star=Sol,body=3,subBody=0\n",
+                          "device=%s,display=none,board=%s,brand=LILYGO,"
+                          "star=Sol,body=3,subBody=0\r\n",
                           FW_VERSION, FW_VERSION, wigleDevice(), DONGLE_WIGLE_BOARD);
         s_wigleCsv.println("MAC,SSID,AuthMode,FirstSeen,Channel,Frequency,RSSI,"
                            "CurrentLatitude,CurrentLongitude,AltitudeMeters,"
@@ -1356,13 +1358,18 @@ void dongleOnDetection(const DetectionEvent* evt) {
     }
 
     if (s_wigleCsv && evt->engine_id == ENGINE_WARDRIVE && gpsValid && haveUtc) {
-        s_wigleCsv.printf("%s,%s,%s,%s,%u,%lu,%d,%.7f,%.7f,%.1f,%.1f,,,%s\n",
+        // WiGLE 1.6: integer altitude; Bluetooth rows have channel 0 and no
+        // frequency; accuracy left blank rather than claiming 0 m.
+        char freq[8] = "";
+        if (!isBle) snprintf(freq, sizeof(freq), "%lu", (unsigned long)chanToFreq(evt->channel));
+        char acc[16] = "";
+        if (currentGps.accuracy > 0) snprintf(acc, sizeof(acc), "%.1f", (double)currentGps.accuracy);
+        s_wigleCsv.printf("%s,%s,%s,%s,%u,%s,%d,%.7f,%.7f,%ld,%s,,,%s\r\n",
                           s_hitMac, nameEsc, wigleAuth(evt, isBle), utcStr,
-                          (unsigned)evt->channel,
-                          (unsigned long)(isBle ? 0u : chanToFreq(evt->channel)),
+                          isBle ? 0u : (unsigned)evt->channel, freq,
                           (int)evt->rssi,
                           currentGps.latitude, currentGps.longitude,
-                          (double)currentGps.altitude, (double)currentGps.accuracy,
+                          lroundf((float)currentGps.altitude), acc,
                           isBle ? "BLE" : "WIFI");
         s_wigleRows++;
     }

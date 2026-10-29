@@ -428,14 +428,12 @@ class _NodeRenameRowState extends ConsumerState<_NodeRenameRow> {
 class _VersionRow extends StatelessWidget {
   const _VersionRow();
 
-  static const String appVersion = '0.6.1';
-
   @override
   Widget build(BuildContext context) {
     return ConfigInfoRow(
       icon: Icons.info_outline,
       label: 'Version',
-      value: appVersion,
+      value: kAppVersion,
     );
   }
 }

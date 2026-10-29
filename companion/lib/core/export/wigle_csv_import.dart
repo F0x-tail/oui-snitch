@@ -236,20 +236,31 @@ class WigleCsvImport {
     return null;
   }
 
+  /// auth_mode for a WiGLE AuthMode string: Android capabilities, as WiGLE
+  /// itself writes and as we now export ("[WPA2-PSK-CCMP][RSN-PSK-CCMP][ESS]"),
+  /// and the underscore style other wardrivers use ("[WPA2_PSK]").
   @visibleForTesting
   static int parseAuthMode(String s) {
     final u = s.toUpperCase();
-    if (u.contains('UNKNOWN') || u.contains('UNDEFINED')) return kAuthUnknown;
-    if (u.contains('OWE')) return 8;
-    if (u.contains('WPA3') && (u.contains('EAP') || u.contains('ENT'))) return 9;
-    if (u.contains('WPA3') && u.contains('WPA2')) return 7;
-    if (u.contains('WPA3')) return 6;
-    if (u.contains('WPA2_EAP') || u.contains('EAP')) return 5;
-    if (u.contains('WPA_WPA2')) {
-      return 4;
+    if (u.trim().isEmpty || u.contains('UNKNOWN') || u.contains('UNDEFINED')) {
+      return kAuthUnknown;
     }
-    if (u.contains('WPA2')) return 3;
-    if (u.contains('WPA')) return 2;
+    if (u.contains('SUITE_B') || (u.contains('WPA3') && (u.contains('EAP') || u.contains('ENT')))) {
+      return 9;
+    }
+    if (u.contains('OWE')) return 8;
+    final sae = u.contains('SAE') || u.contains('WPA3');
+    final psk = u.contains('PSK') || u.contains('WPA2');
+    if (sae && (u.contains('PSK+SAE') || u.contains('WPA2_WPA3') || u.contains('WPA2-PSK') || u.contains('WPA2_PSK'))) {
+      return 7;
+    }
+    if (sae) return 6;
+    if (u.contains('EAP')) return 5;
+    final wpa1 = u.contains('[WPA-') || u.contains('[WPA_PSK') || u.contains('WPA_WPA2');
+    final wpa2 = u.contains('WPA2') || u.contains('RSN');
+    if (wpa1 && wpa2) return 4;
+    if (wpa2 && psk) return 3;
+    if (wpa1 || u.contains('WPA')) return 2;
     if (u.contains('WEP')) return 1;
     return 0;
   }

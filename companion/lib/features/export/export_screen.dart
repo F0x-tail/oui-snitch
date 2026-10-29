@@ -10,6 +10,7 @@ import 'package:oui_spy/core/db/app_database.dart' show AppDatabase, databasePro
 import 'package:oui_spy/core/debug_log.dart';
 import 'package:oui_spy/core/ignore_list_state.dart';
 import 'package:oui_spy/core/export/wigle_csv.dart';
+import 'package:oui_spy/core/geofence/geofence_filter.dart';
 import 'package:oui_spy/core/models/detection.dart';
 import 'package:oui_spy/theme/app_theme.dart';
 import 'package:path_provider/path_provider.dart';
@@ -56,7 +57,7 @@ class ExportScreen extends ConsumerWidget {
               label: 'WiGLE CSV 1.6',
               description: 'Compatible with wigle.net upload',
               icon: Icons.table_chart,
-              onTap: count > 0 ? () => _exportWigleCsv(context, state.recentDetections, ref.read(ignoreListProvider), ref.read(bleManagerProvider).board) : null,
+              onTap: count > 0 ? () => _exportWigleCsv(context, ref, state.recentDetections) : null,
             ),
             _ExportButton(
               label: 'JSON',
@@ -213,8 +214,17 @@ class ExportScreen extends ConsumerWidget {
     );
   }
 
-  Future<void> _exportWigleCsv(BuildContext context, List<Detection> detections, IgnoreListState ignoreList, String board) async {
-    final csv = WigleCsv.generate(detections, ignoreList: ignoreList, board: board);
+  Future<void> _exportWigleCsv(BuildContext context, WidgetRef ref, List<Detection> detections) async {
+    final ble = ref.read(bleManagerProvider);
+    // Exclusion zones apply here as in a session export; they used to be
+    // skipped, so a zone's networks reached any file shared from the feed.
+    final csv = WigleCsv.generate(
+      detections,
+      ignoreList: ref.read(ignoreListProvider),
+      geofenceFilter: ref.read(geofenceFilterProvider),
+      board: ble.board,
+      firmwareVersion: ble.firmwareVersion,
+    );
     await _shareFile(context, csv, 'oui_spy_wigle.csv');
   }
 
