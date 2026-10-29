@@ -68,11 +68,49 @@ static bool hwGpsStarted = false;
 static bool hwGpsFix = false;
 static unsigned long hwGpsLastChar = 0;
 
+// Modules ship at different rates (many u-blox M10 boards at 38400), and at
+// the wrong one nothing parses and no fix ever comes. The rate is found by
+// trying each in turn until NMEA with a valid checksum arrives, then saved.
+// Done in the poll loop, not at boot, so a board without a module starts as
+// fast as before.
+static const uint32_t kGpsBauds[] = {9600, 38400, 115200, 57600, 19200, 4800};
+#define HW_GPS_BAUD_TRY_MS 2500
+static uint8_t  hwGpsBaudIdx = 0;
+static bool     hwGpsBaudLocked = false;
+static uint32_t hwGpsBaudSince = 0;
+static uint32_t hwGpsChecksumsAtSwitch = 0;
+
 void hwGpsInit(void) {
-    hwGpsSerial.begin(9600, SERIAL_8N1, PIN_GPS_RX, PIN_GPS_TX);
+    Preferences p;
+    p.begin("hwgps", true);
+    uint32_t saved = p.getUInt("baud", 9600);
+    p.end();
+    for (uint8_t i = 0; i < sizeof(kGpsBauds) / sizeof(kGpsBauds[0]); i++)
+        if (kGpsBauds[i] == saved) hwGpsBaudIdx = i;
+    hwGpsSerial.begin(kGpsBauds[hwGpsBaudIdx], SERIAL_8N1, PIN_GPS_RX, PIN_GPS_TX);
+    hwGpsBaudSince = millis();
     hwGpsStarted = true;
-    Serial.printf("[HW-GPS] init RX=%d TX=%d @9600 (optional module)\n",
-                  PIN_GPS_RX, PIN_GPS_TX);
+    Serial.printf("[HW-GPS] init RX=%d TX=%d @%lu (optional module)\n",
+                  PIN_GPS_RX, PIN_GPS_TX, (unsigned long)kGpsBauds[hwGpsBaudIdx]);
+}
+
+static void hwGpsBaudStep(void) {
+    if (hwGpsBaudLocked) return;
+    if (hwGps.passedChecksum() > hwGpsChecksumsAtSwitch) {
+        hwGpsBaudLocked = true;
+        uint32_t b = kGpsBauds[hwGpsBaudIdx];
+        Preferences p;
+        p.begin("hwgps", false);
+        if (p.getUInt("baud", 0) != b) p.putUInt("baud", b);
+        p.end();
+        Serial.printf("[HW-GPS] module talking at %lu baud\n", (unsigned long)b);
+        return;
+    }
+    if (millis() - hwGpsBaudSince < HW_GPS_BAUD_TRY_MS) return;
+    hwGpsBaudIdx = (hwGpsBaudIdx + 1) % (sizeof(kGpsBauds) / sizeof(kGpsBauds[0]));
+    hwGpsSerial.updateBaudRate(kGpsBauds[hwGpsBaudIdx]);
+    hwGpsBaudSince = millis();
+    hwGpsChecksumsAtSwitch = hwGps.passedChecksum();
 }
 
 bool hwGpsActive(void) { return hwGpsFix; }
@@ -105,6 +143,7 @@ void hwGpsPoll(void) {
         hwGps.encode(hwGpsSerial.read());
         hwGpsLastChar = millis();
     }
+    hwGpsBaudStep();
     if (hwGpsFix && millis() - hwGpsLastChar > 5000) {
         hwGpsFix = false;
         Serial.println("[HW-GPS] no data 5s — releasing to phone GPS");

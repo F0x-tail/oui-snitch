@@ -233,6 +233,35 @@ static void pushDroneVendorDetection(const uint8_t* mac, int rssi,
                   mac[0], mac[1], mac[2], mac[3], mac[4], mac[5], rssi);
 }
 
+// Network-name prefixes drone makers use for an aircraft's or controller's own
+// Wi-Fi (app pairing, FPV link). Prefixes, case-sensitive, kept to names that
+// are specific enough not to match ordinary home networks.
+static const struct { const char* prefix; const char* vendor; } DRONE_SSID_PREFIXES[] = {
+    {"DJI-", "DJI"}, {"Mavic", "DJI"}, {"Phantom", "DJI"}, {"TELLO-", "Ryze/DJI Tello"},
+    {"ANAFI", "Parrot"}, {"Bebop", "Parrot"}, {"Skydio", "Skydio"}, {"Autel", "Autel"},
+};
+
+static void droneNetworkCheck(const uint8_t* p, int len, int rssi) {
+    const uint8_t* bssid = &p[16];
+    const char* vendor = droneVendorLookup(bssid);
+    char desc[sizeof(((DetectionEvent*)0)->ext.odid.self_id)] = {0};
+    if (vendor) {
+        snprintf(desc, sizeof(desc), "%s", vendor);
+    } else if (len >= 38 && p[36] == 0 && p[37] > 0 && p[37] <= 32 && 38 + p[37] <= len) {
+        char ssid[33] = {0};
+        memcpy(ssid, &p[38], p[37]);
+        for (const auto& d : DRONE_SSID_PREFIXES) {
+            if (strncmp(ssid, d.prefix, strlen(d.prefix)) == 0) {
+                vendor = d.vendor;
+                snprintf(desc, sizeof(desc), "%s Wi-Fi %s", d.vendor, ssid);
+                break;
+            }
+        }
+    }
+    if (!vendor || droneVendorDedup.check(bssid)) return;
+    pushDroneVendorDetection(bssid, rssi, desc);
+}
+
 class SkySkyBLECallback : public NimBLEAdvertisedDeviceCallbacks {
     void onResult(NimBLEAdvertisedDevice* dev) override {
         g_engRawSeen++;
@@ -378,6 +407,10 @@ static void IRAM_ATTR wifiCallback(void* buf, wifi_promiscuous_pkt_type_t type) 
             offset += 2 + len;
             if (len == 0) break;
         }
+        // No Remote ID in this beacon: the same backstop as BLE, by the AP's
+        // vendor OUI or by the network name drone makers give their aircraft
+        // and controllers. SUSPECTED only — no UAS ID, and a name is a name.
+        droneNetworkCheck(payload, length, pkt->rx_ctrl.rssi);
     }
 }
 
