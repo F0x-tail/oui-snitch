@@ -266,6 +266,47 @@ static uint8_t IRAM_ATTR parseAuthFromFrame(const uint8_t* p, int len) {
     return 0;                           // Open
 }
 
+// The channel the AP says it is on: DS Parameter Set (tag 3), else the
+// primary channel in HT Operation (tag 61). The radio's own channel is only a
+// fallback. On 2.4 GHz a beacon is routinely heard one or two channels away
+// from where it was sent, and recording the tuned channel put networks on
+// the wrong channel and frequency in the WiGLE export.
+static uint8_t IRAM_ATTR apChannelFromFrame(const uint8_t* p, int len, uint8_t rxChannel) {
+    uint8_t ht = 0;
+    for (int o = 36; o + 2 <= len;) {
+        uint8_t id = p[o], tl = p[o + 1];
+        if (o + 2 + tl > len) break;
+        if (id == 3 && tl >= 1 && p[o + 2] != 0) return p[o + 2];
+        if (id == 61 && tl >= 1 && p[o + 2] != 0) ht = p[o + 2];
+        o += 2 + tl;
+    }
+    return ht ? ht : rxChannel;
+}
+
+// BSSIDs recently seen beaconing without a name, so the first frame that
+// names them gets past the dedup. Small and approximate on purpose: a miss
+// only means the name is learned on a later sighting.
+#define WD_HIDDEN_SLOTS 16
+static uint8_t s_hidden[WD_HIDDEN_SLOTS][6];
+static uint8_t s_hiddenNext = 0;
+
+static void IRAM_ATTR hiddenNote(const uint8_t* bssid) {
+    for (uint8_t i = 0; i < WD_HIDDEN_SLOTS; i++)
+        if (memcmp(s_hidden[i], bssid, 6) == 0) return;
+    memcpy(s_hidden[s_hiddenNext], bssid, 6);
+    s_hiddenNext = (s_hiddenNext + 1) % WD_HIDDEN_SLOTS;
+}
+
+static bool IRAM_ATTR hiddenTake(const uint8_t* bssid) {
+    for (uint8_t i = 0; i < WD_HIDDEN_SLOTS; i++) {
+        if (memcmp(s_hidden[i], bssid, 6) == 0) {
+            memset(s_hidden[i], 0, 6);
+            return true;
+        }
+    }
+    return false;
+}
+
 static bool IRAM_ATTR isNullSsid(const uint8_t* ssidBytes, uint8_t ssidLen) {
     for (uint8_t i = 0; i < ssidLen; i++) {
         if (ssidBytes[i] != 0) return false;
@@ -273,7 +314,7 @@ static bool IRAM_ATTR isNullSsid(const uint8_t* ssidBytes, uint8_t ssidLen) {
     return true;
 }
 
-static const uint8_t wildcardProbeTemplate[] = {
+static const uint8_t wildcardProbeHeader[] = {
     // Frame control: probe request (type 0, subtype 4)
     0x40, 0x00,
     // Duration
@@ -288,8 +329,17 @@ static const uint8_t wildcardProbeTemplate[] = {
     0x00, 0x00,
     // SSID parameter set: tag 0, length 0 (wildcard)
     0x00, 0x00,
-    // Supported rates: 1, 2, 5.5, 11 Mbps
-    0x01, 0x04, 0x82, 0x84, 0x8B, 0x96,
+};
+
+// Rates as an ordinary client advertises them. The probe used to offer only
+// the 802.11b rates (1, 2, 5.5, 11): on 5 GHz those do not exist at all, and
+// on 2.4 GHz an AP with the b rates switched off may not answer.
+static const uint8_t kRates24[] = {
+    0x01, 0x08, 0x82, 0x84, 0x8B, 0x96, 0x0C, 0x12, 0x18, 0x24,  // 1 2 5.5 11 6 9 12 18
+    0x32, 0x04, 0x30, 0x48, 0x60, 0x6C,                          // ext: 24 36 48 54
+};
+static const uint8_t kRates5[] = {
+    0x01, 0x08, 0x8C, 0x12, 0x98, 0x24, 0xB0, 0x48, 0x60, 0x6C,  // 6 9 12 18 24 36 48 54
 };
 
 // Active probing. OFF by default: wardrive otherwise transmits two wildcard
@@ -308,9 +358,18 @@ bool wardriveGetActiveProbe(void) { return g_activeProbeEnabled; }
 static void sendWildcardProbe(void) {
     if (!activeProbeEnabled()) return;
 
-    uint8_t probe[sizeof(wildcardProbeTemplate)];
+    const bool is5 = currentChannel > 14;
+    const uint8_t* rates = is5 ? kRates5 : kRates24;
+    const size_t ratesLen = is5 ? sizeof(kRates5) : sizeof(kRates24);
+    // DS Parameter Set names the channel, so APs on a neighbouring channel
+    // that hear the probe by leakage do not answer from the wrong one.
+    const uint8_t ds[3] = {0x03, 0x01, currentChannel};
+    uint8_t probe[sizeof(wildcardProbeHeader) + sizeof(kRates24) + sizeof(ds)];
+    const size_t probeLen = sizeof(wildcardProbeHeader) + ratesLen + (is5 ? 0 : sizeof(ds));
     for (int n = 0; n < 2; n++) {
-        memcpy(probe, wildcardProbeTemplate, sizeof(probe));
+        memcpy(probe, wildcardProbeHeader, sizeof(wildcardProbeHeader));
+        memcpy(probe + sizeof(wildcardProbeHeader), rates, ratesLen);
+        if (!is5) memcpy(probe + sizeof(wildcardProbeHeader) + ratesLen, ds, sizeof(ds));
         probe[10] = 0x02 | (esp_random() & 0xFE);
         for (int i = 11; i < 16; i++) {
             probe[i] = esp_random() & 0xFF;
@@ -318,7 +377,7 @@ static void sendWildcardProbe(void) {
         // Randomize sequence number too — some APs dedup by seq.
         probe[22] = esp_random() & 0xFF;
         probe[23] = esp_random() & 0xFF;
-        esp_wifi_80211_tx(WIFI_IF_STA, probe, sizeof(probe), false);
+        esp_wifi_80211_tx(WIFI_IF_STA, probe, probeLen, false);
     }
 }
 
@@ -546,9 +605,6 @@ static void IRAM_ATTR wardriveWifiCb(void* buf, wifi_promiscuous_pkt_type_t type
     }
 
     {
-        if (wifiDedup.check(addr3)) return;
-        wifiLastNetMs = millis();
-
         int tagOffset = 36;
         char ssid[33] = {0};
         if (tagOffset + 2 <= len) {
@@ -562,13 +618,21 @@ static void IRAM_ATTR wardriveWifiCb(void* buf, wifi_promiscuous_pkt_type_t type
             }
         }
 
+        // A hidden network beacons without its name; a probe response to a
+        // client that knows it carries the name. Without this the nameless
+        // beacon used up the dedup slot and the name was never recorded.
+        bool revealsHidden = ssid[0] != '\0' && hiddenTake(addr3);
+        if (!revealsHidden && wifiDedup.check(addr3)) return;
+        if (ssid[0] == '\0') hiddenNote(addr3);
+        wifiLastNetMs = millis();
+
         uint8_t authMode = parseAuthFromFrame(p, len);
 
         DetectionEvent evt = {};
         evt.engine_id = ENGINE_WARDRIVE;
         memcpy(evt.mac, addr3, 6);
         evt.rssi = pkt->rx_ctrl.rssi;
-        evt.channel = pkt->rx_ctrl.channel;
+        evt.channel = apChannelFromFrame(p, len, pkt->rx_ctrl.channel);
         evt.timestamp_ms = millis();
         evt.method = METHOD_WIFI_AP;
         memcpy(evt.ext.wardrive.ssid, ssid, 33);
