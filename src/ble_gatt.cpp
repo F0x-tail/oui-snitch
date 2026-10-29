@@ -12,6 +12,7 @@
 #include "ota_handler.h"
 #include "opsec_mac.h"
 #include "ble_coex.h"
+#include "wd_log.h"
 #include "wifi_ota_handler.h"
 #include <Arduino.h>
 #include <Preferences.h>
@@ -1921,6 +1922,7 @@ class DfuDataCallbacks : public NimBLECharacteristicCallbacks {
 
 static void streamSpoolToPhone(void);
 static volatile bool g_spoolFlushPending = false;
+static volatile bool g_wdLogSendPending = false;
 
 // System control opcodes
 #define SYS_CMD_REBOOT            0x01
@@ -2114,6 +2116,18 @@ class SystemControlCallbacks : public NimBLECharacteristicCallbacks {
             case SYS_CMD_FLUSH_SPOOL:
                 Serial.printf("[SPOOL] phone asked for the backlog (%u held)\n", detSpoolCount());
                 g_spoolFlushPending = true;
+                break;
+
+            case SYS_CMD_WDLOG_SEND:
+                Serial.printf("[WDLOG] phone asked for the offline wardrive (%lu rows)\n",
+                              (unsigned long)wdLogCount());
+                g_wdLogSendPending = true;
+                break;
+
+            case SYS_CMD_WDLOG_CLEAR:
+                Serial.printf("[WDLOG] phone saved it — clearing %lu rows\n",
+                              (unsigned long)wdLogCount());
+                wdLogClear();
                 break;
 
             case SYS_CMD_SPOOL_CLEAR:
@@ -3017,10 +3031,62 @@ static void streamSpoolToPhone(void) {
     Serial.printf("[SPOOL] sent %u to the phone, waiting for it to confirm\n", n);
 }
 
+// Sends one notification, waiting out a full transmit queue rather than
+// dropping the packet: a lost row would leave the app one short and it would
+// never confirm.
+static bool notifyReliably(const uint8_t* data, size_t len) {
+    for (int tries = 0; tries < 100; tries++) {
+        if (!phoneConnected) return false;
+        if (chrDetMutex) xSemaphoreTake(chrDetMutex, portMAX_DELAY);
+        chrDetectionEvents->setValue((uint8_t*)data, len);
+        bool ok = chrDetectionEvents->notify(data, len);
+        if (chrDetMutex) xSemaphoreGive(chrDetMutex);
+        if (ok) return true;
+        delay(10);
+    }
+    return false;
+}
+
+// Offline wardrive log: FD count[4] full[1], then FC n[1] rows[n*59], then FB.
+// As many rows per packet as the negotiated MTU allows.
+static void streamWdLogToPhone(void) {
+    if (!phoneConnected || chrDetectionEvents == nullptr) return;
+    wdLogFlushIfDue();
+    uint32_t total = wdLogCount();
+    uint8_t hdr[6] = {0xFD, (uint8_t)total, (uint8_t)(total >> 8),
+                      (uint8_t)(total >> 16), (uint8_t)(total >> 24),
+                      (uint8_t)(wdLogFull() ? 1 : 0)};
+    if (!notifyReliably(hdr, sizeof(hdr))) return;
+
+    uint16_t mtu = pServer ? pServer->getPeerMTU(s_phoneHandle) : 23;
+    int per = ((int)mtu - 3 - 2) / (int)sizeof(WdLogRecord);
+    if (per < 1) per = 1;
+    if (per > 8) per = 8;
+    static WdLogRecord rows[8];
+    uint8_t pkt[2 + 8 * sizeof(WdLogRecord)];
+    for (uint32_t i = 0; i < total;) {
+        uint16_t n = wdLogReadBlock(i, rows, (uint16_t)per);
+        if (n == 0) break;
+        pkt[0] = 0xFC;
+        pkt[1] = (uint8_t)n;
+        memcpy(pkt + 2, rows, (size_t)n * sizeof(WdLogRecord));
+        if (!notifyReliably(pkt, 2 + (size_t)n * sizeof(WdLogRecord))) return;
+        i += n;
+    }
+    uint8_t done = 0xFB;
+    notifyReliably(&done, 1);
+    Serial.printf("[WDLOG] sent %lu rows (%d per packet), waiting for confirm\n",
+                  (unsigned long)total, per);
+}
+
 void bleGattSpoolFlushPump(void) {
     if (g_spoolFlushPending) {
         g_spoolFlushPending = false;
         streamSpoolToPhone();
+    }
+    if (g_wdLogSendPending) {
+        g_wdLogSendPending = false;
+        streamWdLogToPhone();
     }
 }
 
@@ -3055,6 +3121,11 @@ void bleGattNotifyDetection(const DetectionEvent* evt) {
         if (offlineScanEnabled && evt && engineSpoolable(evt->engine_id) &&
             (!meshManagerJoined() || !meshMgrPhoneConnected())) {
             detSpoolAppend(evt);
+        }
+        // Wardrive is too dense for the spool's merge-by-MAC slots; it goes to
+        // its own log, and only with a position from the board's GPS.
+        if (offlineScanEnabled && evt && evt->engine_id == ENGINE_WARDRIVE) {
+            wdLogAppend(evt);
         }
 #endif
         return;

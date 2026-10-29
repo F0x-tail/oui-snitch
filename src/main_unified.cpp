@@ -14,6 +14,7 @@
 
 #include "protocol.h"
 #include "det_spool.h"
+#include "wd_log.h"
 #include "engine_registry.h"
 #include "radio_coex.h"
 #include "ignore_list.h"
@@ -76,11 +77,13 @@ void hwGpsInit(void) {
 
 bool hwGpsActive(void) { return hwGpsFix; }
 
-#ifdef OUISPY_DONGLE
 bool hwGpsUtc(uint32_t* epochOut) {
     if (!hwGpsStarted || epochOut == nullptr) return false;
     if (!hwGps.date.isValid() || !hwGps.time.isValid()) return false;
     if (hwGps.date.year() < 2020) return false;
+    // The last fix's time stays "valid" after the fix is lost; a stamp from
+    // then would misdate every row since.
+    if (hwGps.time.age() > 2000) return false;
     uint32_t m = hwGps.date.month();
     uint32_t d = hwGps.date.day();
     uint32_t y = hwGps.date.year() - (m <= 2 ? 1 : 0);
@@ -95,7 +98,6 @@ bool hwGpsUtc(uint32_t* epochOut) {
                            hwGps.time.second());
     return true;
 }
-#endif
 
 void hwGpsPoll(void) {
     if (!hwGpsStarted) return;
@@ -185,6 +187,7 @@ static void loadHardwareConfig(void) {
     }
     offlineScanEnabledSetFromPref(offlScan);
     detSpoolInit();
+    wdLogInit();
 #ifdef OUISPY_SPOOL_SELFTEST
     detSpoolSelfTest();
 #endif
@@ -726,6 +729,7 @@ static void statusHeartbeatTask(void* param) {
                       NimBLEDevice::getScan()->isScanning() ? 1 : 0);
 #endif
         detSpoolFlushIfDirty();
+        wdLogFlushIfDue();
         bleGattSpoolFlushPump();
         bleGattNodeGraceTick();
         bleGattPeerDeadlineTick();

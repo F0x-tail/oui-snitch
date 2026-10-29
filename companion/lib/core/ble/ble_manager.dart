@@ -12,12 +12,32 @@ import 'package:flutter_blue_plus/flutter_blue_plus.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:oui_spy/core/ble/ble_protocol.dart';
 import 'package:oui_spy/core/ble/gatt_uuids.dart';
+import 'package:oui_spy/core/ble/wd_log_packets.dart';
 import 'package:oui_spy/core/debug_log.dart';
 import 'package:oui_spy/core/detector_signatures.dart';
 import 'package:oui_spy/core/models/detection.dart';
 import 'package:oui_spy/core/models/engine.dart';
 import 'package:oui_spy/features/pcap/pcap_stats.dart';
 import 'package:oui_spy/core/watchlist_state.dart';
+
+/// One step of an offline wardrive transfer from the board.
+class WdLogEvent {
+  const WdLogEvent.header(this.total, this.boardFull)
+      : rows = const [], done = false, aborted = false;
+  const WdLogEvent.rows(this.rows)
+      : total = 0, boardFull = false, done = false, aborted = false;
+  const WdLogEvent.done()
+      : rows = const [], total = 0, boardFull = false, done = true, aborted = false;
+  const WdLogEvent.aborted()
+      : rows = const [], total = 0, boardFull = false, done = false, aborted = true;
+
+  final List<WdLogRow> rows;
+  final int total;
+  final bool boardFull;
+  final bool done;
+  final bool aborted;
+  bool get isHeader => !done && !aborted && rows.isEmpty;
+}
 
 class SpoolImportProgress {
   final int seen;
@@ -115,6 +135,11 @@ class BleManager {
 
   final _awayLiveDetections = StreamController<Detection>.broadcast();
   Stream<Detection> get awayLiveDetections => _awayLiveDetections.stream;
+
+  final _wdLog = StreamController<WdLogEvent>.broadcast();
+  /// The board's offline wardrive log, as it arrives after a request.
+  Stream<WdLogEvent> get wdLogImport => _wdLog.stream;
+  Timer? _wdLogTimer;
 
   final _spoolImport = StreamController<SpoolImportProgress>.broadcast();
   Stream<SpoolImportProgress> get spoolImport => _spoolImport.stream;
@@ -1042,6 +1067,32 @@ class BleManager {
     if (_offlineScanEnabled && !wardriveSessionActive) {
       await requestSpoolFlush();
     }
+    // Asked for even mid-session: these are exactly the rows recorded while
+    // the board was out of reach.
+    if (_offlineScanEnabled) await requestWdLog();
+  }
+
+  /// Asks the board for the wardrive rows it recorded on its own.
+  Future<void> requestWdLog() async {
+    if (_systemControl == null) return;
+    await _serialWrite(_systemControl!, WdLogPackets.sendCmd, withoutResponse: false);
+    DebugLog.log('BLE: offline wardrive log requested');
+  }
+
+  /// The rows are saved; the board may delete them.
+  Future<void> confirmWdLogImported() async {
+    if (_systemControl == null) throw StateError('no link to the board');
+    await _serialWrite(_systemControl!, WdLogPackets.clearCmd, withoutResponse: false);
+    DebugLog.log('BLE: offline wardrive log clear sent');
+  }
+
+  /// A transfer that stops arriving is abandoned; the board keeps its copy.
+  void _armWdLogTimer() {
+    _wdLogTimer?.cancel();
+    _wdLogTimer = Timer(const Duration(seconds: 15), () {
+      _wdLog.add(const WdLogEvent.aborted());
+      DebugLog.log('BLE: offline wardrive transfer stalled — abandoned');
+    });
   }
 
   static const _kBacklogClearPending = 'spool_clear_pending';
@@ -1795,6 +1846,8 @@ class BleManager {
     _connectionState.close();
     _detections.close();
     _importedDetections.close();
+    _wdLog.close();
+    _wdLogTimer?.cancel();
     _awayLiveDetections.close();
     _spoolImport.close();
     _awayImport.close();
@@ -1895,6 +1948,24 @@ class BleManager {
   // -- Private --
 
   void _onDetection(List<int> data) {
+    // Checked first: these never come from a detection, and during a spool
+    // import every other packet is diverted to it.
+    if (WdLogPackets.isHeader(data)) {
+      final h = WdLogPackets.header(data);
+      _wdLog.add(WdLogEvent.header(h.count, h.full));
+      _armWdLogTimer();
+      return;
+    }
+    if (WdLogPackets.isRows(data)) {
+      _wdLog.add(WdLogEvent.rows(WdLogPackets.rows(data)));
+      _armWdLogTimer();
+      return;
+    }
+    if (WdLogPackets.isDone(data)) {
+      _wdLogTimer?.cancel();
+      _wdLog.add(const WdLogEvent.done());
+      return;
+    }
     if (_importing) {
       _importTimer?.cancel();
       _importTimer = Timer(const Duration(seconds: 12), _abortImport);

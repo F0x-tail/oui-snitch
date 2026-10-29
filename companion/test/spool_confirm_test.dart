@@ -51,7 +51,9 @@ _Rig _rig() {
   final imported = StreamController<Detection>.broadcast();
   final away = StreamController<Detection>.broadcast();
   final progress = StreamController<SpoolImportProgress>.broadcast();
+  final wdLog = StreamController<WdLogEvent>.broadcast();
   final ble = _Ble();
+  when(() => ble.wdLogImport).thenAnswer((_) => wdLog.stream);
   when(() => ble.connectionState).thenAnswer((_) => conn.stream);
   when(() => ble.detections).thenAnswer((_) => live.stream);
   when(() => ble.importedDetections).thenAnswer((_) => imported.stream);

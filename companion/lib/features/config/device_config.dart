@@ -833,8 +833,11 @@ class _DeviceConfigScreenState extends ConsumerState<DeviceConfigScreen> {
         const ConfigSectionHeader(label: 'Offline scan (experimental)'),
         ConfigToggleRow(
           icon: Icons.cloud_off,
-          label: 'Keep scanning while disconnected (EXPERIMENTAL)',
-          subtitle: 'EXPERIMENTAL — may be unstable. Node keeps scanning when the app is closed; detections import on reconnect. Excludes wardrive (not captured offline without an SD card).',
+          label: 'Keep scanning while disconnected (experimental)',
+          subtitle: 'The board keeps scanning when the app is closed or out of range, '
+              'and hands over what it found when you reconnect. A running wardrive '
+              'carries on too, if the board has its own GPS module: rows without a '
+              'position would be no use to WiGLE, so none are kept without one.',
           color: AppTheme.info,
           value: _offlineScanEnabled,
           onChanged: (v) {

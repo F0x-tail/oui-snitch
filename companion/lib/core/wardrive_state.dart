@@ -238,11 +238,12 @@ double borrowedFixAccuracy(GpsPosition p, DateTime now) {
 
 /// How long a running wardrive waits for the board before giving up.
 ///
-/// A wardrive records nothing while the link is down: this hardware has no SD
-/// card, and the firmware deliberately keeps wardrive out of the small flash
-/// spool. So a session whose board is gone is not paused, it is over — it just
-/// does not know it yet, and every minute it stays "running" is a minute the
-/// user believes is being logged.
+/// Without the phone, the board keeps wardrive rows only if offline scan is on
+/// and it has its own GPS module (src/wd_log.cpp); those rows are imported on
+/// reconnect. Otherwise nothing is recorded while the link is down, so a
+/// session whose board is gone is not paused, it is over — it just does not
+/// know it yet, and every minute it stays "running" is a minute the user
+/// believes is being logged.
 ///
 /// Five minutes is the compromise. Long enough to cover a walk round a
 /// building, a pocketed phone or a flat battery swapped on the move; short
@@ -328,6 +329,7 @@ class WardriveController extends ChangeNotifier {
     _importedDetSub = _ble.importedDetections.listen(_onImportedDetection);
     _awayLiveSub = _ble.awayLiveDetections.listen(_onAwayLiveDetection);
     _spoolImportSub = _ble.spoolImport.listen(_onSpoolProgress);
+    _wdLogSub = _ble.wdLogImport.listen((e) => _wdLogChain = _wdLogChain.then((_) => _onWdLog(e)));
     _prefsLoaded = _loadPrefs();
     _reconciled = reconcileDanglingWardriveSessions(_db);
   }
@@ -414,6 +416,20 @@ class WardriveController extends ChangeNotifier {
   StreamSubscription<Detection>? _importedDetSub;
   StreamSubscription<Detection>? _awayLiveSub;
   StreamSubscription<SpoolImportProgress>? _spoolImportSub;
+  StreamSubscription<WdLogEvent>? _wdLogSub;
+  // Transfers are handled strictly in order: a header resets the counts the
+  // rows and the final confirm depend on.
+  Future<void> _wdLogChain = Future.value();
+  int _wdExpected = -1;
+  int _wdHandled = 0;
+  String? _wdSessionId;
+  bool _wdSessionIsOwn = false;
+  int _wdLastHeardMs = 0;
+
+  /// Rows the board recorded on its own that were saved, and whether it
+  /// filled up and stopped recording, for the last transfer.
+  int offlineRowsImported = 0;
+  bool offlineLogWasFull = false;
   String? _spoolSessionId;
   Future<String>? _spoolSessionIdFuture;
   int _spoolInserted = 0;
@@ -1925,6 +1941,114 @@ class WardriveController extends ChangeNotifier {
     DebugLog.log('AWAY-LIVE: persisted ${detection.macAddress} → session $sid');
   }
 
+  Future<void> _onWdLog(WdLogEvent e) async {
+    if (e.aborted) {
+      DebugLog.log('WDLOG: transfer abandoned at $_wdHandled/$_wdExpected — board keeps it');
+      _wdExpected = -1;
+      return;
+    }
+    if (e.isHeader) {
+      _wdExpected = e.total;
+      _wdHandled = 0;
+      _wdSessionId = null;
+      _wdSessionIsOwn = false;
+      _wdLastHeardMs = 0;
+      offlineLogWasFull = e.boardFull;
+      DebugLog.log('WDLOG: board holds ${e.total} rows${e.boardFull ? ' (full)' : ''}');
+      return;
+    }
+    if (e.rows.isNotEmpty) {
+      if (_wdExpected < 0) return;  // rows without a header: ignore, never confirm
+      final keep = <DetectionsCompanion>[];
+      for (final r in e.rows) {
+        final name = r.name;
+        final dropped = _ignoreList.shouldSuppress(mac: r.mac, ssid: name, isBle: r.isBle) ||
+            _geofenceFilter.isExcludedNullable(r.latitude, r.longitude);
+        if (!dropped) {
+          if (_wdSessionId == null) {
+            _wdSessionIsOwn = !(isActive && sessionId.isNotEmpty);
+            _wdSessionId = _wdSessionIsOwn ? await _newOfflineSession(r.time) : sessionId;
+          }
+          if (r.time.millisecondsSinceEpoch > _wdLastHeardMs) {
+            _wdLastHeardMs = r.time.millisecondsSinceEpoch;
+          }
+          keep.add(DetectionsCompanion(
+            sessionId: drift.Value(_wdSessionId!),
+            nodeId: const drift.Value('default'),
+            macAddress: drift.Value(r.mac),
+            deviceName: drift.Value(r.isBle ? name : ''),
+            engine: drift.Value(Engine.wardrive.name),
+            detectionMethod: drift.Value(r.isBle ? 'ble_adv' : 'wifi_ap'),
+            rssi: drift.Value(r.rssi),
+            channel: drift.Value(r.channel),
+            deviceTimestampMs: const drift.Value(0),
+            appTimestamp: drift.Value(r.time.millisecondsSinceEpoch),
+            latitude: drift.Value(r.latitude),
+            longitude: drift.Value(r.longitude),
+            altitude: drift.Value(r.altitude),
+            accuracy: drift.Value(r.accuracy),
+            ssid: drift.Value(r.isBle ? '' : name),
+            authMode: drift.Value(r.isBle ? 0 : r.auth),
+          ));
+        }
+      }
+      try {
+        if (keep.isNotEmpty) await _db.batchInsertDetections(keep);
+        _wdHandled += e.rows.length;
+        offlineRowsImported += keep.length;
+      } catch (err) {
+        // Not counted, so the transfer is never confirmed and the board keeps
+        // the rows for the next connect.
+        DebugLog.log('WDLOG: insert failed: $err');
+      }
+      return;
+    }
+    if (e.done) {
+      DebugLog.log('WDLOG: done handled=$_wdHandled expected=$_wdExpected');
+      final own = _wdSessionId;
+      if (own != null && _wdSessionIsOwn) {
+        // Closed, with its counts, so it lists like any finished session and
+        // no later import mistakes it for an open one.
+        final dets = await _db.getDetectionsForSession(own);
+        await _db.updateSession(SessionsCompanion(
+          id: drift.Value(own),
+          endedAt: drift.Value(_wdLastHeardMs),
+          detectionCount: drift.Value(dets.length),
+          uniqueMacCount: drift.Value(await _db.uniqueMacCount(own)),
+        ));
+      }
+      if (_wdExpected >= 0 && _wdHandled >= _wdExpected && _wdExpected > 0) {
+        for (var attempt = 1; attempt <= 3; attempt++) {
+          try {
+            await _ble.confirmWdLogImported();
+            break;
+          } catch (err) {
+            DebugLog.log('WDLOG: clear write failed (attempt $attempt): $err');
+            if (attempt < 3) await Future<void>.delayed(Duration(seconds: attempt));
+          }
+        }
+      }
+      _wdExpected = -1;
+      notifyListeners();
+    }
+  }
+
+  /// A wardrive session for rows the board recorded while no session ran on
+  /// the phone, named after when the first of them was heard.
+  Future<String> _newOfflineSession(DateTime firstHeard) async {
+    final id = const Uuid().v4();
+    final t = firstHeard.toLocal().toIso8601String().substring(0, 16);
+    await _db.insertSession(SessionsCompanion(
+      id: drift.Value(id),
+      name: drift.Value('Offline wardrive $t'),
+      nodeId: const drift.Value('default'),
+      startedAt: drift.Value(firstHeard.millisecondsSinceEpoch),
+      isWardrive: const drift.Value(true),
+    ));
+    DebugLog.log('WDLOG: created session $id');
+    return id;
+  }
+
   void _onSpoolProgress(SpoolImportProgress p) {
     if (!p.done && !p.aborted && p.seen == 0) {
       _spoolExpectedTotal = p.total;
@@ -2273,6 +2397,7 @@ class WardriveController extends ChangeNotifier {
     _importedDetSub?.cancel();
     _awayLiveSub?.cancel();
     _spoolImportSub?.cancel();
+    _wdLogSub?.cancel();
     _resumeTimer?.cancel();
     super.dispose();
   }
