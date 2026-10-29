@@ -56,6 +56,15 @@ android {
     }
 }
 
+// A release build signed with the debug key installs, and then can never be
+// updated by a real release (Android refuses a different signer). Fail it.
+gradle.taskGraph.whenReady {
+    val releasing = allTasks.any { it.name == "assembleRelease" || it.name == "bundleRelease" }
+    if (releasing && !keystorePropertiesFile.exists()) {
+        throw GradleException("Release build without android/key.properties: refusing to sign with the debug key.")
+    }
+}
+
 dependencies {
     coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.4")
 }

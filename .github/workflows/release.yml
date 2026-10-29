@@ -119,6 +119,16 @@ jobs:
           pattern: firmware-*
           merge-multiple: true
 
+      - name: Checksums
+        # Bare file names, so `sha256sum -c` works in the folder users download to.
+        run: |
+          cd artifacts
+          : > SHA256SUMS
+          find . -type f \( -name '*.bin' -o -name '*.tar.gz' \) | sort | while read -r f; do
+            (cd "$(dirname "$f")" && sha256sum "$(basename "$f")") >> SHA256SUMS
+          done
+          cat SHA256SUMS
+
       - name: Create Draft Release
         uses: softprops/action-gh-release@da05d552573ad5aba039eaac05058a918a7bf631
         with:
@@ -133,8 +143,8 @@ jobs:
 
             ### Firmware
 
-            | Target | Role | OTA asset | First flash (USB) |
-            |--------|------|-----------|-------------------|
+            | Target | Role | Firmware image | First flash (USB) |
+            |--------|------|----------------|-------------------|
             | XIAO ESP32-S3 | node | `oui-snitch-node-xiao_s3-${{ github.ref_name }}.bin` | `oui-snitch-node-xiao_s3-${{ github.ref_name }}-usb.tar.gz` |
 
             The XIAO ESP32-S3 is the only board this release is built for. Other
@@ -146,7 +156,13 @@ jobs:
 
             ### Companion app
 
-            The Android APK is attached by hand; this workflow builds firmware only.
+            `oui-snitch-${{ github.ref_name }}-arm64.apk`, with its SHA-256 in
+            `oui-snitch-${{ github.ref_name }}-arm64.apk.sha256`. Install it
+            directly, or let [Obtainium](https://github.com/ImranR98/Obtainium)
+            track `https://github.com/F0x-tail/oui-snitch`. Signing certificate
+            SHA-256: `7F:22:EA:7F:AA:60:47:3B:60:3B:76:EA:D8:12:31:B2:B0:81:4D:10:D8:35:12:1A:91:FE:1F:94:50:F6:2E:C6`.
+
+            Checksums for the firmware files are in `SHA256SUMS`.
 
             ### Requirements
 
@@ -160,6 +176,7 @@ jobs:
             with the OUI-SNITCH app only — mixing them is silent, not noisy. See
             [COMPATIBILITY.md](https://github.com/F0x-tail/oui-snitch/blob/main/COMPATIBILITY.md).
           files: |
+            artifacts/SHA256SUMS
             artifacts/**/*.bin
             artifacts/**/*.tar.gz
             artifacts/**/LICENSE

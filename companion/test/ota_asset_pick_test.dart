@@ -11,20 +11,20 @@ const int kPort = 8731;
 const String kOtaApi = String.fromEnvironment('OTA_API');
 
 const List<String> kAssets = [
-  'oui-spy-node-xiao_s3-v0.5.1.bin',
-  'oui-spy-node-s3_devkitc-v0.5.1.bin',
-  'oui-spy-node-tdongle_s3-v0.5.1.bin',
-  'oui-spy-node-xiao_c5-v0.5.1.bin',
-  'oui-spy-node-stickc-v0.5.1.bin',
-  'oui-spy-node-stickc_plus-v0.5.1.bin',
-  'oui-spy-node-stickc_plus2-v0.5.1.bin',
-  'oui-spy-mgr-wroom-v0.5.1.bin',
-  'oui-spy-mgr-xiao_c3-v0.5.1.bin',
-  'oui-spy-mgr-xiao_s3-v0.5.1.bin',
-  'oui-spy-mgr-s3_devkitc-v0.5.1.bin',
-  'oui-spy-node-xiao_s3-v0.5.1-bootloader.bin',
-  'oui-spy-node-xiao_s3-v0.5.1-partitions.bin',
-  'oui-spy-node-xiao_s3-v0.5.1-boot_app0.bin',
+  'oui-snitch-node-xiao_s3-v0.5.1.bin',
+  'oui-snitch-node-s3_devkitc-v0.5.1.bin',
+  'oui-snitch-node-tdongle_s3-v0.5.1.bin',
+  'oui-snitch-node-xiao_c5-v0.5.1.bin',
+  'oui-snitch-node-stickc-v0.5.1.bin',
+  'oui-snitch-node-stickc_plus-v0.5.1.bin',
+  'oui-snitch-node-stickc_plus2-v0.5.1.bin',
+  'oui-snitch-mgr-wroom-v0.5.1.bin',
+  'oui-snitch-mgr-xiao_c3-v0.5.1.bin',
+  'oui-snitch-mgr-xiao_s3-v0.5.1.bin',
+  'oui-snitch-mgr-s3_devkitc-v0.5.1.bin',
+  'oui-snitch-node-xiao_s3-v0.5.1-bootloader.bin',
+  'oui-snitch-node-xiao_s3-v0.5.1-partitions.bin',
+  'oui-snitch-node-xiao_s3-v0.5.1-boot_app0.bin',
 ];
 
 Map<String, dynamic> releaseJson(List<String> names) => {
@@ -66,27 +66,27 @@ void main() {
   }
 
   test('each board gets its own image', () async {
-    expect(await pick('xiao_s3', 'node'), 'oui-spy-node-xiao_s3-v0.5.1.bin');
+    expect(await pick('xiao_s3', 'node'), 'oui-snitch-node-xiao_s3-v0.5.1.bin');
     expect(await pick('s3_devkitc', 'node'),
-        'oui-spy-node-s3_devkitc-v0.5.1.bin');
+        'oui-snitch-node-s3_devkitc-v0.5.1.bin');
     expect(await pick('tdongle_s3', 'node'),
-        'oui-spy-node-tdongle_s3-v0.5.1.bin');
-    expect(await pick('xiao_c5', 'node'), 'oui-spy-node-xiao_c5-v0.5.1.bin');
-    expect(await pick('wroom', 'mgr'), 'oui-spy-mgr-wroom-v0.5.1.bin');
-    expect(await pick('xiao_c3', 'mgr'), 'oui-spy-mgr-xiao_c3-v0.5.1.bin');
-    expect(await pick('xiao_s3', 'mgr'), 'oui-spy-mgr-xiao_s3-v0.5.1.bin');
+        'oui-snitch-node-tdongle_s3-v0.5.1.bin');
+    expect(await pick('xiao_c5', 'node'), 'oui-snitch-node-xiao_c5-v0.5.1.bin');
+    expect(await pick('wroom', 'mgr'), 'oui-snitch-mgr-wroom-v0.5.1.bin');
+    expect(await pick('xiao_c3', 'mgr'), 'oui-snitch-mgr-xiao_c3-v0.5.1.bin');
+    expect(await pick('xiao_s3', 'mgr'), 'oui-snitch-mgr-xiao_s3-v0.5.1.bin');
     expect(
-        await pick('s3_devkitc', 'mgr'), 'oui-spy-mgr-s3_devkitc-v0.5.1.bin');
+        await pick('s3_devkitc', 'mgr'), 'oui-snitch-mgr-s3_devkitc-v0.5.1.bin');
   });
 
   test('board name that is a prefix of another never takes its image', () async {
     for (final order in [kAssets, kAssets.reversed.toList()]) {
       served = order;
-      expect(await pick('stickc', 'node'), 'oui-spy-node-stickc-v0.5.1.bin');
+      expect(await pick('stickc', 'node'), 'oui-snitch-node-stickc-v0.5.1.bin');
       expect(await pick('stickc_plus', 'node'),
-          'oui-spy-node-stickc_plus-v0.5.1.bin');
+          'oui-snitch-node-stickc_plus-v0.5.1.bin');
       expect(await pick('stickc_plus2', 'node'),
-          'oui-spy-node-stickc_plus2-v0.5.1.bin');
+          'oui-snitch-node-stickc_plus2-v0.5.1.bin');
     }
     served = kAssets;
   });
@@ -96,10 +96,10 @@ void main() {
   });
 
   test('tdongle_c5 resolves once its asset ships', () async {
-    served = [...kAssets, 'oui-spy-node-tdongle_c5-v0.5.1.bin'];
+    served = [...kAssets, 'oui-snitch-node-tdongle_c5-v0.5.1.bin'];
     addTearDown(() => served = kAssets);
     expect(await pick('tdongle_c5', 'node'),
-        'oui-spy-node-tdongle_c5-v0.5.1.bin');
+        'oui-snitch-node-tdongle_c5-v0.5.1.bin');
   });
 
   test('unknown board still falls back', () async {

@@ -10,6 +10,8 @@ The thing that makes it different from the projects it grew out of: **every
 engine you enable runs at once.** Most devices in this space give you a menu
 and run one mode at a time. Here, detection and logging run together.
 
+<a href="https://apps.obtainium.imranr.dev/redirect?r=obtainium://app/%7B%22id%22%3A%22io.github.f0xtail.ouisnitch%22%2C%22url%22%3A%22https%3A%2F%2Fgithub.com%2FF0x-tail%2Foui-snitch%22%2C%22author%22%3A%22F0x-tail%22%2C%22name%22%3A%22OUI-SNITCH%22%7D"><img src="docs/images/badge_obtainium.png" alt="Get it on Obtainium" height="48"></a>
+
 > [!NOTE]
 > **OUI-SNITCH is a fork of [OUI-APEX](https://github.com/lukeswitz/oui-spy-unified-blue)**,
 > which builds on the OUI-SPY engines by
@@ -68,22 +70,42 @@ supplies the position and the alerts.
 
 ## Flash it
 
-You need [PlatformIO](https://platformio.org/install/cli). Then:
-
-```bash
-pio run -e v3_app_controlled        # XIAO ESP32-S3
-```
-
-Other board targets exist in `platformio.ini`. None of them is tested, and
-none is described here.
-
-### Flashing — read this part
-
 **Flash in DIO mode.** Writing the image as QIO produces a board that boot
 loops with `TG0WDT_SYS_RST` and looks bricked. It isn't, but you will lose an
 evening to it.
 
+You need [esptool](https://docs.espressif.com/projects/esptool/) either way
+(`pip install esptool`). Replace `/dev/ttyACM0` with your port; on Windows it
+is `COM3` or similar, on macOS `/dev/cu.usbmodem…`. On Linux you may need to
+be in the `dialout` group.
+
+### From a release
+
+From the [latest release](https://github.com/F0x-tail/oui-snitch/releases/latest)
+download `oui-snitch-node-xiao_s3-<version>-usb.tar.gz` and unpack it. It holds
+the four files below plus `LICENSE` and `THIRD_PARTY_NOTICES.md`. Check them
+against `SHA256SUMS` from the same release (`sha256sum -c SHA256SUMS
+--ignore-missing`), then, in the unpacked folder:
+
 ```bash
+V=v0.7.0   # the release you downloaded
+python3 -m esptool --chip esp32s3 --port /dev/ttyACM0 --baud 921600 \
+  write_flash --flash_mode dio --flash_freq 80m --flash_size 8MB \
+  0x0     oui-snitch-node-xiao_s3-$V-bootloader.bin \
+  0x8000  oui-snitch-node-xiao_s3-$V-partitions.bin \
+  0xe000  oui-snitch-node-xiao_s3-$V-boot_app0.bin \
+  0x10000 oui-snitch-node-xiao_s3-$V.bin
+```
+
+The board keeps its pairing, settings and offline data across an update. To
+update later, flash only the last file at `0x10000`.
+
+### Build it yourself
+
+You need [PlatformIO](https://platformio.org/install/cli). Then:
+
+```bash
+pio run -e v3_app_controlled        # XIAO ESP32-S3
 python3 -m esptool --chip esp32s3 --port /dev/ttyACM0 --baud 921600 \
   write_flash --flash_mode dio --flash_freq 80m --flash_size 8MB \
   0x0     .pio/build/v3_app_controlled/bootloader.bin \
@@ -92,8 +114,8 @@ python3 -m esptool --chip esp32s3 --port /dev/ttyACM0 --baud 921600 \
   0x10000 .pio/build/v3_app_controlled/firmware.bin
 ```
 
-Replace `/dev/ttyACM0` with your port. On Linux you may need to be in the
-`dialout` group.
+Other board targets exist in `platformio.ini`. None of them is tested, and
+none is described here.
 
 ### Check it worked
 
@@ -115,12 +137,44 @@ If you see `rst:0x7 (TG0WDT_SYS_RST)` repeating, you flashed QIO. Reflash with
 
 ## The app
 
+### Install a release (Android)
+
+<a href="https://apps.obtainium.imranr.dev/redirect?r=obtainium://app/%7B%22id%22%3A%22io.github.f0xtail.ouisnitch%22%2C%22url%22%3A%22https%3A%2F%2Fgithub.com%2FF0x-tail%2Foui-snitch%22%2C%22author%22%3A%22F0x-tail%22%2C%22name%22%3A%22OUI-SNITCH%22%7D"><img src="docs/images/badge_obtainium.png" alt="Get it on Obtainium" height="48"></a>
+
+[Obtainium](https://github.com/ImranR98/Obtainium) installs the app from this
+repository's releases and tells you when a new one is out. The badge above adds
+it in one tap; or add `https://github.com/F0x-tail/oui-snitch` by hand.
+
+Or download `oui-snitch-<version>-arm64.apk` from the
+[latest release](https://github.com/F0x-tail/oui-snitch/releases/latest) and
+open it; Android asks once to allow installs from your browser or file manager.
+The APK is for 64-bit ARM phones, which is nearly every Android phone sold
+since 2017.
+
+**Check it is genuine.** Every release APK is signed with the same key. Its
+certificate's SHA-256 fingerprint is:
+
+```
+7F:22:EA:7F:AA:60:47:3B:60:3B:76:EA:D8:12:31:B2:B0:81:4D:10:D8:35:12:1A:91:FE:1F:94:50:F6:2E:C6
+```
+
+[AppVerifier](https://github.com/soupslurpr/AppVerifier) checks an installed
+app against it; or run
+`apksigner verify --print-certs oui-snitch-<version>-arm64.apk`. Android
+itself refuses an update signed with a different key, so a fake release cannot
+replace the app you have. The file's SHA-256 is in the `.sha256` file next to
+it in the release.
+
+### Build it yourself
+
 ```bash
 cd companion && flutter pub get && flutter build apk --release
 ```
 
 Then `adb install -r build/app/outputs/flutter-apk/app-release.apk`, or build
-`ipa` / `macos` instead.
+`ipa` / `macos` instead. A build you sign yourself cannot update a release
+install, or the other way round: Android would need you to uninstall first,
+which deletes the app's data.
 
 **On Android, set Location to "Allow all the time."** With "only while using
 the app", scanning stops the moment the screen goes off. This is an Android
@@ -218,6 +272,31 @@ configured.
 
 Position comes from your phone unless a GPS module has a fix, in which case the
 module wins. With no fix at all, rows are still logged but cannot be uploaded.
+
+With offline scan on and a GPS module fitted, a wardrive carries on while the
+phone is away: the board keeps the rows itself, with its own GPS position and
+time, and hands them over when you reconnect.
+
+#### WiGLE CSV format
+
+Exports follow [WiGLE CSV v1.6](https://api.wigle.net/csvFormat.html), checked
+field by field against the spec:
+
+- the pre-header names the app and firmware versions and the board, and the
+  header row is the spec's, in order;
+- only wardrive sightings are written: tracker, deauth, camera and drone
+  alerts never become rows, so no one's phone is uploaded as an access point;
+- AuthMode uses Android's capability format, as the spec asks
+  (`[WPA2-PSK-CCMP][RSN-PSK-CCMP][ESS]`, `[RSN-SAE-CCMP][ESS]`, ...), with the
+  ciphers and BSS type the board read from the beacon; a security type it
+  could not read is left blank rather than guessed;
+- Channel is the one the access point announces; times are UTC; altitude is
+  whole metres; an unknown accuracy is left blank, never written as 0;
+- Bluetooth rows have channel 0, no frequency, and the manufacturer ID when the
+  device advertises one; Wi-Fi rows carry Passpoint roaming OIs when present;
+- the ignore list and your exclusion zones apply to every export.
+
+Uploads check WiGLE's own upload list first, so a session is never sent twice.
 
 ---
 

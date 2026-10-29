@@ -46,6 +46,15 @@ files are static Regular and SemiBold instances cut from the upstream variable
 font, which the OFL permits; neither font declares a Reserved Font Name. The
 licence texts sit next to the fonts as `OFL-*.txt` and ship inside the app.
 
+| File | Licence | Copyright |
+| --- | --- | --- |
+| `docs/images/badge_obtainium.png` | GPL-3.0 | ImranR98 and Obtainium contributors |
+
+The "Get it on Obtainium" badge from `assets/graphics/badge_obtainium.png` in
+github.com/ImranR98/Obtainium, trimmed of its transparent padding as the
+Obtainium wiki suggests. It is an image shown in the README, not part of the
+firmware or the app.
+
 ## Build-time dependencies
 
 Fetched by PlatformIO and pub, not stored here, but linked into what you ship:

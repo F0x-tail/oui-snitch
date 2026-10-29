@@ -16,6 +16,7 @@ class OtaRelease {
     required this.assetUrl,
     required this.body,
     required this.publishedAt,
+    this.pageUrl = '',
   });
 
   final String tag;
@@ -24,6 +25,8 @@ class OtaRelease {
   final String assetUrl;
   final String body;
   final DateTime publishedAt;
+  /// The release's GitHub page, for "a newer version exists" links.
+  final String pageUrl;
 }
 
 enum OtaPhase {
@@ -77,12 +80,17 @@ class OtaService {
   /// here before `_pushImage`. Tracked in PROJECT_SPEC.md §8.
   static const bool remoteOtaEnabled = false;
 
+  /// Checking GitHub for a newer release is safe on its own: it only reads
+  /// the release list and says a version exists. Installing stays behind
+  /// [remoteOtaEnabled], in the service and in the UI.
+  static const bool remoteCheckEnabled = true;
+
   static const String _disabledMessage =
       'Online firmware update is disabled in this build: release images are '
       'not signed. Flash over USB, or pick a local .bin you trust.';
 
-  static const String githubOwner = 'lukeswitz';
-  static const String githubRepo = 'oui-spy-unified-blue';
+  static const String githubOwner = 'F0x-tail';
+  static const String githubRepo = 'oui-snitch';
   static const String firmwareAssetSuffix = '.bin';
 
   final StreamController<OtaProgress> _progress =
@@ -130,10 +138,11 @@ class OtaService {
     return 0;
   }
 
-  static int _scoreAsset(String name, String board, String role) {
+  @visibleForTesting
+  static int scoreAsset(String name, String board, String role) {
     final n = name.toLowerCase();
     if (!n.endsWith('.bin')) return -1;
-    if (!n.contains('oui-spy')) return -1;
+    if (!n.contains('oui-snitch')) return -1;
     if (n.contains('-bootloader') ||
         n.contains('-partitions') ||
         n.contains('-boot_app0')) {
@@ -150,7 +159,7 @@ class OtaService {
       String.fromEnvironment('OTA_API', defaultValue: '');
 
   Future<Map<String, dynamic>?> _getLatestJson() async {
-    if (!remoteOtaEnabled) return null;
+    if (!remoteCheckEnabled) return null;
     final url = _otaApiOverride.isNotEmpty
         ? _otaApiOverride
         : 'https://api.github.com/repos/$githubOwner/$githubRepo/releases/latest';
@@ -194,7 +203,7 @@ class OtaService {
     for (final a in assets) {
       final m = a as Map<String, dynamic>;
       final name = m['name']?.toString() ?? '';
-      final score = _scoreAsset(name, board, role);
+      final score = scoreAsset(name, board, role);
       if (score > bestScore) {
         bestScore = score;
         assetName = name;
@@ -219,11 +228,12 @@ class OtaService {
       assetUrl: assetUrl,
       body: body,
       publishedAt: published,
+      pageUrl: data['html_url']?.toString() ?? '',
     );
   }
 
   Future<OtaRelease?> fetchLatestRelease({String board = '', String role = ''}) async {
-    if (!remoteOtaEnabled) {
+    if (!remoteCheckEnabled) {
       _progress.add(const OtaProgress(
           phase: OtaPhase.error, error: _disabledMessage));
       return null;
@@ -245,7 +255,7 @@ class OtaService {
     bool includeNode = false,
     String nodeBoard = 'xiao_s3',
   }) async {
-    if (!remoteOtaEnabled) {
+    if (!remoteCheckEnabled) {
       _progress.add(const OtaProgress(
           phase: OtaPhase.error, error: _disabledMessage));
       return (primary: null, node: null, error: _disabledMessage);
@@ -284,7 +294,7 @@ class OtaService {
   }
 
   Future<OtaRelease?> checkForUpdate(String currentVersion, {String board = '', String role = ''}) async {
-    if (!remoteOtaEnabled) {
+    if (!remoteCheckEnabled) {
       _progress.add(const OtaProgress(
           phase: OtaPhase.error, error: _disabledMessage));
       return null;

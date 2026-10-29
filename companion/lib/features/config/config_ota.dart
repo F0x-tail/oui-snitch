@@ -395,7 +395,7 @@ class _OtaSectionState extends ConsumerState<_OtaSection> {
             ],
           ),
         ),
-      if (nodes.isNotEmpty && _nodeRelease != null)
+      if (nodes.isNotEmpty && _nodeRelease != null && OtaService.remoteOtaEnabled)
         Padding(
           padding: const EdgeInsets.fromLTRB(16, 6, 16, 6),
           child: ElevatedButton.icon(
@@ -713,7 +713,21 @@ class _OtaSectionState extends ConsumerState<_OtaSection> {
             ],
           ),
         ),
-        if (_availableRelease != null && !busy) ...[
+        if (_availableRelease != null && !busy && !OtaService.remoteOtaEnabled)
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 4, 16, 4),
+            child: OutlinedButton.icon(
+              onPressed: () async {
+                final messenger = ScaffoldMessenger.of(context);
+                await Clipboard.setData(ClipboardData(text: _availableRelease!.pageUrl));
+                messenger.showSnackBar(const SnackBar(
+                    content: Text('Release link copied. Flash it over USB as the README describes.')));
+              },
+              icon: const Icon(Icons.link, size: 16),
+              label: Text('${_availableRelease!.tag} is out — copy release link'),
+            ),
+          ),
+        if (_availableRelease != null && !busy && OtaService.remoteOtaEnabled) ...[
           if (_wifiConfigured) ...[
             Padding(
               padding: const EdgeInsets.fromLTRB(16, 4, 16, 4),
