@@ -189,3 +189,27 @@ static inline uint8_t IRAM_ATTR wifiRcoisFromFrame(const uint8_t* p, int len,
     }
     return 0;
 }
+
+// RSN Capabilities from a beacon's RSN element, or -1 when it has none (or
+// the field is absent, which is legal at the end of the element). Bit 6 is
+// MFPR (management frame protection required), bit 7 MFPC (capable).
+static inline int IRAM_ATTR wifiRsnCapabilities(const uint8_t* p, int len) {
+    for (int o = 36; o + 2 <= len;) {
+        uint8_t id = p[o], tl = p[o + 1];
+        if (o + 2 + tl > len) break;
+        if (id == 48) {
+            const uint8_t* b = &p[o + 2];
+            int i = 2 + 4;                                  // version, group
+            if (i + 2 > tl) return -1;
+            i += 2 + 4 * (b[i] | (b[i + 1] << 8));          // pairwise
+            if (i + 2 > tl) return -1;
+            i += 2 + 4 * (b[i] | (b[i + 1] << 8));          // AKMs
+            if (i + 2 > tl) return -1;
+            return b[i] | (b[i + 1] << 8);
+        }
+        o += 2 + tl;
+    }
+    return -1;
+}
+
+#define WIFI_RSN_CAP_MFPR 0x0040

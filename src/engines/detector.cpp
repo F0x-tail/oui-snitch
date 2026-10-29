@@ -164,11 +164,57 @@ static const char* leVendorLookup(const uint8_t* mac) {
     return nullptr;
 }
 
-static volatile unsigned long deauthWindowStart = 0;
-static volatile uint16_t deauthCount = 0;
-static volatile unsigned long lastDeauthAlert = 0;
-static const uint16_t DEAUTH_THRESHOLD = 10;
+// Deauth / disassoc floods.
+//
+// Counted per transmitter, so the alert names who is sending them rather than
+// whoever sent the last frame, and judged against what is normal here: an
+// EWMA of kick frames per second, learned while nothing is alerting. A
+// network that requires management-frame protection (PMF) drops forged
+// deauths, so a flood aimed at one is reported as attempted, not as working.
+static const uint16_t DEAUTH_THRESHOLD = 10;          // floor, frames/s from one sender
 static const unsigned long DEAUTH_ALERT_COOLDOWN_MS = 10000;
+static const uint32_t DEAUTH_HOLD_MS = 2500;          // stay on the channel while it happens
+#define KICK_SLOTS 8
+struct KickSource {
+    uint8_t  ta[6];
+    uint8_t  bssid[6];
+    uint16_t n;
+    uint16_t reason;
+    bool     bcast;
+    bool     disassoc;
+};
+static KickSource s_kick[KICK_SLOTS];
+static uint8_t  s_kickUsed = 0;
+static uint16_t s_kickTotal = 0;
+static unsigned long s_kickWinStart = 0;
+static uint32_t s_kickBaseX16 = 0;                     // EWMA of frames/s, x16
+static unsigned long s_lastKickAlert = 0;
+static uint8_t  s_lastKickTa[6] = {0};
+volatile unsigned long g_detHoldUntil = 0;
+
+// BSSIDs whose beacons say PMF is required.
+#define PMF_SLOTS 16
+static uint8_t s_pmf[PMF_SLOTS][6];
+static uint8_t s_pmfNext = 0;
+
+static void IRAM_ATTR pmfNote(const uint8_t* bssid) {
+    for (uint8_t i = 0; i < PMF_SLOTS; i++) if (memcmp(s_pmf[i], bssid, 6) == 0) return;
+    memcpy(s_pmf[s_pmfNext], bssid, 6);
+    s_pmfNext = (s_pmfNext + 1) % PMF_SLOTS;
+}
+
+static bool IRAM_ATTR pmfRequired(const uint8_t* bssid) {
+    for (uint8_t i = 0; i < PMF_SLOTS; i++) if (memcmp(s_pmf[i], bssid, 6) == 0) return true;
+    return false;
+}
+
+static void IRAM_ATTR kickWindowRoll(unsigned long now, bool alerting) {
+    // Learn only from calm seconds, so an attack cannot raise its own bar.
+    if (!alerting) s_kickBaseX16 += ((int32_t)(s_kickTotal * 16) - (int32_t)s_kickBaseX16) / 10;
+    s_kickWinStart = now;
+    s_kickTotal = 0;
+    s_kickUsed = 0;
+}
 static volatile unsigned long lastPwnAlert = 0;
 static uint8_t sigMask = 0;
 
@@ -668,21 +714,55 @@ static bool IRAM_ATTR apObserveISR(const uint8_t* p, int len, int rssi, uint8_t 
 
 static bool IRAM_ATTR detectorSigFrameISR(const uint8_t* p, int len, int rssi, uint8_t channel) {
     uint8_t fctl = p[0];
-    if ((sigMask & SIG_DEAUTH) && (fctl == 0xC0 || fctl == 0xA0)) {
+    if ((sigMask & SIG_DEAUTH) && fctl == 0x80) {
+        // Beacon: remember networks that require PMF. Not consumed here.
+        int caps = wifiRsnCapabilities(p, len);
+        if (caps >= 0 && (caps & WIFI_RSN_CAP_MFPR)) pmfNote(&p[16]);
+    }
+
+    if ((sigMask & SIG_DEAUTH) && (fctl == 0xC0 || fctl == 0xA0) && len >= 26) {
         unsigned long now = millis();
-        if (now - deauthWindowStart > 1000) { deauthWindowStart = now; deauthCount = 0; }
-        if (deauthCount < 0xFFFF) deauthCount++;
-        if (deauthCount >= DEAUTH_THRESHOLD && now - lastDeauthAlert > DEAUTH_ALERT_COOLDOWN_MS) {
-            lastDeauthAlert = now;
+        g_detHoldUntil = now + DEAUTH_HOLD_MS;
+        if (now - s_kickWinStart >= 1000) kickWindowRoll(now, now - s_lastKickAlert < 2000);
+        if (s_kickTotal < 0xFFFF) s_kickTotal++;
+
+        const uint8_t* ta = &p[10];
+        KickSource* k = nullptr;
+        for (uint8_t i = 0; i < s_kickUsed; i++)
+            if (memcmp(s_kick[i].ta, ta, 6) == 0) { k = &s_kick[i]; break; }
+        if (!k && s_kickUsed < KICK_SLOTS) {
+            k = &s_kick[s_kickUsed++];
+            memset(k, 0, sizeof(*k));
+            memcpy(k->ta, ta, 6);
+        }
+        if (!k) return true;
+        if (k->n < 0xFFFF) k->n++;
+        memcpy(k->bssid, &p[16], 6);
+        k->reason = p[24] | (p[25] << 8);
+        k->bcast = memcmp(&p[4], "\xff\xff\xff\xff\xff\xff", 6) == 0;
+        k->disassoc = fctl == 0xA0;
+
+        uint32_t base = s_kickBaseX16 / 16;
+        uint32_t threshold = base * 3 + 5;
+        if (threshold < DEAUTH_THRESHOLD) threshold = DEAUTH_THRESHOLD;
+        bool again = memcmp(s_lastKickTa, ta, 6) == 0 &&
+                     now - s_lastKickAlert < DEAUTH_ALERT_COOLDOWN_MS;
+        if (k->n >= threshold && !again) {
+            s_lastKickAlert = now;
+            memcpy(s_lastKickTa, ta, 6);
+            bool pmf = pmfRequired(k->bssid);
             DetectionEvent evt = {};
             evt.engine_id = ENGINE_DETECTOR;
-            memcpy(evt.mac, &p[10], 6);
+            memcpy(evt.mac, ta, 6);
             evt.rssi = rssi;
             evt.channel = channel;
             evt.timestamp_ms = now;
             evt.method = METHOD_DET_DEAUTH;
-            strncpy(evt.ext.detector.filter_desc, "Deauth/Disassoc storm",
-                    sizeof(evt.ext.detector.filter_desc) - 1);
+            evt.ext.detector.confidence = pmf ? DET_CONF_SUSPECTED : DET_CONF_HIGH;
+            snprintf(evt.ext.detector.filter_desc, sizeof(evt.ext.detector.filter_desc),
+                     "%s %u/s rc%u%s%s", k->disassoc ? "Disassoc" : "Deauth",
+                     (unsigned)k->n, (unsigned)k->reason, k->bcast ? " all" : "",
+                     pmf ? " PMF-blocked" : "");
             pushDetectionFromISR(&evt);
         }
         return true;
@@ -1112,7 +1192,8 @@ static void detectorLoop(void) {
     if (engineGetState(ENGINE_WARDRIVE) != ESTATE_DISABLED) return;
 
     if (wifiActive && wifiCoexShouldHop(ENGINE_DETECTOR) &&
-        millis() - lastChannelHop >= DWELL_MS) {
+        millis() - lastChannelHop >= DWELL_MS &&
+        (long)(g_detHoldUntil - millis()) <= 0) {   // stay put during a flood
         int guard = 0;
         do {
             channelIdx = (channelIdx + 1) % channelCount;
