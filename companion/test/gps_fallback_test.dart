@@ -69,4 +69,24 @@ void main() {
       isFalse,
     );
   });
+
+  group('a borrowed fix records how far the device may have moved', () {
+    test('a fresh fix keeps its own accuracy', () {
+      expect(borrowedFixAccuracy(_fix(accuracy: 8, at: now), now), 8);
+    });
+
+    test('a stopped receiver still grows at walking pace', () {
+      // Speed reads zero until the moment it moves.
+      final p = _fix(accuracy: 8, at: now.subtract(const Duration(seconds: 60)));
+      expect(borrowedFixAccuracy(p, now), closeTo(8 + 60 * 1.5, 0.001));
+    });
+
+    test('a moving one grows at its last speed', () {
+      final p = GpsPosition(
+        latitude: 49.26, longitude: -123.25, altitude: 70, speed: 20, heading: 0,
+        accuracy: 5, satelliteCount: 9, timestamp: now.subtract(const Duration(seconds: 10)),
+      );
+      expect(borrowedFixAccuracy(p, now), closeTo(5 + 10 * 20, 0.001));
+    });
+  });
 }

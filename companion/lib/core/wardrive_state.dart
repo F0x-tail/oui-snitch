@@ -222,6 +222,20 @@ bool fixUsableAsFallback(GpsPosition p, DateTime now) {
   return !age.isNegative && age <= kStaleFixAfter;
 }
 
+/// Accuracy to record for [p] when it stands in for a fix taken at [now].
+///
+/// The device may have moved since, so the radius grows by the distance it
+/// could have covered: the last known speed, but never less than walking
+/// pace, because a stopped receiver reports zero right up to the moment it
+/// moves.
+double borrowedFixAccuracy(GpsPosition p, DateTime now) {
+  final ageS = now.difference(p.timestamp).inMilliseconds / 1000.0;
+  if (ageS <= 0) return p.accuracy;
+  const walkingMs = 1.5;
+  final speed = p.speed.isFinite && p.speed > walkingMs ? p.speed : walkingMs;
+  return p.accuracy + ageS * speed;
+}
+
 /// How long a running wardrive waits for the board before giving up.
 ///
 /// A wardrive records nothing while the link is down: this hardware has no SD
@@ -1732,8 +1746,9 @@ class WardriveController extends ChangeNotifier {
     if (offlineGpsTag && d.latitude == null) {
       final p = _gps.lastPosition;
       if (p != null) {
-        if (fixUsableAsFallback(p, DateTime.now())) {
-          return (lat: p.latitude, lon: p.longitude, acc: p.accuracy, approx: true);
+        final now = DateTime.now();
+        if (fixUsableAsFallback(p, now)) {
+          return (lat: p.latitude, lon: p.longitude, acc: borrowedFixAccuracy(p, now), approx: true);
         }
         gpsTagsRejected++;
       }

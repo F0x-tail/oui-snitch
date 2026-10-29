@@ -100,7 +100,10 @@ class GpsProvider {
           heading: 0,
           accuracy: acc,
           satelliteCount: 0,
-          timestamp: DateTime.now(),
+          // Its real age. Stamping it "now" let a position saved yesterday
+          // pass as fresh and tag offline detections where the user no
+          // longer was. Older installs never saved a time: treat it as old.
+          timestamp: DateTime.fromMillisecondsSinceEpoch(p.getInt('gps_last_ms') ?? 0),
         );
         DebugLog.log('GPS: restored last position');
       }
@@ -117,6 +120,7 @@ class GpsProvider {
     await p.setDouble('gps_last_lon', lon);
     await p.setDouble('gps_last_alt', alt);
     await p.setDouble('gps_last_acc', acc);
+    await p.setInt('gps_last_ms', DateTime.now().millisecondsSinceEpoch);
   }
 
   bool _hasAlwaysPermission = false;

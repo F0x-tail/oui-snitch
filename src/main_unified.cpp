@@ -60,6 +60,8 @@ volatile GpsData currentGps = {};
 volatile bool gpsValid = false;
 
 static TinyGPSPlus hwGps;
+// Past this HDOP the geometry is too poor to trust a point.
+#define HW_GPS_MAX_HDOP 20.0
 static HardwareSerial hwGpsSerial(1);
 static bool hwGpsStarted = false;
 static bool hwGpsFix = false;
@@ -105,14 +107,19 @@ void hwGpsPoll(void) {
         hwGpsFix = false;
         Serial.println("[HW-GPS] no data 5s — releasing to phone GPS");
     }
-    if (hwGps.location.isUpdated() && hwGps.location.isValid()) {
+    // A fix with no HDOP, or a poor one, is not published: a wrong point
+    // uploaded to WiGLE cannot be withdrawn, a missing one costs nothing.
+    if (hwGps.location.isUpdated() && hwGps.location.isValid() &&
+        hwGps.hdop.isValid() && hwGps.hdop.hdop() <= HW_GPS_MAX_HDOP) {
         GpsData g = {};
         g.latitude  = hwGps.location.lat();
         g.longitude = hwGps.location.lng();
         g.altitude  = hwGps.altitude.isValid() ? (float)hwGps.altitude.meters() : 0.0f;
         g.speed     = hwGps.speed.isValid()    ? (float)hwGps.speed.mps()        : 0.0f;
         g.heading   = hwGps.course.isValid()   ? (float)hwGps.course.deg()        : 0.0f;
-        g.accuracy  = hwGps.hdop.isValid()     ? (float)(hwGps.hdop.hdop() * 5.0) : 10.0f;
+        // HDOP times the receiver's range error. 5 m is a conservative figure
+        // for consumer modules; it is an estimate, not a measurement.
+        g.accuracy  = (float)(hwGps.hdop.hdop() * 5.0);
         g.satellite_count = hwGps.satellites.isValid() ? (uint8_t)hwGps.satellites.value() : 0;
         g.timestamp_ms = millis();
         memcpy((void*)&currentGps, &g, sizeof(GpsData));
