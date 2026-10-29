@@ -89,7 +89,7 @@ const kAlertSlots = <AlertSlot>[
   AlertSlot(melodyEngineAxon, 1, 'Axon: still near (heartbeat)'),
   AlertSlot(melodyEngineAxon, 2, 'Axon: lost'),
   AlertSlot(1, melodyAny, 'Flock BLE'),
-  AlertSlot(2, melodyAny, 'Flock WiFi'),
+  AlertSlot(2, melodyAny, 'Flock'),
   AlertSlot(4, melodyAny, 'Drone Remote ID'),
   AlertSlot(5, melodyAny, 'UniPwn'),
 ];

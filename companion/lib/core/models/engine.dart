@@ -18,7 +18,7 @@ enum Engine {
   /// are mapped on read; see detectionFromDbRow.
   axon('Axon', 'Axon / TASER duty equipment', Color(0xFF9C7DC4), 0x02),
   flockWifi(
-      'Flock WiFi', 'Flock Safety WiFi promiscuous', Color(0xFFC7799F), 0x04),
+      'Flock', 'Flock Safety WiFi promiscuous', Color(0xFFC7799F), 0x04),
   foxhunter('Foxhunter', 'WiFi + BLE proximity tracker', Color(0xFF4E9E80), 0x08),
   skySpy('Sky Spy', 'FAA Remote ID / ODID detection', Color(0xFF6CB4D4), 0x10),
   uniPwn(
