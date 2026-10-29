@@ -60,6 +60,13 @@ final routerProvider = Provider<GoRouter>((ref) {
           ),
         ],
       ),
+      // Settings opened from a screen outside the shell. Pushing '/config'
+      // from there builds a second shell with the same navigator key, which
+      // fails an assertion and leaves a blank screen.
+      GoRoute(
+        path: '/settings',
+        builder: (context, state) => const DeviceConfigScreen(),
+      ),
       GoRoute(
         path: '/onboarding',
         builder: (context, state) => const ScanScreen(),

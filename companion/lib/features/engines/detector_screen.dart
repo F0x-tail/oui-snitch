@@ -72,10 +72,10 @@ class DetectorScreen extends ConsumerWidget {
               ref.read(configSectionRequestProvider.notifier).state = 'Detection';
               // push, not go: this screen lives OUTSIDE the bottom-nav
               // ShellRoute, and go() replaces the whole stack — which destroyed
-              // the back entry and made Back exit the app. The go('/config')
-              // calls in home_screen are correct, because those run from inside
-              // the shell where it is tab-switching.
-              context.push('/config');
+              // the back entry and made Back exit the app. It pushes
+              // '/settings', the copy of the screen outside the shell; pushing
+              // the shell's own '/config' left a blank page.
+              context.push('/settings');
             },
           ),
           const Divider(height: 1),
