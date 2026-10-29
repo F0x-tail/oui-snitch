@@ -294,7 +294,7 @@ static uint8_t parseSecurity(const char* sec) {
     if (strcmp(sec, "[WPA_WPA2_PSK]") == 0) return 4;
     if (strcmp(sec, "[WPA2]") == 0) return 5;      // their label for WPA2-Enterprise
     if (strcmp(sec, "[WPA3_PSK]") == 0) return 6;
-    if (strcmp(sec, "[WPA2_WPA3_PSK]") == 0) return 6;
+    if (strcmp(sec, "[WPA2_WPA3_PSK]") == 0) return 7;
     return 0;
 }
 

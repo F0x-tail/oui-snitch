@@ -96,20 +96,26 @@ class WigleCsv {
   }
 
   static String _capabilities(Detection d) {
-    final isBle = d.isBleDetection;
-    if (isBle) return '[LE]';
-    final auth = d.wardrive?.authMode ?? 3;
-    return switch (auth) {
-      0 => '[OPEN]',
-      1 => '[WEP]',
-      2 => '[WPA_PSK]',
-      3 => '[WPA2_PSK]',
-      4 => '[WPA_WPA2_PSK]',
-      5 => '[WPA2_EAP]',
-      6 => '[WPA3_SAE]',
-      _ => '[WPA2_PSK]',
-    };
+    if (d.isBleDetection) return '[LE]';
+    return authTag(d.wardrive?.authMode);
   }
+
+  /// WiGLE AuthMode for the board's auth_mode code. A code we cannot name is
+  /// written as unknown: it used to become WPA2, which put a guess into the
+  /// map as if it had been observed.
+  static String authTag(int? auth) => switch (auth) {
+        0 => '[OPEN]',
+        1 => '[WEP]',
+        2 => '[WPA_PSK]',
+        3 => '[WPA2_PSK]',
+        4 => '[WPA_WPA2_PSK]',
+        5 => '[WPA2_EAP]',
+        6 => '[WPA3_SAE]',
+        7 => '[WPA2_PSK][WPA3_SAE]',
+        8 => '[OWE]',
+        9 => '[WPA3_EAP]',
+        _ => '[UNKNOWN]',
+      };
 
 
   static String _frequency(Detection d) {

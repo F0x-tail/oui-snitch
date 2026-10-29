@@ -195,21 +195,22 @@ static volatile uint8_t wdFoxhunterActive = 0;
 static volatile uint8_t wdDetectorActive = 0;
 static volatile uint8_t wdAxonActive = 0;
 
-#define AKM_OUI_00   0x00
-#define AKM_OUI_0F   0x0F
-#define AKM_OUI_AC   0xAC
-#define AKM_SUITE_EAP     1
-#define AKM_SUITE_PSK     2
-#define AKM_SUITE_SAE     8
-#define AKM_SUITE_FT_SAE  9
-#define AKM_SUITE_SAE_EXT 12
+// AKM suite numbers under the IEEE OUI 00-0F-AC, as hostap's
+// src/common/wpa_common.h names them (IEEE 802.11-2020 Table 9-151).
+// Personal: PSK 2, FT-PSK 4, PSK-SHA256 6, FT-PSK-SHA384 19, PSK-SHA384 20.
+// SAE (WPA3 personal): 8, FT 9, SAE-EXT-KEY 24, FT-SAE-EXT-KEY 25.
+// Enterprise: 1, 3, 5, 22, 23; Suite B (WPA3 enterprise) 11, 12, 13.
+// OWE (Enhanced Open): 18.
+static inline bool akmIsPsk(uint8_t t)  { return t == 2 || t == 4 || t == 6 || t == 19 || t == 20; }
+static inline bool akmIsSae(uint8_t t)  { return t == 8 || t == 9 || t == 24 || t == 25; }
+static inline bool akmIsEap(uint8_t t)  { return t == 1 || t == 3 || t == 5 || t == 22 || t == 23; }
+static inline bool akmIsSuiteB(uint8_t t) { return t == 11 || t == 12 || t == 13; }
 
+// Returns the auth_mode codes documented on DetectionEvent.ext.wardrive.
 static uint8_t IRAM_ATTR parseAuthFromFrame(const uint8_t* p, int len) {
     int offset = 36;
-    bool hasRSN = false;
-    bool hasWPA = false;
-    bool hasWPA3 = false;
-    bool hasEAP = false;
+    bool hasRSN = false, hasWPA = false;
+    bool psk = false, sae = false, eap = false, suiteB = false, owe = false;
 
     while (offset + 2 <= len) {
         uint8_t tagId = p[offset];
@@ -217,36 +218,28 @@ static uint8_t IRAM_ATTR parseAuthFromFrame(const uint8_t* p, int len) {
         if (offset + 2 + tagLen > len) break;
 
         if (tagId == 48 && tagLen >= 2) {
-            // RSN Information Element — parse AKM suite list
+            // RSN IE: version[2] group[4] pairwise_count[2] pairwise[n*4]
+            //         akm_count[2] akm[n*4]
             hasRSN = true;
-            // RSN IE: version[2] + group_cipher[4] + pairwise_count[2] + pairwise_suites[n*4] + akm_count[2] + akm_suites[n*4]
-            int rsnOff = offset + 2;
+            int rsnOff = offset + 2 + 2;
             int rsnEnd = offset + 2 + tagLen;
-            // Skip version (2 bytes)
-            rsnOff += 2;
             if (rsnOff + 4 > rsnEnd) goto next_tag;
-            // Skip group cipher suite (4 bytes)
             rsnOff += 4;
             if (rsnOff + 2 > rsnEnd) goto next_tag;
-            // Pairwise cipher count + suites
             uint16_t pairCount = p[rsnOff] | (p[rsnOff + 1] << 8);
             rsnOff += 2 + pairCount * 4;
             if (rsnOff + 2 > rsnEnd) goto next_tag;
-            // AKM suite count + suites
             uint16_t akmCount = p[rsnOff] | (p[rsnOff + 1] << 8);
             rsnOff += 2;
-            for (uint16_t i = 0; i < akmCount && rsnOff + 4 <= rsnEnd; i++) {
-                // AKM suite: OUI[3] + type[1]
-                uint8_t akmType = p[rsnOff + 3];
-                if (p[rsnOff] == 0x00 && p[rsnOff + 1] == 0x0F && p[rsnOff + 2] == 0xAC) {
-                    if (akmType == 8 || akmType == 9 || akmType == 12) {
-                        hasWPA3 = true;
-                    }
-                    if (akmType == 1 || akmType == 5) {
-                        hasEAP = true;
-                    }
-                }
-                rsnOff += 4;
+            for (uint16_t i = 0; i < akmCount && rsnOff + 4 <= rsnEnd; i++, rsnOff += 4) {
+                // Vendor AKMs carry their own OUI; their numbers mean nothing here.
+                if (p[rsnOff] != 0x00 || p[rsnOff + 1] != 0x0F || p[rsnOff + 2] != 0xAC) continue;
+                uint8_t t = p[rsnOff + 3];
+                psk |= akmIsPsk(t);
+                sae |= akmIsSae(t);
+                eap |= akmIsEap(t);
+                suiteB |= akmIsSuiteB(t);
+                owe |= (t == 18);
             }
         }
 
@@ -261,8 +254,11 @@ static uint8_t IRAM_ATTR parseAuthFromFrame(const uint8_t* p, int len) {
         offset += 2 + tagLen;
     }
 
-    if (hasWPA3)            return 6;  // WPA3
-    if (hasEAP && hasRSN)   return 5;  // WPA2_ENT
+    if (suiteB)             return 9;  // WPA3_ENT
+    if (sae && psk)         return 7;  // WPA2_WPA3 (transition)
+    if (sae)                return 6;  // WPA3
+    if (owe)                return 8;  // OWE
+    if (eap)                return 5;  // WPA2_ENT
     if (hasRSN && hasWPA)   return 4;  // WPA_WPA2
     if (hasRSN)             return 3;  // WPA2
     if (hasWPA)             return 2;  // WPA

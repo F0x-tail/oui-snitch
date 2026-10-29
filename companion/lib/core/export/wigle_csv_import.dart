@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:drift/drift.dart' as drift;
+import 'package:flutter/foundation.dart' show visibleForTesting;
 import 'package:intl/intl.dart';
 import 'package:oui_spy/core/db/app_database.dart';
 import 'package:oui_spy/core/models/engine.dart';
@@ -11,6 +12,10 @@ import 'package:path/path.dart' as p;
 import 'package:uuid/uuid.dart';
 
 /// Parses a WiGLE-format CSV and imports it as a wardrive session.
+/// auth_mode for a network whose security the source did not say. The board
+/// never sends it; it only comes from imported files.
+const kAuthUnknown = 255;
+
 class WigleCsvImport {
   const WigleCsvImport._();
 
@@ -142,7 +147,7 @@ class WigleCsvImport {
         engine = Engine.wardrive;
         method = isBle ? 'ble_adv' : 'wifi_ap';
       }
-      final authMode = _parseAuthMode(auth);
+      final authMode = parseAuthMode(auth);
 
       batch.add(DetectionsCompanion(
         sessionId: drift.Value(sessionId),
@@ -231,8 +236,13 @@ class WigleCsvImport {
     return null;
   }
 
-  static int _parseAuthMode(String s) {
+  @visibleForTesting
+  static int parseAuthMode(String s) {
     final u = s.toUpperCase();
+    if (u.contains('UNKNOWN') || u.contains('UNDEFINED')) return kAuthUnknown;
+    if (u.contains('OWE')) return 8;
+    if (u.contains('WPA3') && (u.contains('EAP') || u.contains('ENT'))) return 9;
+    if (u.contains('WPA3') && u.contains('WPA2')) return 7;
     if (u.contains('WPA3')) return 6;
     if (u.contains('WPA2_EAP') || u.contains('EAP')) return 5;
     if (u.contains('WPA_WPA2')) {
