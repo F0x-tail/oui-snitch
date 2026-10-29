@@ -5,84 +5,13 @@
 #include <stdint.h>
 #include <string.h>
 
-struct FlockOui { uint8_t b[3]; uint8_t ext; };
-
 // Upstream flock-you RSSI_MIN: frames weaker than this are dropped.
 #define FLOCK_RSSI_MIN (-95)
 
 extern volatile bool g_flockExtendedOui;
 
-static const FlockOui FLOCK_OUI_TABLE[] = {
-    { {0x00,0x03,0x7f}, 1 }, // Qualcomm Atheros QCA9377 (Flock fw default MAC)
-    { {0x00,0x18,0x0a}, 1 }, // Murata
-    { {0x00,0x23,0x6c}, 1 }, // Sierra Wireless
-    { {0x00,0x40,0x8c}, 1 }, // Flock BLE (@NitekryDPaul Jul 2026 LE CSV)
-    { {0x00,0xf4,0x8d}, 0 }, // Cradlepoint
-    { {0x04,0x0d,0x84}, 1 }, // Cradlepoint
-    { {0x08,0x3a,0x88}, 0 },
-    { {0x14,0x5a,0xfc}, 0 },
-    { {0x14,0xb5,0xcd}, 1 },
-    { {0x1c,0x34,0xf1}, 1 },
-    { {0x1c,0xb7,0x2c}, 1 }, // Murata
-    { {0x24,0x0a,0xc4}, 1 }, // Espressif
-    { {0x24,0x6f,0x28}, 1 }, // Espressif
-    { {0x24,0xb2,0xb9}, 0 },
-    { {0x2c,0xf4,0x32}, 1 }, // Espressif
-    { {0x30,0xae,0xa4}, 1 }, // Espressif
-    { {0x38,0x5b,0x44}, 1 },
-    { {0x3c,0x61,0x05}, 1 }, // Espressif
-    { {0x3c,0x71,0xbf}, 0 },
-    { {0x3c,0x91,0x80}, 0 },
-    { {0x48,0x27,0xea}, 0 },
-    { {0x58,0x00,0xe3}, 0 },
-    { {0x58,0x8e,0x81}, 0 },
-    { {0x5c,0x93,0xa2}, 0 },
-    { {0x60,0x62,0x01}, 1 }, // Sierra Wireless
-    { {0x64,0x6e,0x69}, 0 },
-    { {0x70,0x08,0x94}, 0 }, // Espressif
-    { {0x70,0xc9,0x4e}, 0 },
-    { {0x74,0x4c,0xa1}, 0 },
-    { {0x80,0x30,0x49}, 0 },
-    { {0x82,0x6b,0xf2}, 0 },
-    { {0x84,0x0d,0x8e}, 1 }, // Espressif
-    { {0x84,0xf3,0xeb}, 1 }, // Espressif
-    { {0x8c,0xaa,0xb5}, 1 }, // Espressif
-    { {0x90,0x35,0xea}, 0 },
-    { {0x94,0x08,0x53}, 0 },
-    { {0x94,0x34,0x69}, 1 }, // Espressif
-    { {0x98,0xf4,0xab}, 1 }, // Espressif
-    { {0x9c,0x2f,0x9d}, 0 },
-    { {0x9c,0x9c,0x1f}, 1 }, // Espressif
-    { {0xa0,0xc9,0xa0}, 1 }, // Murata
-    { {0xa4,0xcf,0x12}, 0 }, // Espressif
-    { {0xac,0x67,0xb2}, 1 }, // Espressif
-    { {0xac,0xcc,0x8e}, 1 }, // Flock BLE (@NitekryDPaul Jul 2026 LE CSV)
-    { {0xb4,0x1e,0x52}, 1 }, // Flock Group Inc. (direct)
-    { {0xb4,0xe3,0xf9}, 1 },
-    { {0xb8,0x1e,0xa4}, 0 },
-    { {0xb8,0x35,0x32}, 0 },
-    { {0xbc,0xdd,0xc2}, 1 }, // Espressif
-    { {0xc0,0x35,0x32}, 0 },
-    { {0xc8,0x2b,0x96}, 1 }, // Espressif
-    { {0xcc,0x50,0xe3}, 1 }, // Espressif
-    { {0xd0,0x39,0x57}, 0 },
-    { {0xd4,0x11,0xd6}, 1 },
-    { {0xd8,0xa0,0x1d}, 1 }, // Espressif
-    { {0xd8,0xf3,0xbc}, 0 },
-    { {0xdc,0x54,0x75}, 1 }, // Espressif
-    { {0xe0,0x0a,0xf6}, 1 },
-    { {0xe0,0x4f,0x43}, 0 },
-    { {0xe4,0xaa,0xea}, 0 }, // Liteon
-    { {0xe8,0xd0,0xfc}, 0 },
-    { {0xec,0x1b,0xbd}, 0 },
-    { {0xec,0x62,0x60}, 1 }, // Espressif
-    { {0xf0,0x82,0xc0}, 1 },
-    { {0xf4,0x6a,0xdd}, 0 },
-    { {0xf4,0xcf,0xa2}, 1 }, // Espressif
-    { {0xf8,0xa2,0xd6}, 1 },
-    { {0xfc,0xf5,0xc4}, 1 }, // Espressif
-};
-static const int FLOCK_OUI_COUNT = sizeof(FLOCK_OUI_TABLE) / sizeof(FLOCK_OUI_TABLE[0]);
+// The prefix list and its tiers are generated: see flock_oui_table.h.
+#include "flock_oui_table.h"
 
 struct FlockOuiBucket {
     uint8_t start;
@@ -105,32 +34,21 @@ static inline void flockOuiInitBuckets() {
     flockOuiBucketsReady = true;
 }
 
-static inline bool flockMatchOui(const uint8_t* mac) {
-    if (mac[0] & 0x02) return false;
-    if (!flockOuiBucketsReady) flockOuiInitBuckets();
+// The matching prefix's FLOCK_OUI_* tier, or 0. EXT prefixes count only with
+// the extended set switched on.
+static inline uint8_t IRAM_ATTR flockMatchOuiISR(const uint8_t* mac) {
+    if (mac[0] & 0x02) return 0;
+    if (!flockOuiBucketsReady) return 0;
     const FlockOuiBucket& b = flockOuiBuckets[mac[0]];
     for (int i = b.start; i < b.start + b.count; i++) {
         if (mac[1] == FLOCK_OUI_TABLE[i].b[1] &&
             mac[2] == FLOCK_OUI_TABLE[i].b[2]) {
-            if (FLOCK_OUI_TABLE[i].ext && !g_flockExtendedOui) continue;
-            return true;
+            uint8_t t = FLOCK_OUI_TABLE[i].tier;
+            if (t == FLOCK_OUI_EXT && !g_flockExtendedOui) return 0;
+            return t;
         }
     }
-    return false;
-}
-
-static inline bool IRAM_ATTR flockMatchOuiISR(const uint8_t* mac) {
-    if (mac[0] & 0x02) return false;
-    if (!flockOuiBucketsReady) return false;
-    const FlockOuiBucket& b = flockOuiBuckets[mac[0]];
-    for (int i = b.start; i < b.start + b.count; i++) {
-        if (mac[1] == FLOCK_OUI_TABLE[i].b[1] &&
-            mac[2] == FLOCK_OUI_TABLE[i].b[2]) {
-            if (FLOCK_OUI_TABLE[i].ext && !g_flockExtendedOui) continue;
-            return true;
-        }
-    }
-    return false;
+    return 0;
 }
 
 static inline int IRAM_ATTR isWildcardProbeIE(const uint8_t* body, int len) {

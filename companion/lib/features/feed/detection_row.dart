@@ -896,6 +896,7 @@ String methodLabel(String method) => switch (method) {
   'oui_addr3' => 'ADDR3 (BSSID)',
   'ssid' => 'SSID',
   'wildcard_probe' => 'Probe req',
+  'vendor_oui' => 'Vendor OUI',
   'oui_match' => 'BLE OUI',
   'name_match' => 'BLE name',
   'mfg_id' => 'MFG data',

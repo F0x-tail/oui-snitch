@@ -113,6 +113,16 @@ void main() {
         'High (Flock GATT UUID)');
   });
 
+  test('a surveillance vendor\'s own prefix decodes as Wi-Fi, high confidence', () {
+    final pkt = _flockPacket(name: '', method: 6);
+    pkt[0] = 2; // ENGINE_FLOCK_WIFI
+    final d = _decode(pkt);
+    expect(d.method, 'vendor_oui');
+    expect(isWifiMethod(d.method), true);
+    expect(d.flock!.confidence(d.method), FlockConfidence.high);
+    expect(d.flock!.confidence(d.method).label(d.method), 'High (Vendor-registered OUI)');
+  });
+
   test('nordic DFU decodes as BLE, suspected confidence', () {
     final d = _decode(
         _flockPacket(name: 'DfuTarg', method: 5, sigMask: FlockSignal.dfu));

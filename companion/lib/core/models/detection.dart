@@ -73,6 +73,7 @@ extension FlockConfidenceX on FlockConfidence {
     FlockConfidence.verified => 'Verified (XUNTONG Serial)',
     FlockConfidence.high => switch (method) {
       'wildcard_probe_ie_sig' => 'High (Flock IE Signature)',
+      'vendor_oui' => 'High (Vendor-registered OUI)',
       'wildcard_probe' => 'High (Flock Probe Captured)',
       'raven_uuid' => 'High (Raven UUID)',
       'gatt_uuid' => 'High (Flock GATT UUID)',
@@ -95,7 +96,7 @@ extension FlockExtensionSignals on FlockExtension {
     if (hasSignal(FlockSignal.ravenUuid)) return FlockConfidence.high;
     if (hasSignal(FlockSignal.gatt)) return FlockConfidence.high;
     if (hasSignal(FlockSignal.name)) return FlockConfidence.high;
-    if (method == 'wildcard_probe' || method == 'wildcard_probe_ie_sig') {
+    if (method == 'wildcard_probe' || method == 'wildcard_probe_ie_sig' || method == 'vendor_oui') {
       return FlockConfidence.high;
     }
     return FlockConfidence.suspected;

@@ -159,6 +159,7 @@ enum EngineState : uint8_t {
 #define METHOD_SSID            3
 #define METHOD_WILDCARD_PROBE  4
 #define METHOD_WILDCARD_PROBE_IE_SIG 5
+#define METHOD_OUI_VENDOR      6   // prefix registered to a surveillance vendor
 
 // Flock-BLE methods
 #define METHOD_OUI_MATCH       0

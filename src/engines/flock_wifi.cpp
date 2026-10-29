@@ -126,7 +126,8 @@ static void IRAM_ATTR wifiSnifferCb(void* buf, wifi_promiscuous_pkt_type_t type)
     uint8_t method = 0xFF;
     const uint8_t* matchMac = NULL;
 
-    if (flockMatchOuiISR(addr2)) {
+    uint8_t tier = 0;
+    if ((tier = flockMatchOuiISR(addr2)) != 0) {
         method = METHOD_OUI_ADDR2;
         matchMac = addr2;
         if (frameType == 0 && frameSubtype == 4) {
@@ -144,19 +145,26 @@ static void IRAM_ATTR wifiSnifferCb(void* buf, wifi_promiscuous_pkt_type_t type)
                              : METHOD_WILDCARD_PROBE;
             }
         }
-    } else if (!(addr1[0] & 0x01) && flockMatchOuiISR(addr1)) {
+    } else if (!(addr1[0] & 0x01) && (tier = flockMatchOuiISR(addr1)) != 0) {
         method = METHOD_OUI_ADDR1;
         matchMac = addr1;
-    } else if (frameType == 0 && len >= 22 && flockMatchOuiISR(addr3)) {
+    } else if (frameType == 0 && len >= 22 && (tier = flockMatchOuiISR(addr3)) != 0) {
         // BSSID OUI in a management frame (flock-you tier 1, addr3).
         method = METHOD_OUI_ADDR3;
         matchMac = addr3;
     }
 
     if (method == 0xFF || !matchMac) return;
+    // A prefix registered to the surveillance vendor itself is a finding on
+    // its own; a module maker's prefix is shared with countless other products.
+    bool bareOui = method == METHOD_OUI_ADDR1 || method == METHOD_OUI_ADDR2 ||
+                   method == METHOD_OUI_ADDR3;
+    if (bareOui && tier == FLOCK_OUI_VENDOR) {
+        method = METHOD_OUI_VENDOR;
+        bareOui = false;
+    }
     // bare OUI is not a flock on its own; upstream requires corroboration
-    if (method == METHOD_OUI_ADDR1 || method == METHOD_OUI_ADDR2 ||
-        method == METHOD_OUI_ADDR3) {
+    if (bareOui) {
         if (!flockAllowOuiOnly) { g_flockOuiSuppressed++; return; }
         g_flockOuiAllowed++;
     } else {

@@ -440,7 +440,8 @@ static void IRAM_ATTR wardriveWifiCb(void* buf, wifi_promiscuous_pkt_type_t type
     if (wdFlockWifiActive && pkt->rx_ctrl.rssi >= FLOCK_RSSI_MIN) {
         uint8_t fMethod = 0xFF;
         const uint8_t* fMac = NULL;
-        if (flockMatchOuiISR(addr2)) {
+        uint8_t fTier = 0;
+        if ((fTier = flockMatchOuiISR(addr2)) != 0) {
             fMethod = METHOD_OUI_ADDR2;
             fMac = addr2;
             // Probe-request with wildcard SSID is a strong cam signal.
@@ -455,9 +456,14 @@ static void IRAM_ATTR wardriveWifiCb(void* buf, wifi_promiscuous_pkt_type_t type
                     if (r == 1) fMethod = METHOD_WILDCARD_PROBE;
                 }
             }
-        } else if (!(addr1[0] & 0x01) && flockMatchOuiISR(addr1)) {
+        } else if (!(addr1[0] & 0x01) && (fTier = flockMatchOuiISR(addr1)) != 0) {
             fMethod = METHOD_OUI_ADDR1;
             fMac = addr1;
+        }
+        // A surveillance vendor's own prefix needs no corroboration.
+        if (fMac && fTier == FLOCK_OUI_VENDOR &&
+            (fMethod == METHOD_OUI_ADDR1 || fMethod == METHOD_OUI_ADDR2)) {
+            fMethod = METHOD_OUI_VENDOR;
         }
         if (fMac && (fMethod == METHOD_OUI_ADDR1 || fMethod == METHOD_OUI_ADDR2)) {
             if (!flockAllowOuiOnly) { g_flockOuiSuppressed++; fMac = NULL; }

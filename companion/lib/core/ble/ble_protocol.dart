@@ -445,7 +445,8 @@ class BleProtocol {
           'ssid',
           'wildcard_probe',
           'wildcard_probe_ie_sig',
-        ][method.clamp(0, 5)],
+          'vendor_oui',
+        ][method.clamp(0, 6)],
       Engine.axon => const [
           'oui_match',
           'name_match',
