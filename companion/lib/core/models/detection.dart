@@ -164,6 +164,13 @@ class WardriveExtension with _$WardriveExtension {
     @Default('') String ssid,
     @Default(0) int authMode,
     @Default('') String deviceName,
+    /// Pairwise ciphers and BSS type (src/wifi_frame.h WIFI_CAPS_*); 0 when
+    /// the firmware did not send them.
+    @Default(0) int wifiCaps,
+    /// Passpoint roaming OIs, space-separated hex, as WiGLE's RCOIs column.
+    @Default('') String rcois,
+    /// Bluetooth SIG company ID from manufacturer data, when advertised.
+    int? mfgrId,
   }) = _WardriveExtension;
 
   factory WardriveExtension.fromJson(Map<String, dynamic> json) =>

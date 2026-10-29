@@ -80,7 +80,10 @@ class WigleCsv {
       }
 
       final name = _escapeCsv(isBle ? d.deviceName : d.ssid);
-      final auth = isBle ? '[LE]' : authTag(d.wardrive?.authMode);
+      final w = d.wardrive;
+      final auth = isBle ? '[LE]' : authTag(w?.authMode, caps: w?.wifiCaps ?? 0);
+      final rcois = isBle ? '' : (w?.rcois ?? '');
+      final mfgr = isBle && w?.mfgrId != null ? '${w!.mfgrId}' : '';
       final firstSeen = _dateFormat.format(d.appTimestamp.toUtc());
       // Bluetooth: channel 0 and no frequency, as in the spec's own example.
       final channel = isBle ? 0 : d.channel;
@@ -93,7 +96,7 @@ class WigleCsv {
 
       buffer.write(
         '${d.macAddress},$name,$auth,$firstSeen,$channel,'
-        '$frequency,${d.rssi},${d.latitude},${d.longitude},$alt,$accText,,,$type$_eol',
+        '$frequency,${d.rssi},${d.latitude},${d.longitude},$alt,$accText,$rcois,$mfgr,$type$_eol',
       );
     }
 
@@ -102,23 +105,39 @@ class WigleCsv {
 
   /// AuthMode as Android's ScanResult.capabilities writes it, which the spec
   /// names as the format (AOSP InformationElementUtil
-  /// .generateCapabilitiesString). The board does not send the pairwise
-  /// cipher, so the cipher segment is left out, as Android does when it has
-  /// none. A code we cannot name is left blank: "[ESS]" alone would claim an
-  /// open network.
-  static String authTag(int? auth) => switch (auth) {
-        0 => '[ESS]',
-        1 => '[WEP][ESS]',
-        2 => '[WPA-PSK][ESS]',
-        3 => '[WPA2-PSK][RSN-PSK][ESS]',
-        4 => '[WPA-PSK][WPA2-PSK][RSN-PSK][ESS]',
-        5 => '[WPA2-EAP/SHA1][RSN-EAP/SHA1][ESS]',
-        6 => '[RSN-SAE][ESS]',
-        7 => '[WPA2-PSK][RSN-PSK+SAE][ESS]',
-        8 => '[RSN-OWE][ESS]',
-        9 => '[RSN-EAP_SUITE_B_192][ESS]',
-        _ => '',
-      };
+  /// .generateCapabilitiesString): one bracket per protocol, key management,
+  /// then the pairwise ciphers, then [ESS] or [IBSS]. [caps] carries the
+  /// ciphers and BSS type when the firmware sent them (src/wifi_frame.h);
+  /// without them the cipher segment is left out, as Android does when it
+  /// has none. A code we cannot name is left blank: "[ESS]" alone would claim
+  /// an open network.
+  static String authTag(int? auth, {int caps = 0}) {
+    final valid = caps & 0x80 != 0;
+    String seg(List<String> c) => c.isEmpty ? '' : '-${c.join('+')}';
+    final rsn = seg([
+      if (caps & 0x01 != 0) 'CCMP',
+      if (caps & 0x04 != 0) 'GCMP-256',
+      if (caps & 0x02 != 0) 'TKIP',
+    ]);
+    final wpa = seg([
+      if (caps & 0x10 != 0) 'CCMP',
+      if (caps & 0x08 != 0) 'TKIP',
+    ]);
+    final bss = valid && caps & 0x20 != 0 ? '[IBSS]' : '[ESS]';
+    return switch (auth) {
+      0 => bss,
+      1 => '[WEP]$bss',
+      2 => '[WPA-PSK$wpa]$bss',
+      3 => '[WPA2-PSK$rsn][RSN-PSK$rsn]$bss',
+      4 => '[WPA-PSK$wpa][WPA2-PSK$rsn][RSN-PSK$rsn]$bss',
+      5 => '[WPA2-EAP/SHA1$rsn][RSN-EAP/SHA1$rsn]$bss',
+      6 => '[RSN-SAE$rsn]$bss',
+      7 => '[WPA2-PSK$rsn][RSN-PSK+SAE$rsn]$bss',
+      8 => '[RSN-OWE$rsn]$bss',
+      9 => '[RSN-EAP_SUITE_B_192$rsn]$bss',
+      _ => '',
+    };
+  }
 
   static String _frequency(int ch) {
     if (ch >= 1 && ch <= 13) return '${2407 + ch * 5}';

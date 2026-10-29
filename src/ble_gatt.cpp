@@ -2979,12 +2979,23 @@ static size_t packDetection(const DetectionEvent* evt, uint8_t* buf) {
             buf[52] = evt->ext.wardrive.auth_mode;
             memcpy(buf + 53, evt->ext.wardrive.device_name, 21);
             len = 74;
-            if ((evt->method == METHOD_BLE_ADV || evt->method == METHOD_WIFI_AP) && evt->ext.wardrive.adv_len) {
+            if ((evt->method == METHOD_BLE_ADV || evt->method == METHOD_WIFI_AP) &&
+                (evt->ext.wardrive.adv_len || evt->ext.wardrive.wifi_caps)) {
                 uint8_t n = evt->ext.wardrive.adv_len;
                 if (n > sizeof(evt->ext.wardrive.adv)) n = sizeof(evt->ext.wardrive.adv);
                 buf[74] = n;
                 memcpy(buf + 75, evt->ext.wardrive.adv, n);
                 len = 75 + n;
+                // Appended after the adv bytes, so an older app that stops at
+                // adv_len never sees them: wifi_caps, rcoi_len, rcoi.
+                if (evt->method == METHOD_WIFI_AP && evt->ext.wardrive.wifi_caps) {
+                    uint8_t r = evt->ext.wardrive.rcoi_len;
+                    if (r > sizeof(evt->ext.wardrive.rcoi)) r = sizeof(evt->ext.wardrive.rcoi);
+                    buf[len++] = evt->ext.wardrive.wifi_caps;
+                    buf[len++] = r;
+                    memcpy(buf + len, evt->ext.wardrive.rcoi, r);
+                    len += r;
+                }
             }
             break;
         default:

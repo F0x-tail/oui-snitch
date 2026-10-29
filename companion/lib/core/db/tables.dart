@@ -81,6 +81,11 @@ class Detections extends Table {
   BoolColumn get isFullMac => boolean().nullable()();
   // GPS tagged from app's last-known position (captured while phone away)
   BoolColumn get approxGps => boolean().nullable()();
+  // WiGLE CSV fields: pairwise ciphers + BSS type (wifi_frame.h bits), the
+  // Passpoint roaming OIs as WiGLE writes them, and the BLE company ID.
+  IntColumn get wifiCaps => integer().nullable()();
+  TextColumn get rcois => text().nullable()();
+  IntColumn get mfgrId => integer().nullable()();
 }
 
 class EngineConfigs extends Table {

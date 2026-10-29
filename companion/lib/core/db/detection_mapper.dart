@@ -41,7 +41,14 @@ Detection detectionFromDbRow(Map<String, dynamic> row) {
     satelliteCount: row['satelliteCount'] as int?,
     approxGps: (row['approxGps'] as bool?) ?? false,
     wardrive: engine == Engine.wardrive
-        ? WardriveExtension(ssid: ssid, authMode: authMode, deviceName: deviceName)
+        ? WardriveExtension(
+            ssid: ssid,
+            authMode: authMode,
+            deviceName: deviceName,
+            wifiCaps: (row['wifiCaps'] as int?) ?? 0,
+            rcois: (row['rcois'] as String?) ?? '',
+            mfgrId: row['mfgrId'] as int?,
+          )
         : null,
     // Slot 1 no longer carries a Flock payload: Axon reports detector-shaped
     // events (confidence + filter_desc), which this mapper does not restore

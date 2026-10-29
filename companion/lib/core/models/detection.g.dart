@@ -201,6 +201,9 @@ _$WardriveExtensionImpl _$$WardriveExtensionImplFromJson(
   ssid: json['ssid'] as String? ?? '',
   authMode: (json['authMode'] as num?)?.toInt() ?? 0,
   deviceName: json['deviceName'] as String? ?? '',
+  wifiCaps: (json['wifiCaps'] as num?)?.toInt() ?? 0,
+  rcois: json['rcois'] as String? ?? '',
+  mfgrId: (json['mfgrId'] as num?)?.toInt(),
 );
 
 Map<String, dynamic> _$$WardriveExtensionImplToJson(
@@ -209,6 +212,9 @@ Map<String, dynamic> _$$WardriveExtensionImplToJson(
   'ssid': instance.ssid,
   'authMode': instance.authMode,
   'deviceName': instance.deviceName,
+  'wifiCaps': instance.wifiCaps,
+  'rcois': instance.rcois,
+  'mfgrId': instance.mfgrId,
 };
 
 _$DetectorExtensionImpl _$$DetectorExtensionImplFromJson(

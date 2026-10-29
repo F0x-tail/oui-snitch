@@ -2108,6 +2108,16 @@ mixin _$WardriveExtension {
   int get authMode => throw _privateConstructorUsedError;
   String get deviceName => throw _privateConstructorUsedError;
 
+  /// Pairwise ciphers and BSS type (src/wifi_frame.h WIFI_CAPS_*); 0 when
+  /// the firmware did not send them.
+  int get wifiCaps => throw _privateConstructorUsedError;
+
+  /// Passpoint roaming OIs, space-separated hex, as WiGLE's RCOIs column.
+  String get rcois => throw _privateConstructorUsedError;
+
+  /// Bluetooth SIG company ID from manufacturer data, when advertised.
+  int? get mfgrId => throw _privateConstructorUsedError;
+
   /// Serializes this WardriveExtension to a JSON map.
   Map<String, dynamic> toJson() => throw _privateConstructorUsedError;
 
@@ -2125,7 +2135,14 @@ abstract class $WardriveExtensionCopyWith<$Res> {
     $Res Function(WardriveExtension) then,
   ) = _$WardriveExtensionCopyWithImpl<$Res, WardriveExtension>;
   @useResult
-  $Res call({String ssid, int authMode, String deviceName});
+  $Res call({
+    String ssid,
+    int authMode,
+    String deviceName,
+    int wifiCaps,
+    String rcois,
+    int? mfgrId,
+  });
 }
 
 /// @nodoc
@@ -2146,6 +2163,9 @@ class _$WardriveExtensionCopyWithImpl<$Res, $Val extends WardriveExtension>
     Object? ssid = null,
     Object? authMode = null,
     Object? deviceName = null,
+    Object? wifiCaps = null,
+    Object? rcois = null,
+    Object? mfgrId = freezed,
   }) {
     return _then(
       _value.copyWith(
@@ -2161,6 +2181,18 @@ class _$WardriveExtensionCopyWithImpl<$Res, $Val extends WardriveExtension>
                 ? _value.deviceName
                 : deviceName // ignore: cast_nullable_to_non_nullable
                       as String,
+            wifiCaps: null == wifiCaps
+                ? _value.wifiCaps
+                : wifiCaps // ignore: cast_nullable_to_non_nullable
+                      as int,
+            rcois: null == rcois
+                ? _value.rcois
+                : rcois // ignore: cast_nullable_to_non_nullable
+                      as String,
+            mfgrId: freezed == mfgrId
+                ? _value.mfgrId
+                : mfgrId // ignore: cast_nullable_to_non_nullable
+                      as int?,
           )
           as $Val,
     );
@@ -2176,7 +2208,14 @@ abstract class _$$WardriveExtensionImplCopyWith<$Res>
   ) = __$$WardriveExtensionImplCopyWithImpl<$Res>;
   @override
   @useResult
-  $Res call({String ssid, int authMode, String deviceName});
+  $Res call({
+    String ssid,
+    int authMode,
+    String deviceName,
+    int wifiCaps,
+    String rcois,
+    int? mfgrId,
+  });
 }
 
 /// @nodoc
@@ -2196,6 +2235,9 @@ class __$$WardriveExtensionImplCopyWithImpl<$Res>
     Object? ssid = null,
     Object? authMode = null,
     Object? deviceName = null,
+    Object? wifiCaps = null,
+    Object? rcois = null,
+    Object? mfgrId = freezed,
   }) {
     return _then(
       _$WardriveExtensionImpl(
@@ -2211,6 +2253,18 @@ class __$$WardriveExtensionImplCopyWithImpl<$Res>
             ? _value.deviceName
             : deviceName // ignore: cast_nullable_to_non_nullable
                   as String,
+        wifiCaps: null == wifiCaps
+            ? _value.wifiCaps
+            : wifiCaps // ignore: cast_nullable_to_non_nullable
+                  as int,
+        rcois: null == rcois
+            ? _value.rcois
+            : rcois // ignore: cast_nullable_to_non_nullable
+                  as String,
+        mfgrId: freezed == mfgrId
+            ? _value.mfgrId
+            : mfgrId // ignore: cast_nullable_to_non_nullable
+                  as int?,
       ),
     );
   }
@@ -2223,6 +2277,9 @@ class _$WardriveExtensionImpl implements _WardriveExtension {
     this.ssid = '',
     this.authMode = 0,
     this.deviceName = '',
+    this.wifiCaps = 0,
+    this.rcois = '',
+    this.mfgrId,
   });
 
   factory _$WardriveExtensionImpl.fromJson(Map<String, dynamic> json) =>
@@ -2238,9 +2295,24 @@ class _$WardriveExtensionImpl implements _WardriveExtension {
   @JsonKey()
   final String deviceName;
 
+  /// Pairwise ciphers and BSS type (src/wifi_frame.h WIFI_CAPS_*); 0 when
+  /// the firmware did not send them.
+  @override
+  @JsonKey()
+  final int wifiCaps;
+
+  /// Passpoint roaming OIs, space-separated hex, as WiGLE's RCOIs column.
+  @override
+  @JsonKey()
+  final String rcois;
+
+  /// Bluetooth SIG company ID from manufacturer data, when advertised.
+  @override
+  final int? mfgrId;
+
   @override
   String toString() {
-    return 'WardriveExtension(ssid: $ssid, authMode: $authMode, deviceName: $deviceName)';
+    return 'WardriveExtension(ssid: $ssid, authMode: $authMode, deviceName: $deviceName, wifiCaps: $wifiCaps, rcois: $rcois, mfgrId: $mfgrId)';
   }
 
   @override
@@ -2252,12 +2324,24 @@ class _$WardriveExtensionImpl implements _WardriveExtension {
             (identical(other.authMode, authMode) ||
                 other.authMode == authMode) &&
             (identical(other.deviceName, deviceName) ||
-                other.deviceName == deviceName));
+                other.deviceName == deviceName) &&
+            (identical(other.wifiCaps, wifiCaps) ||
+                other.wifiCaps == wifiCaps) &&
+            (identical(other.rcois, rcois) || other.rcois == rcois) &&
+            (identical(other.mfgrId, mfgrId) || other.mfgrId == mfgrId));
   }
 
   @JsonKey(includeFromJson: false, includeToJson: false)
   @override
-  int get hashCode => Object.hash(runtimeType, ssid, authMode, deviceName);
+  int get hashCode => Object.hash(
+    runtimeType,
+    ssid,
+    authMode,
+    deviceName,
+    wifiCaps,
+    rcois,
+    mfgrId,
+  );
 
   /// Create a copy of WardriveExtension
   /// with the given fields replaced by the non-null parameter values.
@@ -2281,6 +2365,9 @@ abstract class _WardriveExtension implements WardriveExtension {
     final String ssid,
     final int authMode,
     final String deviceName,
+    final int wifiCaps,
+    final String rcois,
+    final int? mfgrId,
   }) = _$WardriveExtensionImpl;
 
   factory _WardriveExtension.fromJson(Map<String, dynamic> json) =
@@ -2292,6 +2379,19 @@ abstract class _WardriveExtension implements WardriveExtension {
   int get authMode;
   @override
   String get deviceName;
+
+  /// Pairwise ciphers and BSS type (src/wifi_frame.h WIFI_CAPS_*); 0 when
+  /// the firmware did not send them.
+  @override
+  int get wifiCaps;
+
+  /// Passpoint roaming OIs, space-separated hex, as WiGLE's RCOIs column.
+  @override
+  String get rcois;
+
+  /// Bluetooth SIG company ID from manufacturer data, when advertised.
+  @override
+  int? get mfgrId;
 
   /// Create a copy of WardriveExtension
   /// with the given fields replaced by the non-null parameter values.

@@ -60,7 +60,7 @@ class AppDatabase extends _$AppDatabase {
   AppDatabase.forTesting(super.e);
 
   @override
-  int get schemaVersion => 8;
+  int get schemaVersion => 9;
 
   @override
   MigrationStrategy get migration {
@@ -100,6 +100,11 @@ class AppDatabase extends _$AppDatabase {
         if (from < 8) {
           await customStatement(
               'CREATE INDEX IF NOT EXISTS idx_detections_mac ON detections (mac_address)');
+        }
+        if (from < 9) {
+          await m.addColumn(detections, detections.wifiCaps);
+          await m.addColumn(detections, detections.rcois);
+          await m.addColumn(detections, detections.mfgrId);
         }
       },
     );
@@ -220,6 +225,9 @@ class AppDatabase extends _$AppDatabase {
         'pilotLat': r.pilotLat,
         'pilotLon': r.pilotLon,
         'approxGps': r.approxGps,
+        'wifiCaps': r.wifiCaps,
+        'rcois': r.rcois,
+        'mfgrId': r.mfgrId,
         'isRaven': r.isRaven,
         'ravenFirmware': r.ravenFirmware,
         'flockSignals': r.flockSignals,
@@ -481,6 +489,9 @@ class AppDatabase extends _$AppDatabase {
         'pilotLat': d.pilotLat,
         'pilotLon': d.pilotLon,
         'approxGps': d.approxGps,
+        'wifiCaps': d.wifiCaps,
+        'rcois': d.rcois,
+        'mfgrId': d.mfgrId,
         'isRaven': d.isRaven,
         'ravenFirmware': d.ravenFirmware,
         'flockSignals': d.flockSignals,

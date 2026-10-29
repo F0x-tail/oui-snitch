@@ -308,6 +308,11 @@ typedef struct __attribute__((packed)) {
             char    device_name[21];
             uint8_t adv_len;
             uint8_t adv[62];
+            // Wi-Fi only (wifi_frame.h): pairwise ciphers + BSS type, and
+            // the Passpoint roaming OIs as len[1] oi[len] pairs.
+            uint8_t wifi_caps;
+            uint8_t rcoi_len;
+            uint8_t rcoi[15];
         } wardrive;
     } ext;
 } DetectionEvent;

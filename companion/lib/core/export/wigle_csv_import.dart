@@ -81,6 +81,8 @@ class WigleCsvImport {
     final iAlt = idx('AltitudeMeters');
     final iAcc = idx('AccuracyMeters');
     final iType = idx('Type');
+    final iRcois = idx('RCOIs');
+    final iMfgr = idx('MfgrId');
 
     if (iMac < 0 || iLat < 0 || iLon < 0 || iFirst < 0) {
       throw const FormatException('Missing required columns');
@@ -166,6 +168,12 @@ class WigleCsvImport {
         accuracy: drift.Value(acc),
         ssid: drift.Value(isBle ? '' : ssid),
         authMode: drift.Value(authMode),
+        rcois: iRcois >= 0 && iRcois < f.length && f[iRcois].trim().isNotEmpty
+            ? drift.Value(f[iRcois].trim())
+            : const drift.Value.absent(),
+        mfgrId: isBle && iMfgr >= 0 && iMfgr < f.length
+            ? drift.Value(int.tryParse(f[iMfgr].trim()))
+            : const drift.Value.absent(),
         filterDescription: wlHit != null && wlHit.description.isNotEmpty
             ? drift.Value(wlHit.description)
             : const drift.Value.absent(),

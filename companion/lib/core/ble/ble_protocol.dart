@@ -78,7 +78,7 @@ class BleProtocol {
         case Engine.detector:
           detector = _decodeDetectorExtension(ext);
         case Engine.wardrive:
-          wardrive = _decodeWardriveExtension(ext);
+          wardrive = _decodeWardriveExtension(ext, isBle: method == 1);
           deviceName = wardrive.deviceName.isNotEmpty
               ? wardrive.deviceName
               : wardrive.ssid;
@@ -566,23 +566,64 @@ class BleProtocol {
         isFullMac: isFullMac, filterDescription: desc, confidence: confidence);
   }
 
-  static WardriveExtension _decodeWardriveExtension(Uint8List ext) {
+  static WardriveExtension _decodeWardriveExtension(Uint8List ext, {required bool isBle}) {
     if (ext.isEmpty) return const WardriveExtension();
     final ssid = _extractString(ext, 0, 33);
     final authMode = ext.length > 33 ? ext[33] : 0;
     final deviceName = ext.length > 34 ? _extractString(ext, 34, 21) : '';
     var advRaw = const <int>[];
+    var wifiCaps = 0;
+    var rcois = '';
     if (ext.length > 55) {
       final n = ext[55];
       if (n > 0 && ext.length >= 56 + n) advRaw = List<int>.unmodifiable(ext.sublist(56, 56 + n));
+      // Wi-Fi tail after the adv bytes: wifi_caps, rcoi_len, rcoi pairs.
+      final t = 56 + n;
+      if (!isBle && ext.length > t) wifiCaps = ext[t];
+      if (!isBle && ext.length > t + 1) {
+        final r = ext[t + 1];
+        if (ext.length >= t + 2 + r) rcois = decodeRcois(ext.sublist(t + 2, t + 2 + r));
+      }
     }
     final out = WardriveExtension(
       ssid: ssid,
       authMode: authMode,
       deviceName: deviceName,
+      wifiCaps: wifiCaps,
+      rcois: rcois,
+      // Wi-Fi rows carry vendor OUIs in the adv bytes, not AD structures.
+      mfgrId: isBle ? bleCompanyId(advRaw) : null,
     );
     if (advRaw.isNotEmpty) wardriveAdvRaw[out] = advRaw;
     return out;
+  }
+
+  /// len[1] oi[len] pairs as WiGLE writes RCOIs: uppercase hex, space
+  /// separated ("5A03BA0000 BAA2D00000").
+  static String decodeRcois(List<int> b) {
+    final out = <String>[];
+    for (var i = 0; i < b.length;) {
+      final l = b[i];
+      if (l == 0 || i + 1 + l > b.length) break;
+      out.add([for (final x in b.sublist(i + 1, i + 1 + l)) x.toRadixString(16).padLeft(2, '0')]
+          .join()
+          .toUpperCase());
+      i += 1 + l;
+    }
+    return out.join(' ');
+  }
+
+  /// Bluetooth SIG company ID from the first Manufacturer Specific Data
+  /// structure (AD type 0xFF; the ID is its first two bytes, little-endian)
+  /// in raw advertising data, or null.
+  static int? bleCompanyId(List<int> adv) {
+    for (var i = 0; i + 1 < adv.length;) {
+      final l = adv[i];
+      if (l == 0 || i + 1 + l > adv.length) break;
+      if (adv[i + 1] == 0xFF && l >= 3) return adv[i + 2] | (adv[i + 3] << 8);
+      i += 1 + l;
+    }
+    return null;
   }
 
   static String _extractString(Uint8List data, int offset, int maxLen) {

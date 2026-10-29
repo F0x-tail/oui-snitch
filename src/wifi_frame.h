@@ -105,3 +105,87 @@ static inline uint8_t IRAM_ATTR apChannelFromFrame(const uint8_t* p, int len, ui
     return ht ? ht : rxChannel;
 }
 
+
+// Pairwise ciphers and BSS type, packed for DetectionEvent.ext.wardrive.wifi_caps
+// so the export can write AuthMode with its cipher segment, as Android does
+// ("[WPA2-PSK-CCMP][RSN-PSK-CCMP][ESS]"). Cipher suite numbers per hostap's
+// wpa_common.h: under 00-0F-AC (RSN) 2 TKIP, 4 CCMP-128, 9 GCMP-256; under
+// 00-50-F2 (the WPA1 element) 2 TKIP, 4 CCMP.
+#define WIFI_CAPS_RSN_CCMP    0x01
+#define WIFI_CAPS_RSN_TKIP    0x02
+#define WIFI_CAPS_RSN_GCMP256 0x04
+#define WIFI_CAPS_WPA_TKIP    0x08
+#define WIFI_CAPS_WPA_CCMP    0x10
+#define WIFI_CAPS_IBSS        0x20
+#define WIFI_CAPS_VALID       0x80  // set by firmware that parses these at all
+
+static inline uint8_t IRAM_ATTR wifiPairwiseBits(const uint8_t* body, int bodyLen,
+                                                 uint8_t o0, uint8_t o1, uint8_t o2,
+                                                 bool rsn) {
+    // version[2] group[4] pairwise_count[2] pairwise[n*4]
+    if (bodyLen < 8) return 0;
+    uint16_t n = body[6] | (body[7] << 8);
+    uint8_t bits = 0;
+    for (int i = 0, o = 8; i < n && o + 4 <= bodyLen; i++, o += 4) {
+        if (body[o] != o0 || body[o + 1] != o1 || body[o + 2] != o2) continue;
+        uint8_t t = body[o + 3];
+        if (rsn) {
+            if (t == 4) bits |= WIFI_CAPS_RSN_CCMP;
+            else if (t == 2) bits |= WIFI_CAPS_RSN_TKIP;
+            else if (t == 9) bits |= WIFI_CAPS_RSN_GCMP256;
+        } else {
+            if (t == 4) bits |= WIFI_CAPS_WPA_CCMP;
+            else if (t == 2) bits |= WIFI_CAPS_WPA_TKIP;
+        }
+    }
+    return bits;
+}
+
+static inline uint8_t IRAM_ATTR wifiCapsFromFrame(const uint8_t* p, int len) {
+    uint8_t caps = WIFI_CAPS_VALID;
+    // Capability Information, bit 1: IBSS (ad hoc) rather than ESS.
+    if (len >= 36 && (p[34] & 0x02)) caps |= WIFI_CAPS_IBSS;
+    for (int o = 36; o + 2 <= len;) {
+        uint8_t id = p[o], tl = p[o + 1];
+        if (o + 2 + tl > len) break;
+        const uint8_t* b = &p[o + 2];
+        if (id == 48) caps |= wifiPairwiseBits(b, tl, 0x00, 0x0F, 0xAC, true);
+        if (id == 221 && tl >= 4 && b[0] == 0x00 && b[1] == 0x50 && b[2] == 0xF2 && b[3] == 0x01)
+            caps |= wifiPairwiseBits(b + 4, tl - 4, 0x00, 0x50, 0xF2, false);
+        o += 2 + tl;
+    }
+    return caps;
+}
+
+// Roaming Consortium OIs (element 111, Passpoint), for WiGLE's RCOIs column.
+// Element body: number of ANQP OIs[1], OI#1/OI#2 lengths[1] (low/high
+// nibble), OI#1, OI#2, then OI#3 taking whatever remains. Written to [out] as
+// len[1] oi[len] pairs; stops at the first OI that does not fit. Returns the
+// bytes written.
+static inline uint8_t IRAM_ATTR wifiRcoisFromFrame(const uint8_t* p, int len,
+                                                   uint8_t* out, uint8_t cap) {
+    for (int o = 36; o + 2 <= len;) {
+        uint8_t id = p[o], tl = p[o + 1];
+        if (o + 2 + tl > len) break;
+        if (id == 111 && tl >= 2) {
+            const uint8_t* b = &p[o + 2];
+            uint8_t l1 = b[1] & 0x0F, l2 = b[1] >> 4;
+            int rest = tl - 2 - l1 - l2;
+            if (rest < 0) return 0;
+            uint8_t lens[3] = {l1, l2, (uint8_t)rest};
+            const uint8_t* oi = b + 2;
+            uint8_t w = 0;
+            for (int k = 0; k < 3; k++) {
+                uint8_t l = lens[k];
+                if (l == 0) continue;
+                if (l < 3 || l > 15 || w + 1 + l > cap) break;
+                out[w++] = l;
+                for (uint8_t j = 0; j < l; j++) out[w++] = oi[j];
+                oi += l;
+            }
+            return w;
+        }
+        o += 2 + tl;
+    }
+    return 0;
+}

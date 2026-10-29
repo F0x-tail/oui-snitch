@@ -550,6 +550,9 @@ static void IRAM_ATTR wardriveWifiCb(void* buf, wifi_promiscuous_pkt_type_t type
         evt.method = METHOD_WIFI_AP;
         memcpy(evt.ext.wardrive.ssid, ssid, 33);
         evt.ext.wardrive.auth_mode = authMode;
+        evt.ext.wardrive.wifi_caps = wifiCapsFromFrame(p, len);
+        evt.ext.wardrive.rcoi_len = wifiRcoisFromFrame(p, len, evt.ext.wardrive.rcoi,
+                                                       sizeof(evt.ext.wardrive.rcoi));
         uint8_t n = 0;
         for (int o = tagOffset; o + 2 <= len && n + 3 <= sizeof(evt.ext.wardrive.adv);) {
             uint8_t tl = p[o + 1];
