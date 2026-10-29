@@ -146,6 +146,9 @@ class _DetectionsTabState extends ConsumerState<_DetectionsTab> {
     );
     if (ok != true) return;
     final n = await db.clearFlockDetectorDetections();
+    // The board keeps its own copy of what it saw while the phone was away and
+    // replays it on connect; clear that too or the log refills.
+    await ref.read(bleManagerProvider).clearBoardBacklog();
     if (!mounted) return;
     messenger.showSnackBar(SnackBar(
       backgroundColor: AppTheme.success,

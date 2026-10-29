@@ -1944,15 +1944,31 @@ class WardriveController extends ChangeNotifier {
 
   Future<void> _maybeConfirmSpool() async {
     if (_spoolDone && _spoolExpectedTotal >= 0 && _spoolInserted >= _spoolExpectedTotal && !_spoolConfirmed) {
+      // Claimed before the first await so a later insert cannot start a second
+      // confirm, and released in every outcome. A single failed write used to
+      // be the end of it: the board kept the backlog and replayed it on the
+      // next connect, which refilled a log the user had just cleared.
       _spoolConfirmed = true;
       DebugLog.log('SPOOL: confirming inserted=$_spoolInserted expected=$_spoolExpectedTotal');
-      await _ble.confirmSpoolImported();
-      _spoolDone = false;
-      _spoolInserted = 0;
-      _spoolExpectedTotal = -1;
-      _spoolConfirmed = false;
-      _spoolSessionId = null;
-      _spoolSessionIdFuture = null;
+      try {
+        for (var attempt = 1; attempt <= 3; attempt++) {
+          try {
+            await _ble.confirmSpoolImported();
+            DebugLog.log('SPOOL: board told to clear (attempt $attempt)');
+            break;
+          } catch (e) {
+            DebugLog.log('SPOOL: clear write failed (attempt $attempt): $e');
+            if (attempt < 3) await Future<void>.delayed(Duration(seconds: attempt));
+          }
+        }
+      } finally {
+        _spoolDone = false;
+        _spoolInserted = 0;
+        _spoolExpectedTotal = -1;
+        _spoolConfirmed = false;
+        _spoolSessionId = null;
+        _spoolSessionIdFuture = null;
+      }
     }
   }
 

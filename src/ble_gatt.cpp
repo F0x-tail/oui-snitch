@@ -2112,10 +2112,12 @@ class SystemControlCallbacks : public NimBLECharacteristicCallbacks {
             }
 
             case SYS_CMD_FLUSH_SPOOL:
+                Serial.printf("[SPOOL] phone asked for the backlog (%u held)\n", detSpoolCount());
                 g_spoolFlushPending = true;
                 break;
 
             case SYS_CMD_SPOOL_CLEAR:
+                Serial.printf("[SPOOL] phone confirmed the import — clearing %u\n", detSpoolCount());
                 detSpoolClear();
                 break;
 
@@ -3008,6 +3010,7 @@ static void streamSpoolToPhone(void) {
     }
     uint8_t done = 0xFE;
     bleGattNotifyRaw(&done, 1);
+    Serial.printf("[SPOOL] sent %u to the phone, waiting for it to confirm\n", n);
 }
 
 void bleGattSpoolFlushPump(void) {

@@ -7,6 +7,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:oui_spy/core/app_state.dart';
 import 'package:oui_spy/core/ble/ble_manager.dart' show bleManagerProvider;
 import 'package:oui_spy/core/db/app_database.dart' show AppDatabase, databaseProvider;
+import 'package:oui_spy/core/debug_log.dart';
 import 'package:oui_spy/core/ignore_list_state.dart';
 import 'package:oui_spy/core/export/wigle_csv.dart';
 import 'package:oui_spy/core/models/detection.dart';
@@ -89,6 +90,13 @@ class ExportScreen extends ConsumerWidget {
               trailingIcon: Icons.folder_open,
               onTap: () => _restoreDatabase(context, ref),
             ),
+            _ExportButton(
+              label: 'Share app log',
+              description: 'What the app did, for tracking down a problem. '
+                  'Contains MAC addresses and network names.',
+              icon: Icons.description_outlined,
+              onTap: () => _shareLog(context),
+            ),
           ],
         ),
       ),
@@ -112,6 +120,24 @@ class ExportScreen extends ConsumerWidget {
     } catch (e) {
       messenger.showSnackBar(SnackBar(content: Text('Backup failed: $e')));
     }
+  }
+
+  Future<void> _shareLog(BuildContext context) async {
+    final messenger = ScaffoldMessenger.of(context);
+    final box = context.findRenderObject() as RenderBox?;
+    final origin = box != null
+        ? box.localToGlobal(Offset.zero) & box.size
+        : const Rect.fromLTWH(0, 0, 100, 100);
+    final file = await DebugLog.file();
+    if (file == null || !await file.exists()) {
+      messenger.showSnackBar(const SnackBar(content: Text('No log yet')));
+      return;
+    }
+    await Share.shareXFiles(
+      [XFile(file.path, mimeType: 'text/plain')],
+      subject: 'OUI-SNITCH app log',
+      sharePositionOrigin: origin,
+    );
   }
 
   Future<void> _restoreDatabase(BuildContext context, WidgetRef ref) async {

@@ -1038,8 +1038,36 @@ class BleManager {
     // (no SD on this board), so there is nothing of its to import. Skip the
     // flush while wardriving; the spoolable engines import on the next connect
     // when no session is running.
+    if (await _sendPendingBacklogClear()) return;
     if (_offlineScanEnabled && !wardriveSessionActive) {
       await requestSpoolFlush();
+    }
+  }
+
+  static const _kBacklogClearPending = 'spool_clear_pending';
+
+  /// Throws away what the board is holding for the phone. Used when the user
+  /// clears the detection log: otherwise the board would hand the same records
+  /// back on the next connect. Without a link the request waits for one.
+  Future<void> clearBoardBacklog() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool(_kBacklogClearPending, true);
+    if (_systemControl != null) await _sendPendingBacklogClear();
+  }
+
+  /// Sends a clear the user asked for while the board was away. Returns true
+  /// when it did, so the caller skips asking for the backlog it just dropped.
+  Future<bool> _sendPendingBacklogClear() async {
+    final prefs = await SharedPreferences.getInstance();
+    if (!(prefs.getBool(_kBacklogClearPending) ?? false)) return false;
+    try {
+      await confirmSpoolImported();
+      await prefs.remove(_kBacklogClearPending);
+      DebugLog.log('BLE: board backlog cleared at the user\'s request');
+      return true;
+    } catch (e) {
+      DebugLog.log('BLE: board backlog clear failed, will retry on reconnect: $e');
+      return false;
     }
   }
 
@@ -1099,7 +1127,9 @@ class BleManager {
   }
 
   Future<void> confirmSpoolImported() async {
-    if (_systemControl == null) return;
+    if (_systemControl == null) {
+      throw StateError('no link to the board');
+    }
     await _serialWrite(_systemControl!, BleProtocol.spoolClearCmd, withoutResponse: false);
     DebugLog.log('BLE: spool clear sent after DB commit');
   }

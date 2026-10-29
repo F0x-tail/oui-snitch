@@ -40,6 +40,14 @@ class DebugLog {
     }
   }
 
+  /// The log file, flushed so a share includes the latest lines.
+  static Future<File?> file() async {
+    if (!_ready) return null;
+    await _sink?.flush();
+    final dir = await getApplicationDocumentsDirectory();
+    return File('${dir.path}/oui_spy.log');
+  }
+
   static void dispose() {
     _sink?.close();
   }
