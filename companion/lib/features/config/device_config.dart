@@ -467,10 +467,16 @@ class _DeviceConfigScreenState extends ConsumerState<DeviceConfigScreen> {
         const _VersionRow(),
         ConfigActionRow(
           icon: Icons.code,
-          label: 'Source Code',
-          subtitle: 'github.com/lukeswitz/oui-spy-unified-blue',
-          onTap: () => _launchUrl('https://github.com/lukeswitz/oui-spy-unified-blue'),
+          label: 'Source code',
+          subtitle: 'github.com/F0x-tail/oui-snitch',
+          onTap: () => _launchUrl('https://github.com/F0x-tail/oui-snitch'),
           trailing: Icon(Icons.open_in_new, size: 14, color: t.textDim),
+        ),
+        ConfigActionRow(
+          icon: Icons.gavel_outlined,
+          label: 'Open-source licences',
+          subtitle: 'OUI-SNITCH is MIT licensed, as is the project it builds on',
+          onTap: () => showLicensePage(context: context, applicationName: 'OUI-SNITCH'),
         ),
       ],
     );

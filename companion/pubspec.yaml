@@ -72,6 +72,7 @@ flutter:
     - assets/bt_sig/
     - assets/classify/
     - assets/icons/
+    - assets/licenses/LICENSE
     - assets/fonts/OFL-AtkinsonHyperlegible.txt
     - assets/fonts/OFL-AtkinsonHyperlegibleMono.txt
   fonts:

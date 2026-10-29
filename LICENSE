@@ -1,7 +1,7 @@
 MIT License
 
-Copyright (c) 2026 colonelpanichacks and contributors (original OUI-SPY firmware)
-Copyright (c) 2026 F0x_ (subsequent modifications)
+Copyright (c) 2026 colonelpanichacks
+Copyright (c) 2026 F0x_
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal
@@ -20,6 +20,10 @@ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
+
+The first copyright line and the permission notice above are those of the
+original project, colonelpanichacks/oui-spy-unified-blue, reproduced as its
+MIT licence requires. The second covers the changes made in this repository.
 
 Portions of this repository are covered by other licences. See
 THIRD_PARTY_NOTICES.md.

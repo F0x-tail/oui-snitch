@@ -6,11 +6,20 @@ recorded here.
 
 ## Provenance
 
-This firmware descends from `colonelpanichacks/oui-spy-unified-blue` by way of
-`lukeswitz/oui-spy-unified-blue`. Neither repository carries a LICENSE file at
-the time of writing. This project proceeds on the basis that the original is MIT
-licensed, pending confirmation from its author. If that turns out to be wrong,
-the MIT grant in `LICENSE` covers only the modifications made here.
+This project descends from `colonelpanichacks/oui-spy-unified-blue` by way of
+`lukeswitz/oui-spy-unified-blue` (OUI-APEX).
+
+- **colonelpanichacks/oui-spy-unified-blue** is MIT licensed, "Copyright (c)
+  2026 colonelpanichacks"
+  ([LICENSE](https://github.com/colonelpanichacks/oui-spy-unified-blue/blob/master/LICENSE),
+  added in October 2026). `LICENSE` here reproduces that copyright line and its
+  permission notice unchanged, as the licence requires.
+- **lukeswitz/oui-spy-unified-blue** carries no LICENSE file as of 28 October
+  2026. What it added on top of the original, including the first version of
+  the companion app, is used here on the assumption that it is offered under
+  the same MIT terms as the project it forks. If that turns out to be wrong,
+  the MIT grant in `LICENSE` covers only the original project and the
+  modifications made here.
 
 ## Files in this repository under other licences
 

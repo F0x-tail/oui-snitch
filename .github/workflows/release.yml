@@ -92,14 +92,19 @@ jobs:
           cp ".pio/build/${ENV}/partitions.bin" "dist/${STEM}-partitions.bin"
           BOOT_APP0=$(find ~/.platformio -name "boot_app0.bin" -path "*/partitions/*" | head -1)
           cp "$BOOT_APP0" "dist/${STEM}-boot_app0.bin"
+          # MIT and Apache-2.0 both require the notices to travel with the binaries.
+          cp LICENSE THIRD_PARTY_NOTICES.md dist/
           (cd dist && tar czf "../${STEM}-usb.tar.gz" \
-            "${STEM}-bootloader.bin" "${STEM}-partitions.bin" "${STEM}.bin" "${STEM}-boot_app0.bin")
+            "${STEM}-bootloader.bin" "${STEM}-partitions.bin" "${STEM}.bin" "${STEM}-boot_app0.bin" \
+            LICENSE THIRD_PARTY_NOTICES.md)
 
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
           name: firmware-${{ matrix.role }}-${{ matrix.board }}
           path: |
             dist/oui-snitch-*.bin
+            dist/LICENSE
+            dist/THIRD_PARTY_NOTICES.md
             oui-snitch-*-usb.tar.gz
 
   release:
@@ -157,3 +162,5 @@ jobs:
           files: |
             artifacts/**/*.bin
             artifacts/**/*.tar.gz
+            artifacts/**/LICENSE
+            artifacts/**/THIRD_PARTY_NOTICES.md
