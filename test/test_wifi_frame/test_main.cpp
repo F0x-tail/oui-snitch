@@ -124,6 +124,15 @@ static void test_truncated_element_is_safe(void) {
     TEST_ASSERT_EQUAL_UINT8(0, wifiRcoisFromFrame(f.b, f.n, out, sizeof(out)));
 }
 
+static void test_downgrade_is_secured_vs_unprotected(void) {
+    TEST_ASSERT_TRUE(wifiAuthDowngrade(3, 0));    // WPA2 vs open
+    TEST_ASSERT_TRUE(wifiAuthDowngrade(1, 6));    // WEP vs WPA3
+    TEST_ASSERT_TRUE(wifiAuthDowngrade(5, 8));    // enterprise vs OWE
+    TEST_ASSERT_FALSE(wifiAuthDowngrade(3, 7));   // WPA2 vs WPA2/WPA3: both secured
+    TEST_ASSERT_FALSE(wifiAuthDowngrade(0, 8));   // open vs OWE: neither authenticates
+    TEST_ASSERT_FALSE(wifiAuthDowngrade(3, 3));
+}
+
 int main(int, char**) {
     UNITY_BEGIN();
     RUN_TEST(test_fcs_is_not_frame_data);
@@ -136,5 +145,6 @@ int main(int, char**) {
     RUN_TEST(test_rcois);
     RUN_TEST(test_pmf_required);
     RUN_TEST(test_truncated_element_is_safe);
+    RUN_TEST(test_downgrade_is_secured_vs_unprotected);
     return UNITY_END();
 }

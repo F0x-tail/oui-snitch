@@ -88,6 +88,17 @@ static inline uint8_t IRAM_ATTR parseAuthFromFrame(const uint8_t* p, int len) {
     return 0;                           // Open
 }
 
+// True when an auth code (above) offers no protection worth impersonating:
+// open, OWE (encrypted but unauthenticated) or WEP (broken).
+static inline bool wifiAuthUnprotected(uint8_t a) { return a == 0 || a == 1 || a == 8; }
+
+// One SSID served both with and without real protection. A network does not
+// run its own name open on one radio and WPA on another, so this is a copy
+// of a secured network with the security stripped off, whatever the vendor.
+static inline bool wifiAuthDowngrade(uint8_t a, uint8_t b) {
+    return wifiAuthUnprotected(a) != wifiAuthUnprotected(b);
+}
+
 // The channel the AP says it is on: DS Parameter Set (tag 3), else the
 // primary channel in HT Operation (tag 61). The radio's own channel is only a
 // fallback. On 2.4 GHz a beacon is routinely heard one or two channels away

@@ -69,6 +69,8 @@ static DedupRingISR<16, 8000> cameraDedupISR;
 //   Evil twin  one SSID beaconing from a second BSSID whose OUI differs. A
 //              second radio for the same network name is either a legitimate
 //              extender (same vendor OUI, so not flagged) or an impersonator.
+//              Also, whatever the vendor, one SSID offered both secured and
+//              open (or WEP): an impersonator that dropped the password.
 //   KARMA      one BSSID beaconing many different SSIDs, the signature of a
 //              Pineapple-style AP answering whatever clients ask for.
 //
@@ -76,6 +78,7 @@ static DedupRingISR<16, 8000> cameraDedupISR;
 struct SsidOwner {
     uint32_t ssidHash;
     uint8_t  bssid[6];
+    uint8_t  auth;        // parseAuthFromFrame code of this BSSID's beacon
     uint32_t lastMs;
     bool     alerted;
 };
@@ -638,8 +641,9 @@ static bool IRAM_ATTR apObserveISR(const uint8_t* p, int len, int rssi, uint8_t 
     const uint8_t* bssid = &p[16];                // addr3
     uint32_t h = ssidHash32(ssid, slen);
     uint32_t now = millis();
+    uint8_t auth = parseAuthFromFrame(p, len);
 
-    // --- evil twin: same SSID, different BSSID, different vendor ---
+    // --- evil twin: same SSID, different BSSID, different vendor or security ---
     int freeSlot = -1;
     for (int i = 0; i < (int)(sizeof(ssidOwners) / sizeof(ssidOwners[0])); i++) {
         SsidOwner& o = ssidOwners[i];
@@ -649,20 +653,26 @@ static bool IRAM_ATTR apObserveISR(const uint8_t* p, int len, int rssi, uint8_t 
             continue;
         }
         if (o.ssidHash != h) continue;
-        if (memcmp(o.bssid, bssid, 6) == 0) { o.lastMs = now; return false; }
+        if (memcmp(o.bssid, bssid, 6) == 0) { o.lastMs = now; o.auth = auth; return false; }
         // Same name from another radio. A legitimate extender normally shares
-        // the vendor OUI, so only a differing OUI is treated as impersonation.
-        if (memcmp(o.bssid, bssid, 3) != 0 && !o.alerted) {
+        // the vendor OUI, so only a differing OUI is treated as impersonation,
+        // unless the two disagree on whether the network is protected at all.
+        bool downgrade = wifiAuthDowngrade(o.auth, auth);
+        if ((downgrade || memcmp(o.bssid, bssid, 3) != 0) && !o.alerted) {
             o.alerted = true;
+            // Report the unprotected one; on a downgrade the copy may be the
+            // radio seen first.
+            const uint8_t* rogue = (downgrade && wifiAuthUnprotected(o.auth)) ? o.bssid : bssid;
             DetectionEvent evt = {};
             evt.engine_id = ENGINE_DETECTOR;
-            memcpy(evt.mac, bssid, 6);
+            memcpy(evt.mac, rogue, 6);
             evt.rssi = rssi;
             evt.channel = channel;
             evt.timestamp_ms = now;
             evt.method = METHOD_DET_EVILTWIN;
             evt.ext.detector.confidence = DET_CONF_HIGH;
-            strncpy(evt.ext.detector.filter_desc, "Evil twin (SSID from 2nd BSSID)",
+            strncpy(evt.ext.detector.filter_desc,
+                    downgrade ? "Evil twin (security downgrade)" : "Evil twin (SSID from 2nd BSSID)",
                     sizeof(evt.ext.detector.filter_desc) - 1);
             pushDetectionFromISR(&evt);
             return true;
@@ -673,6 +683,7 @@ static bool IRAM_ATTR apObserveISR(const uint8_t* p, int len, int rssi, uint8_t 
         SsidOwner& o = ssidOwners[freeSlot];
         o.ssidHash = h;
         memcpy(o.bssid, bssid, 6);
+        o.auth = auth;
         o.lastMs = now;
         o.alerted = false;
     }
