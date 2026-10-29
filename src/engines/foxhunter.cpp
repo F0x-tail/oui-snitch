@@ -5,6 +5,7 @@
 #include "../mesh_espnow.h"
 #include "../radio_coex.h"
 #include "../ble_coex.h"
+#include "wifi_frame.h"
 #include <Arduino.h>
 #include <NimBLEDevice.h>
 #include <WiFi.h>
@@ -86,7 +87,7 @@ static void IRAM_ATTR wifiSnifferCb(void* buf, wifi_promiscuous_pkt_type_t type)
 
     wifi_promiscuous_pkt_t* pkt = (wifi_promiscuous_pkt_t*)buf;
     uint8_t* p = pkt->payload;
-    int len = pkt->rx_ctrl.sig_len;
+    int len = wifiFrameLen(pkt->rx_ctrl.sig_len);
     if (len < 24) return;
 
     const uint8_t* addr1 = &p[4];

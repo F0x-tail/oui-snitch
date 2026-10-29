@@ -12,6 +12,7 @@
 #include "opendroneid.h"
 #include "odid_wifi.h"
 #include "dedup_ring.h"
+#include "wifi_frame.h"
 
 #define MAX_UAVS 32
 
@@ -323,7 +324,7 @@ static void IRAM_ATTR wifiCallback(void* buf, wifi_promiscuous_pkt_type_t type) 
 
     wifi_promiscuous_pkt_t* pkt = (wifi_promiscuous_pkt_t*)buf;
     uint8_t* payload = pkt->payload;
-    int length = pkt->rx_ctrl.sig_len;
+    int length = wifiFrameLen(pkt->rx_ctrl.sig_len);
     if (length < 24) return;
 
     // NAN Action Frame

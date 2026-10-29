@@ -6,6 +6,7 @@
 #include "../radio_coex.h"
 #include "../ble_coex.h"
 #include "dedup_ring.h"
+#include "wifi_frame.h"
 #include <Arduino.h>
 #include <NimBLEDevice.h>
 #include <WiFi.h>
@@ -115,7 +116,7 @@ static void IRAM_ATTR axonWifiSnifferCb(void* buf, wifi_promiscuous_pkt_type_t t
     if (type != WIFI_PKT_MGMT) return;
     wifi_promiscuous_pkt_t* pkt = (wifi_promiscuous_pkt_t*)buf;
     if (!pkt) return;
-    axonCheckWifiISR(pkt->payload, pkt->rx_ctrl.sig_len,
+    axonCheckWifiISR(pkt->payload, wifiFrameLen(pkt->rx_ctrl.sig_len),
                      pkt->rx_ctrl.rssi, pkt->rx_ctrl.channel);
 }
 

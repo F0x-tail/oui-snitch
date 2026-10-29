@@ -12,6 +12,7 @@ extern bool flockAllowOuiOnly;
 #include "flock_auth_cache.h"
 #include "dedup_ring.h"
 #include "../engine_registry.h"
+#include "wifi_frame.h"
 #include <Arduino.h>
 #include <WiFi.h>
 #include <esp_wifi.h>
@@ -111,7 +112,7 @@ static void IRAM_ATTR wifiSnifferCb(void* buf, wifi_promiscuous_pkt_type_t type)
 
     wifi_promiscuous_pkt_t* pkt = (wifi_promiscuous_pkt_t*)buf;
     uint8_t* p = pkt->payload;
-    int len = pkt->rx_ctrl.sig_len;
+    int len = wifiFrameLen(pkt->rx_ctrl.sig_len);
     if (len < 24) return;
     if (pkt->rx_ctrl.rssi < FLOCK_RSSI_MIN) return;
 

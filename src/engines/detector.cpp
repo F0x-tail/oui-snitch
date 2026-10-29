@@ -11,6 +11,7 @@
 #include <esp_wifi.h>
 #include "camera_match.h"
 #include "axon_match.h"
+#include "wifi_frame.h"
 
 // Extended camera OUI entries (reserved for observed Wi-Fi module OUIs) stay off
 // unless explicitly enabled; see camera_oui.h.
@@ -800,7 +801,7 @@ static void IRAM_ATTR wifiSnifferCb(void* buf, wifi_promiscuous_pkt_type_t type)
 
     wifi_promiscuous_pkt_t* pkt = (wifi_promiscuous_pkt_t*)buf;
     uint8_t* p = pkt->payload;
-    int len = pkt->rx_ctrl.sig_len;
+    int len = wifiFrameLen(pkt->rx_ctrl.sig_len);
     if (len < 24) return;
 
     if (detectorSigFrameISR(p, len, pkt->rx_ctrl.rssi, pkt->rx_ctrl.channel)) return;
