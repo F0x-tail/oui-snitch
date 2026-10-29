@@ -1939,7 +1939,7 @@ static void fleetOtaNotify(uint8_t phase, uint8_t pct, uint8_t done, uint8_t see
     if (!chrSystemControl) return;
     uint8_t b[6] = { SYS_OP_FLEET_PROGRESS, phase, pct, done, seen, 0 };
     chrSystemControl->setValue(b, sizeof(b));
-    chrSystemControl->notify();
+    chrSystemControl->notify(b, sizeof(b));
 }
 
 static void fleetProgressCb(uint8_t phase, uint8_t pct, uint8_t done, uint8_t seen) {
@@ -2018,7 +2018,7 @@ class SystemControlCallbacks : public NimBLECharacteristicCallbacks {
                               err == ESP_OK ? "OK" : esp_err_to_name(err));
                 uint8_t ack = (err == ESP_OK) ? 0x00 : 0x01;
                 chr->setValue(&ack, 1);
-                chr->notify();
+                chr->notify(&ack, 1);
                 break;
             }
 
@@ -2067,7 +2067,7 @@ class SystemControlCallbacks : public NimBLECharacteristicCallbacks {
                 if (!wifiOtaLoadCreds(ssid, sizeof(ssid), pass, sizeof(pass))) {
                     Serial.println("[SYS] Fleet WiFi OTA: no manager WiFi creds saved");
                     uint8_t b[6] = { SYS_OP_FLEET_PROGRESS, 0x80, 0, 0, 0, 0 };
-                    chr->setValue(b, sizeof(b)); chr->notify();
+                    chr->setValue(b, sizeof(b)); chr->notify(b, sizeof(b));
                     return;
                 }
                 size_t sl = strlen(ssid), pl = strlen(pass), ul = url.length();
@@ -2076,7 +2076,7 @@ class SystemControlCallbacks : public NimBLECharacteristicCallbacks {
                 if (1 + sl + 1 + pl + 1 + ul > MESH_WIFIOTA_MAX) {
                     Serial.println("[SYS] Fleet WiFi OTA: creds+url too large for mesh packet");
                     uint8_t b[6] = { SYS_OP_FLEET_PROGRESS, 0x81, 0, 0, 0, 0 };
-                    chr->setValue(b, sizeof(b)); chr->notify();
+                    chr->setValue(b, sizeof(b)); chr->notify(b, sizeof(b));
                     return;
                 }
                 size_t off = 0;
@@ -2091,7 +2091,7 @@ class SystemControlCallbacks : public NimBLECharacteristicCallbacks {
                               ssid, (unsigned)off);
                 xTaskCreatePinnedToCore(fleetWifiOtaPushTask, "fleet_wifi", 3072, NULL, 1, NULL, 1);
                 uint8_t b[6] = { SYS_OP_FLEET_PROGRESS, 2, 100, 0, 0, 0 };
-                chr->setValue(b, sizeof(b)); chr->notify();
+                chr->setValue(b, sizeof(b)); chr->notify(b, sizeof(b));
 #endif
                 break;
             }
@@ -2215,7 +2215,7 @@ class WifiConfigCallbacks : public NimBLECharacteristicCallbacks {
 static void dfuNotifyTrampoline(const uint8_t* data, size_t len) {
     if (chrDfuControl == nullptr) return;
     chrDfuControl->setValue((uint8_t*)data, len);
-    chrDfuControl->notify();
+    chrDfuControl->notify((uint8_t*)data, len);
 }
 
 static volatile bool     pcapIndInFlight = false;
@@ -2467,7 +2467,7 @@ void bleGattDispatchMeshNotify(uint8_t kind, const char source_node_id[5],
 #else
             if (phoneConnected && chrPcapData) {
                 chrPcapData->setValue((uint8_t*)(payload + 1), (uint16_t)(len - 1));
-                chrPcapData->notify();
+                chrPcapData->notify((uint8_t*)(payload + 1), (uint16_t)(len - 1));
             }
 #endif
             break;
@@ -2503,7 +2503,7 @@ void bleGattDispatchMeshNotify(uint8_t kind, const char source_node_id[5],
         case RAW_NOTIFY_FOXHUNTER_RSSI:
             if (chrFoxhunterRssi && len >= 1) {
                 chrFoxhunterRssi->setValue((uint8_t*)(payload + 1), (uint16_t)(len - 1));
-                chrFoxhunterRssi->notify();
+                chrFoxhunterRssi->notify((uint8_t*)(payload + 1), (uint16_t)(len - 1));
             }
             break;
         default:
@@ -2622,7 +2622,7 @@ static DeviceInfoCallbacks deviceInfoCb;
 static void wifiOtaNotifyTrampoline(const uint8_t* data, size_t len) {
     if (chrSystemControl == nullptr) return;
     chrSystemControl->setValue((uint8_t*)data, len);
-    chrSystemControl->notify();
+    chrSystemControl->notify((uint8_t*)data, len);
 }
 
 void bleGattInit(void) {
@@ -2979,11 +2979,15 @@ static size_t packDetection(const DetectionEvent* evt, uint8_t* buf) {
     return len;
 }
 
+// Every notify here passes its bytes. A bare notify() is sent later by the
+// host task and reads whatever the characteristic holds by then, so a packet
+// written straight after another overwrote it: the spool header was always
+// lost to the first record, and the app never confirmed a backlog.
 static void bleGattNotifyRaw(const uint8_t* data, size_t len) {
     if (chrDetectionEvents == nullptr) return;
     if (chrDetMutex) xSemaphoreTake(chrDetMutex, portMAX_DELAY);
     chrDetectionEvents->setValue((uint8_t*)data, len);
-    chrDetectionEvents->notify();
+    chrDetectionEvents->notify((uint8_t*)data, len);
     if (chrDetMutex) xSemaphoreGive(chrDetMutex);
 }
 
@@ -3060,7 +3064,7 @@ void bleGattNotifyDetection(const DetectionEvent* evt) {
     size_t len = packDetection(evt, buf);
     if (chrDetMutex) xSemaphoreTake(chrDetMutex, portMAX_DELAY);
     chrDetectionEvents->setValue(buf, len);
-    chrDetectionEvents->notify();
+    chrDetectionEvents->notify(buf, len);
     if (chrDetMutex) xSemaphoreGive(chrDetMutex);
 }
 
@@ -3077,7 +3081,7 @@ void bleGattNotifyFoxhunterRssi(int8_t rssi, uint16_t intervalMs) {
     }
     if (chrFoxhunterRssi == nullptr) return;
     chrFoxhunterRssi->setValue(buf, 3);
-    chrFoxhunterRssi->notify();
+    chrFoxhunterRssi->notify(buf, 3);
 }
 
 void bleGattNotifyEngineState(void) {
@@ -3098,7 +3102,7 @@ void bleGattNotifyEngineState(void) {
     }
 #endif
     chrEngineControl->setValue(buf, 2 + ENGINE_COUNT);
-    chrEngineControl->notify();
+    chrEngineControl->notify(buf, 2 + ENGINE_COUNT);
 }
 
 bool bleGattIsConnected(void) {
@@ -3145,7 +3149,7 @@ void bleGattNotifyMeshStatus(void) {
     if (force) lastForceMs = now;
 
     chrMeshStatus->setValue(buf, (uint16_t)off);
-    chrMeshStatus->notify();
+    chrMeshStatus->notify(buf, (uint16_t)off);
 }
 
 void bleGattNotifyPcapStats(void) {
@@ -3255,5 +3259,5 @@ void bleGattNotifyPcapStats(void) {
     if (force) lastPcapForceMs = now;
 
     chrPcapStats->setValue((uint8_t*)&st, sizeof(st));
-    chrPcapStats->notify();
+    chrPcapStats->notify((uint8_t*)&st, sizeof(st));
 }

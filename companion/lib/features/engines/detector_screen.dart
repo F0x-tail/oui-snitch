@@ -48,7 +48,12 @@ class DetectorScreen extends ConsumerWidget {
           IconButton(
             icon: const Icon(Icons.delete_sweep),
             tooltip: 'Clear detections',
-            onPressed: () => ref.read(appStateProvider).clearDetectionsForEngine(Engine.detector),
+            onPressed: () {
+              ref.read(appStateProvider).clearDetectionsForEngine(Engine.detector);
+              // Otherwise the board's offline backlog refills the list on the
+              // next connect.
+              ref.read(bleManagerProvider).clearBoardBacklog();
+            },
           ),
         ],
       ),
