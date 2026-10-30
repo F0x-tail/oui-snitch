@@ -475,19 +475,24 @@ class _ConnectedView extends ConsumerWidget {
 
           _SectionLabel(label: 'Tracking', color: AppTheme.detector),
           const SizedBox(height: 6),
-          SizedBox(
-            height: _mediumCardHeight(context),
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                Expanded(
-                  child: _sizedCard(Engine.detector, CardSize.medium, state, wd),
-                ),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: _sizedCard(Engine.skySpy, CardSize.medium, state, wd),
-                ),
-              ],
+          // At least the designed height, taller when the content needs it:
+          // with a large system font a fixed height pushed the count out of
+          // the tile. Both cards take the height of the taller one.
+          ConstrainedBox(
+            constraints: BoxConstraints(minHeight: _mediumCardHeight(context)),
+            child: IntrinsicHeight(
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Expanded(
+                    child: _sizedCard(Engine.detector, CardSize.medium, state, wd),
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: _sizedCard(Engine.skySpy, CardSize.medium, state, wd),
+                  ),
+                ],
+              ),
             ),
           ),
 

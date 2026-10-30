@@ -448,33 +448,47 @@ class _EngineCardState extends ConsumerState<EngineCard>
                 Row(
                   crossAxisAlignment: CrossAxisAlignment.end,
                   children: [
-                    Text(
-                      '${widget.detectionCount}',
-                      style: TextStyle(
-                        color: active && widget.detectionCount > 0
-                            ? t.textPrimary : t.textSecondary,
-                        fontSize: 26,
-                        fontWeight: FontWeight.w200,
-                        fontFamily: AppTheme.monoFamily,
-                        height: 1,
-                      ),
-                    ),
-                    if (widget.rate > 0) ...[
-                      const SizedBox(width: 6),
-                      Padding(
-                        padding: const EdgeInsets.only(bottom: 3),
-                        child: Text(
-                          '${widget.rate}/min',
-                          style: TextStyle(
-                            color: color.withValues(alpha: 0.8),
-                            fontSize: 12,
-                            fontWeight: FontWeight.w600,
-                            fontFamily: AppTheme.monoFamily,
-                          ),
+                    // The count shrinks before it may push the badge out of
+                    // the tile: on a narrow phone a four-digit count, the
+                    // rate and the badge do not fit side by side.
+                    Expanded(
+                      child: FittedBox(
+                        fit: BoxFit.scaleDown,
+                        alignment: Alignment.bottomLeft,
+                        child: Row(
+                          crossAxisAlignment: CrossAxisAlignment.end,
+                          children: [
+                            Text(
+                              '${widget.detectionCount}',
+                              style: TextStyle(
+                                color: active && widget.detectionCount > 0
+                                    ? t.textPrimary : t.textSecondary,
+                                fontSize: 26,
+                                fontWeight: FontWeight.w200,
+                                fontFamily: AppTheme.monoFamily,
+                                height: 1,
+                              ),
+                            ),
+                            if (widget.rate > 0) ...[
+                              const SizedBox(width: 6),
+                              Padding(
+                                padding: const EdgeInsets.only(bottom: 3),
+                                child: Text(
+                                  '${widget.rate}/min',
+                                  style: TextStyle(
+                                    color: color.withValues(alpha: 0.8),
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.w600,
+                                    fontFamily: AppTheme.monoFamily,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ],
                         ),
                       ),
-                    ],
-                    const Spacer(),
+                    ),
+                    const SizedBox(width: 6),
                     _stateBadge(active, t),
                   ],
                 ),
