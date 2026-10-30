@@ -3,6 +3,22 @@
 The order matters: Obtainium and Android both read a release the moment it is
 published.
 
+## One command
+
+`tools/release.sh X.Y.Z` does every step below on the release machine: version
+bump, host tests, the release APK, commit, tag and push, waiting for CI,
+signing the firmware, uploading, the one-APK check, publishing as Latest, and
+checking the published files against what was built. Everything that can fail
+locally runs before anything is pushed.
+
+It needs both keys (below), the toolchains in `~/toolchains`, and `gh` logged
+in once with access to the repository: `gh auth login`, choosing GitHub.com,
+**SSH** as the git protocol (git keeps pushing over SSH) and the browser login.
+
+## By hand
+
+The same steps, for when something needs doing differently:
+
 1. **Bump the version** in all four places to the same `X.Y.Z` (the tag check in
    `release.yml` refuses a mismatch):
    - `src/protocol.h` — `FW_VERSION` and `FW_VERSION_NUM`
