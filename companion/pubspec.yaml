@@ -1,7 +1,7 @@
 name: oui_spy
 description: "OUI-SNITCH Companion - Multi-engine RF detection and wardriving"
 publish_to: "none"
-version: 0.7.0+2
+version: 0.8.0+3
 
 environment:
   sdk: ^3.11.5
