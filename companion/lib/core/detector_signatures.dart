@@ -47,13 +47,13 @@ class DetectorSignature {
 
 const List<DetectorSignature> detectorSignatures = [
   DetectorSignature(sigTracker, 'Trackers', 'Trackers', Icons.track_changes,
-      'Apple Find My / AirTag, Samsung SmartTag, Tile and Google Find My Device trackers. Escalates from nearby, to following you, to leaving and returning repeatedly'),
+      'Apple Find My / AirTag, Samsung SmartTag, Tile and Google Find My Device trackers. Escalates from nearby, to following you, to leaving and returning repeatedly. A burst of fake tags is reported once as tracker spam'),
   DetectorSignature(sigHacktools, 'Hacking tools', 'Hack\ntools', Icons.developer_board,
       'Wireless-audit hardware: Flipper Zero BLE advertisements and Pwnagotchi handshake-harvester beacons'),
-  DetectorSignature(sigDeauth, 'Deauth attack', 'Deauth', Icons.wifi_off,
-      'WiFi deauth / disassociation attack frames'),
+  DetectorSignature(sigDeauth, 'Wi-Fi attacks', 'Wi-Fi\nattacks', Icons.wifi_off,
+      'WiFi deauth / disassociation floods, authentication floods, handshake-harvesting sweeps, anonymous reassociation and forged channel switches'),
   DetectorSignature(sigProbe, 'Probes & rogue APs', 'Probe', Icons.wifi_find,
-      'Devices probing for saved WiFi networks, evil-twin APs (one SSID from a second BSSID with a different vendor) and KARMA APs (one BSSID handing out many SSIDs)'),
+      'Devices probing for saved WiFi networks, evil-twin APs (one SSID from a second BSSID with a different vendor or weaker security) and KARMA APs (one BSSID handing out many SSIDs)'),
   DetectorSignature(sigMesh, 'Mesh nodes', 'Mesh', Icons.hub,
       'Meshtastic (own service UUID) and MeshCore (by name — it rides the generic Nordic UART service) mesh radios'),
   DetectorSignature(sigGlasses, 'Meta glasses', 'Meta glasses', Icons.visibility,

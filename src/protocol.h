@@ -204,6 +204,8 @@ enum EngineState : uint8_t {
 #define METHOD_DET_PINEAPPLE   11
 #define METHOD_DET_MESH        12
 #define METHOD_DET_STREAM      13  // sustained video-shaped uplink (traffic shape)
+#define METHOD_DET_WIFIATTACK  14  // auth flood, handshake sweep, anonymous reassoc, forged channel switch
+#define METHOD_DET_BLESPAM     15  // burst of fake BLE devices (tracker spam)
 
 // Signature bits are grouped by category rather than one per device, so the
 // eight bits cover far more than eight devices. SIG_HACKTOOLS folds together
@@ -211,7 +213,7 @@ enum EngineState : uint8_t {
 // which frees one for SIG_MESH.
 #define SIG_TRACKER    0x01   // Find My, SmartTag, Tile, Google FMD
 #define SIG_HACKTOOLS  0x02   // Flipper Zero, Pwnagotchi
-#define SIG_DEAUTH     0x04   // deauth / disassoc floods
+#define SIG_DEAUTH     0x04   // deauth / disassoc floods and other Wi-Fi attacks
 #define SIG_PROBE      0x08   // directed probes, evil twin, KARMA
 #define SIG_MESH       0x10   // Meshtastic, MeshCore
 #define SIG_GLASSES    0x20   // Meta / Ray-Ban, Oakley

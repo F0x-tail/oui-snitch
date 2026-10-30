@@ -154,6 +154,8 @@ const _mutableMethods = <(String, String)>[
   ('probe_ssid', 'Probe requests'),
   ('evil_twin', 'Rogue AP / evil twin'),
   ('deauth_storm', 'Deauth floods'),
+  ('wifi_attack', 'Other Wi-Fi attacks'),
+  ('ble_spam', 'Tracker spam'),
   ('mesh', 'Mesh nodes'),
   ('camera', 'Cameras'),
   ('stream', 'Streaming devices'),

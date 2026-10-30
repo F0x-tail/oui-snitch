@@ -31,7 +31,7 @@ const _watchGroups = <(String, List<_WatchItem>)>[
   ('Hacking & attacks', [
     _WatchItem('Hacking tools', 'Flipper Zero, Pwnagotchi and other pentest gear', Icons.bug_report,
         bits: sigHacktools, classes: {SignatureClass.hacking}),
-    _WatchItem('Wi-Fi deauth attacks', 'Someone knocking devices off Wi-Fi', Icons.wifi_off, bits: sigDeauth),
+    _WatchItem('Wi-Fi attacks', 'Someone knocking devices off Wi-Fi, flooding an access point or harvesting passwords', Icons.wifi_off, bits: sigDeauth),
     _WatchItem('Probes & rogue APs', 'Phones calling out for saved Wi-Fi names, plus evil-twin and KARMA access points. Noisy in busy areas', Icons.wifi_find,
         bits: sigProbe),
   ]),

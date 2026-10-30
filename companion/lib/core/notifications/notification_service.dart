@@ -579,6 +579,8 @@ class NotificationService extends ChangeNotifier {
       'tracker' => 'Find My Tracker',
       'flipper' => 'Flipper Zero',
       'deauth_storm' => 'Deauth Attack',
+      'wifi_attack' => 'Wi-Fi Attack',
+      'ble_spam' => 'Tracker Spam',
       'pwnagotchi' => 'Pwnagotchi',
       'glasses' => 'Meta Smart Glasses',
       'axon' => 'Axon Device',

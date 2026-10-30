@@ -57,6 +57,15 @@ void main() {
     expect(detectionMapIcon(_d(Engine.detector, 'pineapple')), flipper);
   });
 
+  test('Wi-Fi attacks share the deauth symbol, tracker spam has its own', () {
+    // Same signature bit as deauth floods, so the same symbol.
+    expect(detectionMapIcon(_d(Engine.detector, 'wifi_attack')),
+        detectionMapIcon(_d(Engine.detector, 'deauth_storm')));
+    // A burst of fakes is not a tracker and must not look like one.
+    expect(detectionMapIcon(_d(Engine.detector, 'ble_spam')),
+        isNot(detectionMapIcon(_d(Engine.detector, 'tracker'))));
+  });
+
   test('an unknown method falls back rather than guessing', () {
     expect(detectionMapIcon(_d(Engine.detector, 'something_new')), Icons.radar);
   });

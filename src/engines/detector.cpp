@@ -12,6 +12,7 @@
 #include "camera_match.h"
 #include "axon_match.h"
 #include "wifi_frame.h"
+#include "../wifi_attack.h"
 
 // Extended camera OUI entries (reserved for observed Wi-Fi module OUIs) stay off
 // unless explicitly enabled; see camera_oui.h.
@@ -71,8 +72,8 @@ static DedupRingISR<16, 8000> cameraDedupISR;
 //              extender (same vendor OUI, so not flagged) or an impersonator.
 //              Also, whatever the vendor, one SSID offered both secured and
 //              open (or WEP): an impersonator that dropped the password.
-//   KARMA      one BSSID beaconing many different SSIDs, the signature of a
-//              Pineapple-style AP answering whatever clients ask for.
+//   KARMA      one BSSID offering many different SSIDs, in beacons or probe
+//              responses: an AP answering whatever clients ask for.
 //
 // Fixed tables, no allocation: this runs in the promiscuous callback.
 struct SsidOwner {
@@ -212,6 +213,25 @@ static bool IRAM_ATTR pmfRequired(const uint8_t* bssid) {
     return false;
 }
 
+// Join floods, handshake sweeps, anonymous reassociation and forged channel
+// switches: the rules and thresholds are in wifi_attack.h.
+static JoinWatch s_join;
+static CsaWatch  s_csa;
+
+static void wifiAttackAlert(const uint8_t* mac, int rssi, uint8_t channel,
+                             uint8_t confidence, const char* desc) {
+    DetectionEvent evt = {};
+    evt.engine_id = ENGINE_DETECTOR;
+    memcpy(evt.mac, mac, 6);
+    evt.rssi = rssi;
+    evt.channel = channel;
+    evt.timestamp_ms = millis();
+    evt.method = METHOD_DET_WIFIATTACK;
+    evt.ext.detector.confidence = confidence;
+    strncpy(evt.ext.detector.filter_desc, desc, sizeof(evt.ext.detector.filter_desc) - 1);
+    pushDetectionFromISR(&evt);
+}
+
 static void IRAM_ATTR kickWindowRoll(unsigned long now, bool alerting) {
     // Learn only from calm seconds, so an attack cannot raise its own bar.
     if (!alerting) s_kickBaseX16 += ((int32_t)(s_kickTotal * 16) - (int32_t)s_kickBaseX16) / 10;
@@ -290,8 +310,43 @@ static const uint8_t  TRK_WINDOWS_VERIFIED = 3;       // left and came back this
 static const uint32_t TRK_SPAN_VERIFIED_MS = 600000;  // ...across at least 10 min
 static const uint32_t TRK_STALE_MS         = 1800000; // forget after 30 min unseen
 
+// Tracker spam. A spoofing tool advertises dozens of fake tags with fresh
+// addresses every second. Real tags rotate their address every 15 minutes or
+// so, so even a crowd yields only a few new ones in ten seconds. A burst is
+// reported once as spam, and while it lasts:
+//   - "nearby" alerts for that family are held back (they would all be fakes),
+//   - fakes may not evict a tag already with you for a minute, so the flood
+//     cannot push a real follower out of the table.
+static const uint32_t TRK_SPAM_WIN_MS      = 10000;
+static const uint8_t  TRK_SPAM_NEW         = 20;      // new addresses per window
+static const uint32_t TRK_SPAM_HOLD_MS     = 60000;   // spam mode outlasts the burst
+static const uint32_t TRK_KEEP_MS          = 60000;   // tracks protected during spam
+struct TrackerSpam {
+    uint32_t winStart;
+    uint8_t  fresh;        // new addresses this window
+    uint32_t untilMs;      // spam mode ends, 0 = off
+};
+static TrackerSpam trkSpam[4];
+
+static bool trackerSpamActive(uint8_t fam, uint32_t now) {
+    return trkSpam[fam].untilMs && (int32_t)(trkSpam[fam].untilMs - now) > 0;
+}
+
+// Counts a never-seen address. Returns true on the sighting that starts spam.
+static bool trackerSpamNote(uint8_t fam, uint32_t now) {
+    TrackerSpam& t = trkSpam[fam];
+    if (now - t.winStart > TRK_SPAM_WIN_MS) { t.winStart = now; t.fresh = 0; }
+    if (t.fresh < 0xFF) t.fresh++;
+    if (t.fresh < TRK_SPAM_NEW) return false;
+    bool starts = !trackerSpamActive(fam, now);
+    t.untilMs = (now + TRK_SPAM_HOLD_MS) ? now + TRK_SPAM_HOLD_MS : 1;
+    return starts;
+}
+
 static void trackerObserve(const uint8_t* mac, int rssi, TrackerFamily fam) {
     uint32_t now = millis();
+    if (fam > TRK_FAM_GOOGLE) fam = TRK_FAM_APPLE;
+    bool spam = trackerSpamActive(fam, now);
     int slot = -1, freeSlot = -1, oldest = -1;
     uint32_t oldestMs = 0xFFFFFFFF;
     const int n = (int)(sizeof(trkTracks) / sizeof(trkTracks[0]));
@@ -303,9 +358,24 @@ static void trackerObserve(const uint8_t* mac, int rssi, TrackerFamily fam) {
             continue;
         }
         if (memcmp(trkTracks[i].mac, mac, 6) == 0) { slot = i; break; }
+        if (spam && now - trkTracks[i].firstMs >= TRK_KEEP_MS) continue;
         if (trkTracks[i].lastMs < oldestMs) { oldestMs = trkTracks[i].lastMs; oldest = i; }
     }
     if (slot < 0) {
+        if (trackerSpamNote(fam, now)) {
+            DetectionEvent evt = {};
+            evt.engine_id = ENGINE_DETECTOR;
+            memcpy(evt.mac, mac, 6);
+            evt.rssi = rssi;
+            evt.timestamp_ms = now;
+            evt.method = METHOD_DET_BLESPAM;
+            evt.ext.detector.confidence = DET_CONF_HIGH;
+            snprintf(evt.ext.detector.filter_desc, sizeof(evt.ext.detector.filter_desc),
+                     "%s spam %u new/10s", TRK_FAMILY_NAME[fam], (unsigned)trkSpam[fam].fresh);
+            pushDetection(&evt);
+            Serial.printf("[DETECTOR] TRACKER SPAM %s\n", TRK_FAMILY_NAME[fam]);
+            spam = true;
+        }
         slot = (freeSlot >= 0) ? freeSlot : oldest;
         if (slot < 0) return;
         memcpy(trkTracks[slot].mac, mac, 6);
@@ -332,9 +402,12 @@ static void trackerObserve(const uint8_t* mac, int rssi, TrackerFamily fam) {
         tier = DET_CONF_SUSPECTED;
     }
     if (tier == DET_CONF_NONE || tier <= trkTracks[slot].alerted) return;
+    // During spam a brief sighting is most likely a fake; staying with you is
+    // not something a burst of throwaway addresses can do.
+    if (spam && tier == DET_CONF_SUSPECTED) return;
     trkTracks[slot].alerted = tier;
 
-    const char* famName = TRK_FAMILY_NAME[fam <= TRK_FAM_GOOGLE ? fam : 0];
+    const char* famName = TRK_FAMILY_NAME[fam];
     DetectionEvent evt = {};
     evt.engine_id = ENGINE_DETECTOR;
     memcpy(evt.mac, mac, 6);
@@ -632,7 +705,7 @@ class DetectorCallback : public NimBLEAdvertisedDeviceCallbacks {
 
 static DetectorCallback scanCb;
 
-// Watches beacons for the two rogue-AP behaviours above. Returns true when it
+// Watches beacons and probe responses for the two rogue-AP behaviours above. Returns true when it
 // raised a detection.
 static bool IRAM_ATTR apObserveISR(const uint8_t* p, int len, int rssi, uint8_t channel) {
     const uint8_t* ssid = nullptr;
@@ -729,6 +802,44 @@ static bool IRAM_ATTR apObserveISR(const uint8_t* p, int len, int rssi, uint8_t 
     return false;
 }
 
+// Out of line and out of IRAM: the frame handler runs in the Wi-Fi task, and
+// IRAM is full on the original ESP32. Returns true when the frame is consumed.
+static __attribute__((noinline)) bool wifiAttackFrame(const uint8_t* p, int len, int rssi,
+                                                      uint8_t channel) {
+    uint8_t fctl = p[0];
+    if ((fctl == WFC_BEACON || fctl == WFC_PROBE_RESP || fctl == WFC_ACTION) && len >= 26) {
+        uint32_t now = millis();
+        uint8_t apCh = fctl == WFC_ACTION ? channel : apChannelFromFrame(p, len, channel);
+        uint8_t v = csaObserve(&s_csa, p, len, apCh, now);
+        // Stay on the channel so the real AP's next beacon can be compared.
+        if (v == CSA_SUSPECT) g_detHoldUntil = now + CSA_PAIR_MS;
+        if (v != CSA_NONE) {
+            wifiAttackAlert(&p[16], rssi, channel,
+                            v == CSA_FORGED ? DET_CONF_HIGH : DET_CONF_SUSPECTED,
+                            v == CSA_FORGED ? "Forged channel switch" : "Channel switch (2.4 GHz)");
+        }
+        if (fctl == WFC_ACTION) return true;
+    }
+
+    if (wifiIsJoinRequest(p, len)) {
+        uint8_t n = 0;
+        uint8_t v = joinObserve(&s_join, p, millis(), &n);
+        if (v != JOIN_NONE) {
+            char desc[32];
+            if (v == JOIN_FLOOD) snprintf(desc, sizeof(desc), "Auth flood %u senders", (unsigned)n);
+            else if (v == JOIN_SWEEP) snprintf(desc, sizeof(desc), "Handshake sweep %u APs", (unsigned)n);
+            else snprintf(desc, sizeof(desc), "Anonymous reassociation");
+            g_detHoldUntil = millis() + DEAUTH_HOLD_MS;
+            // A flood and an anonymous request are named by the AP under
+            // attack (the senders are forged); a sweep by the station doing it.
+            wifiAttackAlert(v == JOIN_SWEEP ? &p[10] : &p[16], rssi, channel, DET_CONF_HIGH, desc);
+            return true;
+        }
+    }
+
+    return false;
+}
+
 static bool IRAM_ATTR detectorSigFrameISR(const uint8_t* p, int len, int rssi, uint8_t channel) {
     uint8_t fctl = p[0];
     if ((sigMask & SIG_DEAUTH) && fctl == 0x80) {
@@ -736,6 +847,9 @@ static bool IRAM_ATTR detectorSigFrameISR(const uint8_t* p, int len, int rssi, u
         int caps = wifiRsnCapabilities(p, len);
         if (caps >= 0 && (caps & WIFI_RSN_CAP_MFPR)) pmfNote(&p[16]);
     }
+
+    // Forged channel switches and join floods/sweeps (wifi_attack.h).
+    if ((sigMask & SIG_DEAUTH) && wifiAttackFrame(p, len, rssi, channel)) return true;
 
     if ((sigMask & SIG_DEAUTH) && (fctl == 0xC0 || fctl == 0xA0) && len >= 26) {
         unsigned long now = millis();
@@ -768,6 +882,9 @@ static bool IRAM_ATTR detectorSigFrameISR(const uint8_t* p, int len, int rssi, u
             s_lastKickAlert = now;
             memcpy(s_lastKickTa, ta, 6);
             bool pmf = pmfRequired(k->bssid);
+            // An anonymous reassociation just before makes the AP send real,
+            // protected deauths: PMF does not stop that one.
+            bool anon = pmf && joinAnonRecent(&s_join, k->bssid, now);
             DetectionEvent evt = {};
             evt.engine_id = ENGINE_DETECTOR;
             memcpy(evt.mac, ta, 6);
@@ -775,11 +892,11 @@ static bool IRAM_ATTR detectorSigFrameISR(const uint8_t* p, int len, int rssi, u
             evt.channel = channel;
             evt.timestamp_ms = now;
             evt.method = METHOD_DET_DEAUTH;
-            evt.ext.detector.confidence = pmf ? DET_CONF_SUSPECTED : DET_CONF_HIGH;
+            evt.ext.detector.confidence = (pmf && !anon) ? DET_CONF_SUSPECTED : DET_CONF_HIGH;
             snprintf(evt.ext.detector.filter_desc, sizeof(evt.ext.detector.filter_desc),
                      "%s %u/s rc%u%s%s", k->disassoc ? "Disassoc" : "Deauth",
                      (unsigned)k->n, (unsigned)k->reason, k->bcast ? " all" : "",
-                     pmf ? " PMF-blocked" : "");
+                     anon ? " via reassoc" : pmf ? " PMF-blocked" : "");
             pushDetectionFromISR(&evt);
         }
         return true;
@@ -857,8 +974,10 @@ static bool IRAM_ATTR detectorSigFrameISR(const uint8_t* p, int len, int rssi, u
         }
     }
 
-    // Beacons also feed the rogue-AP behaviour watch (evil twin / KARMA).
-    if ((sigMask & SIG_PROBE) && fctl == 0x80 && len >= 38) {
+    // Beacons and probe responses feed the rogue-AP behaviour watch (evil
+    // twin / KARMA). A KARMA AP may never beacon, only answer the names
+    // phones ask for, so probe responses matter as much as beacons.
+    if ((sigMask & SIG_PROBE) && (fctl == WFC_BEACON || fctl == WFC_PROBE_RESP) && len >= 38) {
         if (apObserveISR(p, len, rssi, channel)) return true;
     }
 
