@@ -214,9 +214,11 @@ static void loadHardwareConfig(void) {
     bool flockExt = p.getBool("flock_ext", false);
     bool offlScan = p.getBool("offl_scan", false);
     bool blePassive = p.getBool("ble_passive", false);
+    bool genFollow = p.getBool("gen_follow", false);
     p.end();
 
     bleSetPassiveScan(blePassive);
+    detectorSetGenericFollow(genFollow);
     flockSetExtendedOui(flockExt);
     {
         extern bool flockAllowOuiOnly;

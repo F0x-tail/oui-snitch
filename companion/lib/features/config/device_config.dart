@@ -94,6 +94,7 @@ class _DeviceConfigScreenState extends ConsumerState<DeviceConfigScreen> {
   bool _flockExtendedOui = false;
   bool _flockAllowOuiOnly = false;
   bool _blePassiveScan = false;
+  bool _genericFollow = false;
   bool _offlineScanEnabled = false;
   bool _offlineGpsTag = false;
   bool _buzzerEnabled = true;
@@ -185,6 +186,7 @@ class _DeviceConfigScreenState extends ConsumerState<DeviceConfigScreen> {
             _flockExtendedOui = hw.length >= 5 && hw[4] != 0;
             _flockAllowOuiOnly = hw.length >= 7 && hw[6] != 0;
             _blePassiveScan = hw.length >= 8 && hw[7] != 0;
+            _genericFollow = hw.length >= 9 && hw[8] != 0;
             _offlineScanEnabled = hw.length > 5 && hw[5] != 0;
           });
           ref.read(sharedPreferencesProvider)
@@ -813,6 +815,23 @@ class _DeviceConfigScreenState extends ConsumerState<DeviceConfigScreen> {
           value: _flockAllowOuiOnly,
           onChanged: (v) {
             setState(() => _flockAllowOuiOnly = v);
+            _writeHardwareConfig();
+          },
+        ),
+
+        const SizedBox(height: 16),
+        const ConfigSectionHeader(label: 'Followers'),
+        ConfigToggleRow(
+          icon: Icons.directions_walk,
+          label: 'Unknown devices that move with you (experimental)',
+          subtitle: 'Report any Bluetooth device with a fixed address that stays close '
+              'while you move between places, even one no signature knows, such as a '
+              'cheap key finder or a hidden GPS tracker. Your own watch, earbuds and '
+              'car will show up too: add them to the ignore list. Needs Trackers on.',
+          color: AppTheme.warning,
+          value: _genericFollow,
+          onChanged: (v) {
+            setState(() => _genericFollow = v);
             _writeHardwareConfig();
           },
         ),
@@ -1542,6 +1561,7 @@ class _DeviceConfigScreenState extends ConsumerState<DeviceConfigScreen> {
             allowOuiOnly: _flockAllowOuiOnly,
             offlineScan: _offlineScanEnabled,
             passiveBleScan: _blePassiveScan,
+            genericFollow: _genericFollow,
           );
       ref.read(sharedPreferencesProvider)
           .setBool('offlineScanEnabled', _offlineScanEnabled);

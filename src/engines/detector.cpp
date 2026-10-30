@@ -13,6 +13,10 @@
 #include "axon_match.h"
 #include "wifi_frame.h"
 #include "../wifi_attack.h"
+#include "../place_epoch.h"
+#include "../follow.h"
+#include "../ignore_list.h"
+#include <Preferences.h>
 
 // Extended camera OUI entries (reserved for observed Wi-Fi module OUIs) stay off
 // unless explicitly enabled; see camera_oui.h.
@@ -297,6 +301,8 @@ struct TrackerTrack {
     uint32_t firstMs;      // first sighting in this track
     uint32_t lastMs;       // most recent sighting
     uint16_t hits;
+    uint16_t lastPlace;    // place (place_epoch.h) of the most recent sighting
+    uint8_t  places;       // different places it was seen in
     uint8_t  windows;      // separate appearances (absence > TRK_WINDOW_GAP_MS)
     uint8_t  family;
     uint8_t  alerted;      // highest DET_CONF_* already reported
@@ -308,6 +314,62 @@ static const uint32_t TRK_FOLLOW_MS        = 300000;  // 5 min with you
 static const uint32_t TRK_WINDOW_GAP_MS    = 60000;   // absence that ends a window
 static const uint8_t  TRK_WINDOWS_VERIFIED = 3;       // left and came back this often
 static const uint32_t TRK_SPAN_VERIFIED_MS = 600000;  // ...across at least 10 min
+static const uint8_t  TRK_PLACES_VERIFIED  = 3;       // or was with you in this many places
+
+// Where the board is, told apart by what it hears (place_epoch.h). Fed by
+// every advertisement the detector sees.
+static PlaceState s_place;
+static bool s_placeInit = false;
+
+// Followers no signature knows (opt-in), and memory of followers across
+// power cycles (follow.h). The memory is saved at most every five minutes.
+static bool s_genericFollow = false;
+static FollowTable s_follow;
+static FollowMem s_mem;
+static bool s_memLoaded = false;
+static uint32_t s_memSavedMs = 0;
+static const uint32_t FOLLOW_MEM_SAVE_MS = 300000;
+
+static void followMemLoad(void) {
+    if (s_memLoaded) return;
+    s_memLoaded = true;
+    memset(&s_mem, 0, sizeof(s_mem));
+    Preferences p;
+    p.begin("ouispy-follow", false);
+    s_mem.salt = p.getUInt("salt", 0);
+    if (s_mem.salt == 0) {
+        s_mem.salt = esp_random() | 1u;
+        p.putUInt("salt", s_mem.salt);
+    }
+    p.getBytes("recs", s_mem.r, sizeof(s_mem.r));
+    p.end();
+}
+
+static void followMemSave(bool force) {
+    if (!s_memLoaded || !s_mem.dirty) return;
+    uint32_t now = millis();
+    if (!force && now - s_memSavedMs < FOLLOW_MEM_SAVE_MS) return;
+    Preferences p;
+    p.begin("ouispy-follow", false);
+    p.putBytes("recs", s_mem.r, sizeof(s_mem.r));
+    p.end();
+    s_mem.dirty = false;
+    s_memSavedMs = now;
+}
+
+// Places counted from moves: home, out and home again is three. Reported as
+// moves so the wording stays true.
+static void followerAlert(const uint8_t* mac, int rssi, uint8_t conf, const char* desc) {
+    DetectionEvent evt = {};
+    evt.engine_id = ENGINE_DETECTOR;
+    memcpy(evt.mac, mac, 6);
+    evt.rssi = rssi;
+    evt.timestamp_ms = millis();
+    evt.method = METHOD_DET_FOLLOWER;
+    evt.ext.detector.confidence = conf;
+    strncpy(evt.ext.detector.filter_desc, desc, sizeof(evt.ext.detector.filter_desc) - 1);
+    pushDetection(&evt);
+}
 static const uint32_t TRK_STALE_MS         = 1800000; // forget after 30 min unseen
 
 // Tracker spam. A spoofing tool advertises dozens of fake tags with fresh
@@ -382,19 +444,29 @@ static void trackerObserve(const uint8_t* mac, int rssi, TrackerFamily fam) {
         trkTracks[slot].firstMs = now;
         trkTracks[slot].hits    = 0;
         trkTracks[slot].windows = 1;
+        trkTracks[slot].places  = 1;
+        trkTracks[slot].lastPlace = s_place.epoch;
         trkTracks[slot].alerted = DET_CONF_NONE;
     } else if (now - trkTracks[slot].lastMs > TRK_WINDOW_GAP_MS) {
         // Was away and is back: a new appearance window.
         if (trkTracks[slot].windows < 0xFF) trkTracks[slot].windows++;
     }
+    if (trkTracks[slot].lastPlace != s_place.epoch) {
+        // Seen again after the board moved somewhere else.
+        trkTracks[slot].lastPlace = s_place.epoch;
+        if (trkTracks[slot].places < 0xFF) trkTracks[slot].places++;
+    }
     trkTracks[slot].family = (uint8_t)fam;
     trkTracks[slot].lastMs = now;
+    followMemLoad();
+    uint8_t back = followMemNote(&s_mem, mac, trkTracks[slot].places);
     if (trkTracks[slot].hits < 0xFFFF) trkTracks[slot].hits++;
     if (trkTracks[slot].hits < TRK_MIN_HITS) return;
 
     uint32_t span = now - trkTracks[slot].firstMs;
     uint8_t  tier = DET_CONF_NONE;
-    if (trkTracks[slot].windows >= TRK_WINDOWS_VERIFIED && span >= TRK_SPAN_VERIFIED_MS) {
+    if ((trkTracks[slot].windows >= TRK_WINDOWS_VERIFIED && span >= TRK_SPAN_VERIFIED_MS) ||
+        trkTracks[slot].places >= TRK_PLACES_VERIFIED || back >= 2) {
         tier = DET_CONF_VERIFIED;
     } else if (span >= TRK_FOLLOW_MS) {
         tier = DET_CONF_HIGH;
@@ -415,7 +487,13 @@ static void trackerObserve(const uint8_t* mac, int rssi, TrackerFamily fam) {
     evt.timestamp_ms = now;
     evt.method = METHOD_DET_TRACKER;
     evt.ext.detector.confidence = tier;
-    if (tier == DET_CONF_VERIFIED) {
+    if (tier == DET_CONF_VERIFIED && back >= 2) {
+        snprintf(evt.ext.detector.filter_desc, sizeof(evt.ext.detector.filter_desc),
+                 "%s back after restart (%ux)", famName, back);
+    } else if (tier == DET_CONF_VERIFIED && trkTracks[slot].places >= TRK_PLACES_VERIFIED) {
+        snprintf(evt.ext.detector.filter_desc, sizeof(evt.ext.detector.filter_desc),
+                 "%s moved with you %ux", famName, trkTracks[slot].places - 1);
+    } else if (tier == DET_CONF_VERIFIED) {
         snprintf(evt.ext.detector.filter_desc, sizeof(evt.ext.detector.filter_desc),
                  "%s returned %ux/%lum", famName, trkTracks[slot].windows,
                  (unsigned long)(span / 60000));
@@ -434,7 +512,42 @@ static void trackerObserve(const uint8_t* mac, int rssi, TrackerFamily fam) {
                   (unsigned long)(span / 1000), trkTracks[slot].windows);
 }
 
+static void placeFeed(NimBLEAdvertisedDevice* dev, const uint8_t* mac) {
+    uint32_t now = millis();
+    if (!s_placeInit) { placeInit(&s_place, now); s_placeInit = true; }
+    uint16_t cid = PLACE_NO_MFG;
+    if (dev->haveManufacturerData()) {
+        std::string md = dev->getManufacturerData();
+        if (md.size() >= 2) cid = (uint8_t)md[0] | ((uint8_t)md[1] << 8);
+    }
+    if (placeObserve(&s_place, mac, cid, now))
+        Serial.printf("[DETECTOR] new place #%u\n", (unsigned)s_place.epoch);
+}
+
+static void genericFollowFeed(NimBLEAdvertisedDevice* dev, const uint8_t* mac, int rssi) {
+    if (rssi < FOLLOW_MIN_RSSI) return;
+    if (!followFixedAddress(mac, dev->getAddressType() != BLE_ADDR_PUBLIC)) return;
+    if (ignoreListMatch(mac, nullptr, true)) return;
+    uint8_t places = 0;
+    uint8_t moved = followObserve(&s_follow, mac, s_place.epoch, millis(), &places);
+    followMemLoad();
+    uint8_t back = followMemNote(&s_mem, mac, places);
+    char desc[32];
+    if (moved) {
+        snprintf(desc, sizeof(desc), "Moved with you %ux", (unsigned)(moved - 1));
+        followerAlert(mac, rssi, DET_CONF_HIGH, desc);
+    }
+    if (back >= 2) {
+        snprintf(desc, sizeof(desc), "Back after restart (%ux)", (unsigned)back);
+        followerAlert(mac, rssi, back >= 3 ? DET_CONF_VERIFIED : DET_CONF_HIGH, desc);
+    }
+}
+
 static void detectorCheckSignatures(NimBLEAdvertisedDevice* dev, const uint8_t* mac, int rssi) {
+    if (sigMask & SIG_TRACKER) {
+        placeFeed(dev, mac);
+        if (s_genericFollow) genericFollowFeed(dev, mac, rssi);
+    }
 #ifdef OUISPY_SIG_DEBUG
     {
         std::string dbgName = dev->getName();
@@ -1331,6 +1444,13 @@ void detectorSetSigMask(uint8_t mask) {
 }
 uint8_t detectorGetSigMask(void) { return sigMask; }
 
+void detectorSetGenericFollow(bool on) {
+    s_genericFollow = on;
+    if (!on) memset(&s_follow, 0, sizeof(s_follow));
+    Serial.printf("[DETECTOR] generic followers %s\n", on ? "on" : "off");
+}
+bool detectorGetGenericFollow(void) { return s_genericFollow; }
+
 bool detectorUsesWifi(void) {
     return (detectorRadioMask & 0x01) != 0 &&
            (sigMask & (SIG_DEAUTH | SIG_PROBE | SIG_HACKTOOLS | SIG_AXON | SIG_CAMERA)) != 0;
@@ -1404,6 +1524,7 @@ static void detectorConfig(const uint8_t* payload, uint8_t len) {
 
 static void detectorStop(void) {
     scanning = false;
+    followMemSave(true);
 
     if (wifiActive) {
         wifiActive = false;
@@ -1443,6 +1564,7 @@ void detectorHostSuspend(bool suspend) {
 }
 
 static void detectorLoop(void) {
+    followMemSave(false);
     if (meshIsEnabled() && (meshInMeshWindow() || meshInRidWindow())) return;
     if (!scanning) return;
     if (engineGetState(ENGINE_WARDRIVE) != ESTATE_DISABLED) return;

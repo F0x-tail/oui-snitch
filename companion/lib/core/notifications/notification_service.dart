@@ -581,6 +581,7 @@ class NotificationService extends ChangeNotifier {
       'deauth_storm' => 'Deauth Attack',
       'wifi_attack' => 'Wi-Fi Attack',
       'ble_spam' => 'Tracker Spam',
+      'follower' => 'Device Moving With You',
       'pwnagotchi' => 'Pwnagotchi',
       'glasses' => 'Meta Smart Glasses',
       'axon' => 'Axon Device',

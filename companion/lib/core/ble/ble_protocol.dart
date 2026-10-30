@@ -212,7 +212,8 @@ class BleProtocol {
 
   /// Encode hardware config: buzzer[1] led[1] neopixel_brightness[1]
   /// buzzer_volume[1] extended_oui[1] offline_scan[1] allow_oui_only[1]
-  /// passive_ble_scan[1]. Firmware reads the trailing bytes only if present.
+  /// passive_ble_scan[1] generic_follow[1]. Firmware reads the trailing bytes
+  /// only if present.
   static Uint8List encodeHardwareConfig({
     required bool buzzer,
     required bool led,
@@ -222,6 +223,7 @@ class BleProtocol {
     bool offlineScan = false,
     bool allowOuiOnly = false,
     bool passiveBleScan = false,
+    bool genericFollow = false,
   }) {
     return Uint8List.fromList([
       buzzer ? 1 : 0,
@@ -232,6 +234,7 @@ class BleProtocol {
       offlineScan ? 1 : 0,
       allowOuiOnly ? 1 : 0,
       passiveBleScan ? 1 : 0,
+      genericFollow ? 1 : 0,
     ]);
   }
 
@@ -480,7 +483,8 @@ class BleProtocol {
           'stream',
           'wifi_attack',
           'ble_spam',
-        ][method.clamp(0, 15)],
+          'follower',
+        ][method.clamp(0, 16)],
       Engine.foxhunter => const ['ble_proximity', 'wifi_proximity'][method.clamp(0, 1)],
       Engine.uniPwn => 'unitree_ble',
       Engine.wardrive => const ['wifi_ap', 'ble_adv'][method.clamp(0, 1)],

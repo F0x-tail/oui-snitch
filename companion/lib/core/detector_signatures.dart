@@ -47,7 +47,7 @@ class DetectorSignature {
 
 const List<DetectorSignature> detectorSignatures = [
   DetectorSignature(sigTracker, 'Trackers', 'Trackers', Icons.track_changes,
-      'Apple Find My / AirTag, Samsung SmartTag, Tile and Google Find My Device trackers. Escalates from nearby, to following you, to leaving and returning repeatedly. A burst of fake tags is reported once as tracker spam'),
+      'Apple Find My / AirTag, Samsung SmartTag, Tile and Google Find My Device trackers. Escalates from nearby, to following you, to moving with you between places (told apart by what the board hears, no GPS needed) or coming back after a restart. A burst of fake tags is reported once as tracker spam'),
   DetectorSignature(sigHacktools, 'Hacking tools', 'Hack\ntools', Icons.developer_board,
       'Wireless-audit hardware: Flipper Zero BLE advertisements and Pwnagotchi handshake-harvester beacons'),
   DetectorSignature(sigDeauth, 'Wi-Fi attacks', 'Wi-Fi\nattacks', Icons.wifi_off,

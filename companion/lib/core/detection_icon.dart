@@ -27,7 +27,7 @@ IconData detectionMapIcon(Detection d) => switch (d.engine) {
 
 /// Icon for a detector hit, keyed on the decoded method name.
 ///
-/// Method strings come from `BleProtocol` (`Engine.detector` table): the 15
+/// Method strings come from `BleProtocol` (`Engine.detector` table): the 16
 /// values below. An unknown method falls back to the engine's generic radar
 /// rather than guessing.
 IconData detectorMethodIcon(String method) => switch (method) {
@@ -44,6 +44,7 @@ IconData detectorMethodIcon(String method) => switch (method) {
       'flipper' || 'pwnagotchi' || 'pineapple' => Icons.developer_board,
       'deauth_storm' || 'wifi_attack' => Icons.wifi_off,
       'ble_spam' => Icons.bluetooth_disabled,
+      'follower' => Icons.directions_walk,
       'probe_ssid' => Icons.wifi_find,
       'evil_twin' => Icons.wifi_tethering_error,
       // The user's own watchlist targets.

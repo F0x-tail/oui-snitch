@@ -1686,6 +1686,7 @@ class BleManager {
     bool offlineScan = false,
     bool allowOuiOnly = false,
     bool passiveBleScan = false,
+    bool genericFollow = false,
   }) async {
     if (_hardwareConfig == null) return;
     await _serialWrite(_hardwareConfig!, 
@@ -1698,6 +1699,7 @@ class BleManager {
         offlineScan: offlineScan,
         allowOuiOnly: allowOuiOnly,
         passiveBleScan: passiveBleScan,
+        genericFollow: genericFollow,
       ),
     );
   }

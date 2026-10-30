@@ -183,9 +183,11 @@ void setup() {
         p.begin("ouispy-hw", true);
         bool offlScan = p.getBool("offl_scan", false);
         bool blePassive = p.getBool("ble_passive", false);
+        bool genFollow = p.getBool("gen_follow", false);
         p.end();
         offlineScanEnabledSetFromPref(offlScan);
         bleSetPassiveScan(blePassive);
+        detectorSetGenericFollow(genFollow);
     }
 
     meshRestoreUserConfig();

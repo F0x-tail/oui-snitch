@@ -908,6 +908,7 @@ String methodLabel(String method) => switch (method) {
   'deauth_storm' => 'Deauth',
   'wifi_attack' => 'Wi-Fi attack',
   'ble_spam' => 'BLE spam',
+  'follower' => 'Follower',
   'probe_ssid' => 'Probe',
   'pwnagotchi' => 'Pwnagotchi',
   'glasses' => 'Meta glasses',

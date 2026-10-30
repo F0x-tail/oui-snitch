@@ -225,7 +225,7 @@ dropped after a minute, and can't lock your phone out while connected.
 
 | Engine | Finds |
 |---|---|
-| **Detector** | Your watchlist (MAC, OUI prefix, name, BLE service UUID), plus built-in signatures — all off by default: Find My / AirTag trackers following you (and bursts of fake ones), Flipper Zero, Wi-Fi attacks (deauth and authentication floods, handshake-harvesting sweeps, anonymous reassociation, forged channel switches), evil-twin and KARMA access points, directed probes, Pwnagotchi, Meta Ray-Ban and Oakley glasses |
+| **Detector** | Your watchlist (MAC, OUI prefix, name, BLE service UUID), plus built-in signatures — all off by default: Find My / AirTag trackers following you (between places, without GPS, and across restarts; bursts of fake ones are reported as spam), optionally any unknown fixed-address device that moves with you, Flipper Zero, Wi-Fi attacks (deauth and authentication floods, handshake-harvesting sweeps, anonymous reassociation, forged channel switches), evil-twin and KARMA access points, directed probes, Pwnagotchi, Meta Ray-Ban and Oakley glasses |
 | **Axon** | Axon / TASER duty equipment — body cameras and the like, close enough to hear |
 | **Flock WiFi** | Flock Safety ALPR cameras and Raven gunshot sensors, by Wi-Fi fingerprint |
 | **Sky Spy** | Drones broadcasting FAA Remote ID over BLE or Wi-Fi: ID, position, altitude, speed, pilot position |

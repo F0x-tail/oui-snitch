@@ -1467,7 +1467,7 @@ class GpsReceiveCallbacks : public NimBLECharacteristicCallbacks {
 
 void hardwareConfigApply(const uint8_t* data, size_t len) {
     if (len < 3) return;
-    static uint8_t lastCfg[8]; static size_t lastCfgLen = 0; static bool haveCfg = false;
+    static uint8_t lastCfg[9]; static size_t lastCfgLen = 0; static bool haveCfg = false;
     if (haveCfg && len == lastCfgLen && len <= sizeof(lastCfg) && memcmp(lastCfg, data, len) == 0) return;
     if (len <= sizeof(lastCfg)) { memcpy(lastCfg, data, len); lastCfgLen = len; haveCfg = true; }
 #ifdef OUISPY_NO_BUZZER
@@ -1505,6 +1505,12 @@ void hardwareConfigApply(const uint8_t* data, size_t len) {
         bool passive = data[7] != 0;
         p.putBool("ble_passive", passive);
         bleSetPassiveScan(passive);
+    }
+    // Byte 8, followers no signature knows (opt-in), likewise optional.
+    if (len >= 9) {
+        bool follow = data[8] != 0;
+        p.putBool("gen_follow", follow);
+        detectorSetGenericFollow(follow);
     }
     p.end();
     if (len >= 7) flockSetAllowOuiOnly(data[6] != 0);
@@ -1674,7 +1680,7 @@ class HardwareConfigCallbacks : public NimBLECharacteristicCallbacks {
     void onRead(NimBLECharacteristic* chr) override {
         Preferences p;
         p.begin("ouispy-hw", true);
-        uint8_t buf[8];
+        uint8_t buf[9];
         buf[0] = p.getBool("buzzer", true) ? 1 : 0;
         buf[1] = p.getBool("led", true) ? 1 : 0;
         buf[2] = p.getUChar("neo_brt", 50);
@@ -1684,7 +1690,8 @@ class HardwareConfigCallbacks : public NimBLECharacteristicCallbacks {
         p.end();
         buf[6] = flockGetAllowOuiOnly() ? 1 : 0;
         buf[7] = bleGetPassiveScan() ? 1 : 0;
-        chr->setValue(buf, 8);
+        buf[8] = detectorGetGenericFollow() ? 1 : 0;
+        chr->setValue(buf, 9);
     }
 };
 

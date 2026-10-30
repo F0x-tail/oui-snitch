@@ -160,6 +160,7 @@ const _mutableMethods = <(String, String)>[
   ('camera', 'Cameras'),
   ('stream', 'Streaming devices'),
   ('tracker', 'Trackers'),
+  ('follower', 'Unknown followers'),
 ];
 
 String _confidenceLabel(int c) {

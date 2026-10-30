@@ -7,7 +7,7 @@ void main() {
     final on = BleProtocol.encodeHardwareConfig(
       buzzer: true, led: true, neopixelBrightness: 10, buzzerVolume: 20,
       extendedOui: false, offlineScan: true);
-    expect(on.length, 8);
+    expect(on.length, 9);
     expect(on[5], 1);
     final off = BleProtocol.encodeHardwareConfig(
       buzzer: true, led: true, neopixelBrightness: 10, buzzerVolume: 20,
@@ -26,6 +26,18 @@ void main() {
     // Every byte before it is unchanged, so older firmware that reads seven
     // bytes sees exactly what it saw before.
     expect(passive.sublist(0, 7), active.sublist(0, 7));
+  });
+
+  test('hardware config carries the generic-follower byte[8], off by default', () {
+    final off = BleProtocol.encodeHardwareConfig(
+      buzzer: true, led: true, neopixelBrightness: 10, buzzerVolume: 20);
+    expect(off.length, 9);
+    expect(off[8], 0);
+    final on = BleProtocol.encodeHardwareConfig(
+      buzzer: true, led: true, neopixelBrightness: 10, buzzerVolume: 20,
+      genericFollow: true);
+    expect(on[8], 1);
+    expect(on.sublist(0, 8), off.sublist(0, 8));
   });
 
   test('decodes spool header frame', () {

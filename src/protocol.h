@@ -206,6 +206,7 @@ enum EngineState : uint8_t {
 #define METHOD_DET_STREAM      13  // sustained video-shaped uplink (traffic shape)
 #define METHOD_DET_WIFIATTACK  14  // auth flood, handshake sweep, anonymous reassoc, forged channel switch
 #define METHOD_DET_BLESPAM     15  // burst of fake BLE devices (tracker spam)
+#define METHOD_DET_FOLLOWER    16  // fixed-address device that moved with you, or came back after a restart
 
 // Signature bits are grouped by category rather than one per device, so the
 // eight bits cover far more than eight devices. SIG_HACKTOOLS folds together
