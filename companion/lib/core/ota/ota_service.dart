@@ -65,20 +65,14 @@ class OtaService {
   final BleManager _ble;
   final Dio _dio = Dio();
 
-  /// Remote OTA is **disabled**.
+  /// Installing releases from GitHub, over Bluetooth or the board's own Wi-Fi.
   ///
-  /// Releases are fetched from a third-party GitHub repo over TLS and the
-  /// image is checked with CRC32 only. CRC32 detects corruption, not
-  /// tampering, so there is nothing establishing that a downloaded image came
-  /// from whom it claims. Anyone controlling that repo, or a release in it,
-  /// could push code to the device.
-  ///
-  /// `pushLocalImage` is deliberately NOT gated: a file the user picked is a
-  /// trust decision they made themselves.
-  ///
-  /// TODO: re-enable once images are signed and the signature is verified
-  /// here before `_pushImage`. Tracked in PROJECT_SPEC.md §8.
-  static const bool remoteOtaEnabled = false;
+  /// Safe because the board, not the app, decides: it boots only an image
+  /// signed with the release key for its role and chip (src/ota_sig.cpp), and
+  /// keeps the previous image until the new one has run for a minute. The
+  /// signed release asset is the one ending in `-ota.bin`. A local .bin picked
+  /// in the app goes through the same check, so unsigned builds need USB.
+  static const bool remoteOtaEnabled = true;
 
   /// Checking GitHub for a newer release is safe on its own: it only reads
   /// the release list and says a version exists. Installing stays behind
@@ -141,7 +135,8 @@ class OtaService {
   @visibleForTesting
   static int scoreAsset(String name, String board, String role) {
     final n = name.toLowerCase();
-    if (!n.endsWith('.bin')) return -1;
+    // Only the signed image installs; the plain .bin is for USB flashing.
+    if (!n.endsWith('-ota.bin')) return -1;
     if (!n.contains('oui-snitch')) return -1;
     if (n.contains('-bootloader') ||
         n.contains('-partitions') ||
@@ -211,11 +206,11 @@ class OtaService {
       }
     }
     if (assetName == null || assetUrl == null) {
-      DebugLog.log('OTA: no .bin asset in release $tag for board=$board role=$role');
+      DebugLog.log('OTA: no -ota.bin asset in release $tag for board=$board role=$role');
       if (emitError) {
         _progress.add(OtaProgress(
           phase: OtaPhase.error,
-          error: 'Latest release $tag has no firmware .bin asset',
+          error: 'Latest release $tag has no signed firmware (-ota.bin) for this board',
         ));
       }
       return null;
@@ -475,6 +470,7 @@ class OtaService {
 
     await dfuControl.setNotifyValue(true);
     final statusCompleter = Completer<bool>();
+    int rejectCode = 0;
     final statusSub = dfuControl.onValueReceived.listen((data) {
       if (data.length < 4) return;
       final seq = data[1] | (data[2] << 8);
@@ -489,6 +485,7 @@ class OtaService {
         return;
       }
       // any other code is an error from ota_handler.cpp
+      rejectCode = status;
       if (!statusCompleter.isCompleted) statusCompleter.complete(false);
     });
 
@@ -563,9 +560,12 @@ class OtaService {
           message: 'Update applied — device rebooting',
         ));
       } else {
-        _progress.add(const OtaProgress(
+        _progress.add(OtaProgress(
           phase: OtaPhase.error,
-          error: 'Firmware rejected image (see device serial log)',
+          error: rejectCode == 0x09
+              ? 'The board refused this image: it is not signed with the '
+                  'OUI-SNITCH release key for this board. Flash it over USB instead.'
+              : 'Firmware rejected image (see device serial log)',
         ));
       }
       return ok;

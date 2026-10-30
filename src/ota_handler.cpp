@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: MIT
 #include "ota_handler.h"
+#include "ota_sig.h"
 #include <Arduino.h>
 #include <esp_ota_ops.h>
 #include <esp_partition.h>
@@ -177,6 +178,14 @@ bool handleCommit() {
         return false;
     }
 
+    // Only an image signed with the release key, for this role and chip, boots.
+    if (otaSigVerifyPartition(g_partition, g_expectedLength) != OTA_SIG_OK) {
+        esp_ota_abort(g_handle);
+        notifyStatus(0, 0x09);
+        resetState();
+        return false;
+    }
+
     esp_err_t err = esp_ota_end(g_handle);
     if (err != ESP_OK) {
         Serial.printf("[OTA] esp_ota_end failed: %s\n", esp_err_to_name(err));
@@ -225,7 +234,7 @@ extern "C" void otaInit(void) {
     esp_ota_img_states_t state;
     if (running && esp_ota_get_state_partition(running, &state) == ESP_OK) {
         if (state == ESP_OTA_IMG_PENDING_VERIFY) {
-            Serial.println("[OTA] Image PENDING_VERIFY — awaiting confirm from app");
+            Serial.println("[OTA] New image on trial: confirmed after 60 s or by the app");
         } else if (state == ESP_OTA_IMG_VALID) {
             Serial.println("[OTA] Image VALID");
         }

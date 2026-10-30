@@ -31,6 +31,7 @@
 #include "engines/unipwn.h"
 #include "engines/wardrive.h"
 #include "engines/pcap.h"
+#include "ota_sig.h"
 #include <TinyGPS++.h>
 #include <HardwareSerial.h>
 #ifdef OUISPY_DONGLE
@@ -1778,6 +1779,7 @@ void setup() {
 }
 
 void loop() {
+    otaTrialTick();
 #ifdef OUISPY_STACKPROBE
     static int stackProbeDone = 0;
     if ((stackProbeDone == 0 && millis() > 10000) || (stackProbeDone == 1 && millis() > 45000)) {

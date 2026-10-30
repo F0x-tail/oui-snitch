@@ -143,9 +143,13 @@ jobs:
 
             ### Firmware
 
-            | Target | Role | Firmware image | First flash (USB) |
-            |--------|------|----------------|-------------------|
-            | XIAO ESP32-S3 | node | `oui-snitch-node-xiao_s3-${{ github.ref_name }}.bin` | `oui-snitch-node-xiao_s3-${{ github.ref_name }}-usb.tar.gz` |
+            | Target | Role | Update from the app | First flash (USB) |
+            |--------|------|---------------------|-------------------|
+            | XIAO ESP32-S3 | node | `oui-snitch-node-xiao_s3-${{ github.ref_name }}-ota.bin` | `oui-snitch-node-xiao_s3-${{ github.ref_name }}-usb.tar.gz` |
+
+            The app installs the signed `-ota.bin`; the board refuses anything
+            not signed with the release key. The plain `.bin` is the same
+            firmware, unsigned, for flashing over USB.
 
             The XIAO ESP32-S3 is the only board this release is built for. Other
             targets exist in `platformio.ini` and are untested.

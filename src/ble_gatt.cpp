@@ -10,6 +10,7 @@
 #include "engines/wardrive.h"
 #include "mesh_espnow.h"
 #include "ota_handler.h"
+#include "ota_sig.h"
 #include "opsec_mac.h"
 #include "ble_coex.h"
 #include "wd_log.h"
@@ -2015,10 +2016,7 @@ class SystemControlCallbacks : public NimBLECharacteristicCallbacks {
                 break;
 
             case SYS_CMD_CONFIRM_OTA: {
-                esp_err_t err = esp_ota_mark_app_valid_cancel_rollback();
-                Serial.printf("[SYS] OTA confirm: %s\n",
-                              err == ESP_OK ? "OK" : esp_err_to_name(err));
-                uint8_t ack = (err == ESP_OK) ? 0x00 : 0x01;
+                uint8_t ack = otaTrialConfirm() ? 0x00 : 0x01;
                 chr->setValue(&ack, 1);
                 chr->notify(&ack, 1);
                 break;

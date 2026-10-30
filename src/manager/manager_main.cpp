@@ -11,6 +11,7 @@
 #include "../mesh_espnow.h"
 #include "../wifi_ota_handler.h"
 #include "../ignore_list.h"
+#include "../ota_sig.h"
 #include <Preferences.h>
 #include "../engines/detector.h"
 #include <freertos/FreeRTOS.h>
@@ -214,6 +215,7 @@ void setup() {
 
 void loop() {
     delay(50);
+    otaTrialTick();
 #ifdef OUISPY_WD_CYCLE_TEST
     bleGattWdCycleTick();
     bleGattPeerDeadlineTick();

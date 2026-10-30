@@ -98,7 +98,20 @@ python3 -m esptool --chip esp32s3 --port /dev/ttyACM0 --baud 921600 \
 ```
 
 The board keeps its pairing, settings and offline data across an update. To
-update later, flash only the last file at `0x10000`.
+update later, flash only the last file at `0x10000`, or update from the app.
+
+### Updating from the app
+
+Once the board runs a release, the app's firmware page offers newer releases
+and installs them over Bluetooth, or over the board's own Wi-Fi if you gave it
+your network. Each release carries a signed image, `…-ota.bin`. The board
+checks the signature before it switches to a new image, and refuses an image
+that is unsigned, signed with another key, altered, or built for another
+board. So a firmware you built yourself goes on over USB, as above.
+
+A new image runs on trial for its first minute. If it crashes, or the board
+loses power in that minute, the board goes back to the previous firmware on
+its next start. Leave it powered for a minute after an update.
 
 ### Build it yourself
 

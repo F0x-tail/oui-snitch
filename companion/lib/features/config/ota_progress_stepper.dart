@@ -150,7 +150,7 @@ class OtaStepperModel {
       case 0x82:
         return 'Download failed (HTTP/HTTPS)';
       case 0x83:
-        return 'Image validation failed';
+        return 'Image refused: not signed for this board, or corrupt';
       case 0x84:
         return 'Flash write failed';
       default:

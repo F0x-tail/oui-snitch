@@ -411,6 +411,7 @@ static bool decryptPacket(const uint8_t* data, size_t dataLen,
 }
 
 #ifndef OUISPY_ROLE_MANAGER
+#include "ota_sig.h"
 // ---- Mesh OTA byte-relay responder (node) ----
 #define MESH_OTA_MAX_CHUNKS 16384
 static struct {
@@ -488,6 +489,12 @@ static void otaRxEnd(const MeshOtaEndPacket* e) {
     if (!g_otaRx.active) return;
     if (g_otaRx.recv_count < g_otaRx.total_chunks) {
         otaRxSendAck(MESH_OTA_ST_RESUME, otaFirstMissing(), g_otaRx.recv_count);
+        return;
+    }
+    if (otaSigVerifyPartition(g_otaRx.part, g_otaRx.total_size) != OTA_SIG_OK) {
+        esp_ota_abort(g_otaRx.handle);
+        g_otaRx.active = false;
+        otaRxSendAck(MESH_OTA_ST_ERR, 0, g_otaRx.recv_count);
         return;
     }
     esp_err_t er = esp_ota_end(g_otaRx.handle);
