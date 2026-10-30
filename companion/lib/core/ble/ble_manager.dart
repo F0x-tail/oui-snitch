@@ -10,6 +10,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:flutter_blue_plus/flutter_blue_plus.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:oui_spy/core/exposure/exposure_result.dart';
 import 'package:oui_spy/core/ble/ble_protocol.dart';
 import 'package:oui_spy/core/ble/gatt_uuids.dart';
 import 'package:oui_spy/core/ble/wd_log_packets.dart';
@@ -165,6 +166,8 @@ class BleManager {
 
   // WiFi OTA progress notifications: opcode 0x06, status[1], bytes[4 LE]
   final _wifiOtaStream = StreamController<({int status, int bytesRead})>.broadcast();
+  final _exposureStream = StreamController<ExposureUpdate>.broadcast();
+  Stream<ExposureUpdate> get exposureUpdates => _exposureStream.stream;
   Stream<({int status, int bytesRead})> get wifiOtaUpdates => _wifiOtaStream.stream;
 
   // Fleet (mesh byte-relay) OTA progress: opcode 0x08, phase[1], pct[1], done[1], seen[1]
@@ -1034,6 +1037,9 @@ class BleManager {
                 | (data[4] << 16)
                 | (data[5] << 24);
             _wifiOtaStream.add((status: status, bytesRead: bytes));
+          } else if (data[0] == ExposureUpdate.opcode) {
+            final u = ExposureUpdate.decode(data);
+            if (u != null) _exposureStream.add(u);
           } else if (data[0] == 0x08 && data.length >= 5) {
             _fleetOtaStream.add((
               phase: data[1],
@@ -1074,6 +1080,14 @@ class BleManager {
     // Asked for even mid-session: these are exactly the rows recorded while
     // the board was out of reach.
     if (_offlineScanEnabled) await requestWdLog();
+  }
+
+  /// Starts the board's "what does my phone give away" check. Progress and
+  /// the result arrive on [exposureUpdates].
+  Future<void> startExposureCheck() async {
+    if (_systemControl == null) throw StateError('no link to the board');
+    await _serialWrite(_systemControl!, Uint8List.fromList([0x11]), withoutResponse: false);
+    DebugLog.log('BLE: exposure check started');
   }
 
   /// Asks the board for the wardrive rows it recorded on its own.
@@ -1860,6 +1874,7 @@ class BleManager {
     _meshStatusStream.close();
     _pairingFailures.close();
     _wifiOtaStream.close();
+    _exposureStream.close();
     _fleetOtaStream.close();
     _pcapStatsStream.close();
     _pcapDataStream.close();

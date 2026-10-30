@@ -436,6 +436,7 @@ bool   melodyLookup(uint8_t engine, uint8_t method, uint8_t* n, uint8_t notes[][
 #define SYS_CMD_POWER_OFF         0x0E  // deep sleep until physical reset / re-power
 #define SYS_CMD_WDLOG_SEND        0x0F  // stream the offline wardrive log
 #define SYS_CMD_WDLOG_CLEAR       0x10  // phone saved it; delete it
+#define SYS_CMD_EXPOSURE_CHECK    0x11  // "what does my phone leak": ~21 s listen, result as SYS_OP_EXPOSURE
 
 #define PCAP_MODE_WIFI 0
 #define PCAP_MODE_BLE  1

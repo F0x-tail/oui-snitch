@@ -326,6 +326,10 @@ Read these before trusting the device with anything that matters.
 - **Bluetooth scanning is active by default.** To read device names, the board
   sends a scan request to everything it hears, including what it detects. For
   listen-only, turn on *Settings → Radio privacy → Passive Bluetooth scanning*.
+- **Your phone may be giving you away.** *Settings → Radio privacy → What does
+  my phone give away?* has the board listen while you switch your phone's Wi-Fi
+  off and on, then shows which network names it called out and whether it used
+  its factory address. Nothing from the check is stored.
 - **The default passkey protects nothing.** See *Pairing* above.
 - **Detections are signal matches.** No engine identifies a device with
   certainty. Confidence tiers tell you how much evidence there was.

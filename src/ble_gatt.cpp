@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: MIT
 #include "ble_gatt.h"
 #include "engines/tracker_ring.h"
+#include "engines/exposure_check.h"
 #include "det_spool.h"
 #include "engine_registry.h"
 #include "ignore_list.h"
@@ -1964,6 +1965,9 @@ static void fleetWifiOtaPushTask(void* arg) {
 }
 #endif
 
+// Notifies on the system control characteristic (defined below).
+static void wifiOtaNotifyTrampoline(const uint8_t* data, size_t len);
+
 class SystemControlCallbacks : public NimBLECharacteristicCallbacks {
     void onWrite(NimBLECharacteristic* chr) override {
         std::string val = chr->getValue();
@@ -2131,6 +2135,10 @@ class SystemControlCallbacks : public NimBLECharacteristicCallbacks {
             case SYS_CMD_SPOOL_CLEAR:
                 Serial.printf("[SPOOL] phone confirmed the import — clearing %u\n", detSpoolCount());
                 detSpoolClear();
+                break;
+
+            case SYS_CMD_EXPOSURE_CHECK:
+                exposureCheckStart(wifiOtaNotifyTrampoline);
                 break;
 
             case SYS_CMD_RING_TRACKER: {

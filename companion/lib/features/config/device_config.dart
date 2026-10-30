@@ -35,6 +35,7 @@ import 'package:oui_spy/core/watchlist_state.dart';
 import 'package:oui_spy/core/export/detections_csv.dart' show DetectionsCsv;
 import 'package:oui_spy/core/export/wigle_csv_import.dart';
 import 'package:oui_spy/features/config/widgets/config_widgets.dart';
+import 'package:oui_spy/features/config/phone_leak_screen.dart';
 import 'package:oui_spy/features/config/config_menu_state.dart';
 import 'package:oui_spy/features/config/widgets/config_nav.dart';
 import 'package:oui_spy/widgets/command_bar.dart';
@@ -828,6 +829,16 @@ class _DeviceConfigScreenState extends ConsumerState<DeviceConfigScreen> {
             setState(() => _blePassiveScan = v);
             _writeHardwareConfig();
           },
+        ),
+
+        ConfigActionRow(
+          icon: Icons.wifi_find,
+          label: 'What does my phone give away?',
+          subtitle: 'Switch your phone\'s Wi-Fi off and on while the board listens, '
+              'and see which network names it calls out to everyone nearby',
+          onTap: () => Navigator.of(context).push(MaterialPageRoute(
+            builder: (_) => const PhoneLeakScreen(),
+          )),
         ),
 
         const SizedBox(height: 16),
