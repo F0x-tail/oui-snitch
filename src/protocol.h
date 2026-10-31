@@ -57,10 +57,10 @@ static inline bool activeProbeEnabled(void) { return g_activeProbeEnabled; }
 
 // Firmware version
 #ifndef FW_VERSION
-#define FW_VERSION     "0.8.0"
+#define FW_VERSION     "0.8.1"
 #endif
 #ifndef FW_VERSION_NUM
-#define FW_VERSION_NUM 0x000800
+#define FW_VERSION_NUM 0x000801
 #endif
 
 #ifndef OUISPY_BOARD
