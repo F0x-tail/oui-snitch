@@ -52,15 +52,19 @@ void main() async {
   // thing a new install shows is an explanation rather than three bare
   // system dialogs. Everything below waits: the services started here all
   // need the permissions this asks for.
-  if (needsPermissionOnboarding(prefs)) {
+  final pendingSteps = await pendingPermissionSteps(prefs);
+  DebugLog.log('PERM: ${prefs.getKeys().length} stored settings, '
+      'steps to show: ${pendingSteps.map((s) => s.id).join(',')}');
+  if (pendingSteps.isNotEmpty) {
     final done = Completer<void>();
     runApp(UncontrolledProviderScope(
       container: container,
-      child: PermissionsOnboardingApp(onDone: done.complete),
+      child: PermissionsOnboardingApp(onDone: done.complete, steps: pendingSteps),
     ));
     await done.future;
-    await prefs.setBool(kPermissionsOnboardedKey, true);
+    await markPermissionStepsAsked(prefs, pendingSteps);
   }
+  await prefs.setBool(kPermissionsOnboardedKey, true);
 
   // Load OUI vendor database (async, non-blocking)
   container.read(ouiLookupProvider).init();

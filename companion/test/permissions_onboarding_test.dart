@@ -8,13 +8,43 @@ import 'package:oui_spy/features/onboarding/permissions_screen.dart';
 import 'package:oui_spy/theme/app_theme.dart';
 
 void main() {
-  test('only a fresh install with no saved settings sees the permission steps', () async {
+  PermissionStep perm(String id, bool granted) => PermissionStep(
+        id: id,
+        icon: Icons.check,
+        title: id,
+        body: '',
+        request: (_) async {},
+        isGranted: () async => granted,
+      );
+
+  test('a fresh install sees every permission it does not have yet', () async {
     SharedPreferences.setMockInitialValues({});
-    expect(needsPermissionOnboarding(await SharedPreferences.getInstance()), isTrue);
+    final prefs = await SharedPreferences.getInstance();
+    final steps = await pendingPermissionSteps(prefs, [perm('bt', false), perm('loc', false)]);
+    expect(steps.map((s) => s.id), ['bt', 'loc']);
+  });
+
+  test('an update with its permissions in place goes straight to the app', () async {
+    // Even with nothing stored: granted permissions are not asked for again.
+    SharedPreferences.setMockInitialValues({});
+    final prefs = await SharedPreferences.getInstance();
+    expect(await pendingPermissionSteps(prefs, [perm('bt', true), perm('loc', true)]), isEmpty);
+  });
+
+  test('an install from before per-step tracking is never walked through again', () async {
     SharedPreferences.setMockInitialValues({kPermissionsOnboardedKey: true});
-    expect(needsPermissionOnboarding(await SharedPreferences.getInstance()), isFalse);
-    SharedPreferences.setMockInitialValues({'map_style': 'dark'});
-    expect(needsPermissionOnboarding(await SharedPreferences.getInstance()), isFalse);
+    final prefs = await SharedPreferences.getInstance();
+    expect(await pendingPermissionSteps(prefs, [perm('bt', false), perm('loc', false)]), isEmpty);
+  });
+
+  test('a new permission is asked for once, a refused one not again', () async {
+    SharedPreferences.setMockInitialValues({kPermissionsAskedKey: ['bt', 'loc']});
+    final prefs = await SharedPreferences.getInstance();
+    final all = [perm('bt', true), perm('loc', false), perm('nfc', false)];
+    final first = await pendingPermissionSteps(prefs, all);
+    expect(first.map((s) => s.id), ['nfc']);              // loc was refused before
+    await markPermissionStepsAsked(prefs, first);
+    expect(await pendingPermissionSteps(prefs, all), isEmpty);
   });
 
   testWidgets('each Continue asks for one permission, in order, then finishes', (tester) async {

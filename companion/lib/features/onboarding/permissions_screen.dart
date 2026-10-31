@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_blue_plus/flutter_blue_plus.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:geolocator/geolocator.dart';
+import 'package:permission_handler/permission_handler.dart' as ph;
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:oui_spy/core/ble/ble_permissions.dart';
@@ -14,10 +15,8 @@ import 'package:oui_spy/theme/app_theme.dart';
 
 const kPermissionsOnboardedKey = 'permissions_onboarded';
 
-/// A first run is one where nothing has been stored yet. Checking for an empty
-/// store rather than for our own key means an existing install is never shown
-/// the walkthrough retroactively.
-bool needsPermissionOnboarding(SharedPreferences prefs) => prefs.getKeys().isEmpty;
+/// Ids of the steps already shown, or found granted. A step is shown once.
+const kPermissionsAskedKey = 'permissions_asked';
 
 class PermissionStep {
   const PermissionStep({
@@ -25,13 +24,82 @@ class PermissionStep {
     required this.title,
     required this.body,
     required this.request,
-  });
+    String? id,
+    this.isGranted,
+  }) : id = id ?? title;
 
+  final String id;
   final IconData icon;
   final String title;
   final String body;
   final Future<void> Function(WidgetRef ref) request;
+
+  /// Whether the phone already allows it. Null: unknown, treated as not.
+  final Future<bool> Function()? isGranted;
 }
+
+/// The steps to show at start-up.
+///
+/// The walkthrough is for a first install, not for every update: an upgrade
+/// whose permissions are all in place goes straight to the app. A step is
+/// shown when it was never shown before and the permission is missing, so
+/// a version that adds a permission asks for that one only, and a permission
+/// the user turned down is not asked for again at every launch (the feature
+/// that needs it asks in context).
+///
+/// Installs from before steps were tracked one by one, recognisable by any
+/// stored setting, count every current step as already shown.
+Future<List<PermissionStep>> pendingPermissionSteps(SharedPreferences prefs,
+    [List<PermissionStep>? all]) async {
+  final steps = all ?? defaultPermissionSteps();
+  final asked = (prefs.getStringList(kPermissionsAskedKey) ?? const <String>[]).toSet();
+  if (!prefs.containsKey(kPermissionsAskedKey) && prefs.getKeys().isNotEmpty) {
+    asked.addAll(steps.map((s) => s.id));
+  }
+  final pending = <PermissionStep>[];
+  for (final s in steps) {
+    if (asked.contains(s.id)) continue;
+    var granted = false;
+    try {
+      granted = await s.isGranted?.call() ?? false;
+    } catch (e) {
+      DebugLog.log('PERM: could not check ${s.id}: $e');
+    }
+    if (granted) {
+      asked.add(s.id);
+    } else {
+      pending.add(s);
+    }
+  }
+  await prefs.setStringList(kPermissionsAskedKey, asked.toList());
+  return pending;
+}
+
+/// Records [steps] as shown, once the user has been through them.
+Future<void> markPermissionStepsAsked(SharedPreferences prefs, List<PermissionStep> steps) async {
+  final asked = (prefs.getStringList(kPermissionsAskedKey) ?? const <String>[]).toSet()
+    ..addAll(steps.map((s) => s.id));
+  await prefs.setStringList(kPermissionsAskedKey, asked.toList());
+}
+
+Future<bool> _bluetoothGranted() async {
+  if (!Platform.isAndroid) {
+    final s = FlutterBluePlus.adapterStateNow;
+    return s == BluetoothAdapterState.on || s == BluetoothAdapterState.off;
+  }
+  if (await BlePermissions.androidSdkInt() >= 31) {
+    return await ph.Permission.bluetoothScan.isGranted &&
+        await ph.Permission.bluetoothConnect.isGranted;
+  }
+  return ph.Permission.location.isGranted;
+}
+
+Future<bool> _locationGranted() async {
+  final p = await Geolocator.checkPermission();
+  return p == LocationPermission.whileInUse || p == LocationPermission.always;
+}
+
+Future<bool> _notificationsGranted() => ph.Permission.notification.isGranted;
 
 Future<void> _requestBluetooth(WidgetRef ref) async {
   if (Platform.isAndroid) {
@@ -57,6 +125,8 @@ Future<void> _requestNotifications(WidgetRef ref) =>
 
 List<PermissionStep> defaultPermissionSteps() => [
       PermissionStep(
+        id: 'bluetooth',
+        isGranted: _bluetoothGranted,
         icon: Icons.bluetooth,
         title: 'Bluetooth',
         body: 'OUI-SNITCH uses Bluetooth to find your board and receive what it '
@@ -66,6 +136,8 @@ List<PermissionStep> defaultPermissionSteps() => [
         request: _requestBluetooth,
       ),
       const PermissionStep(
+        id: 'location',
+        isGranted: _locationGranted,
         icon: Icons.location_on_outlined,
         title: 'Location',
         body: 'Location puts each detection on the map and records where your '
@@ -75,6 +147,8 @@ List<PermissionStep> defaultPermissionSteps() => [
         request: _requestLocation,
       ),
       const PermissionStep(
+        id: 'notifications',
+        isGranted: _notificationsGranted,
         icon: Icons.notifications_outlined,
         title: 'Notifications',
         body: 'Notifications tell you when the app finds a tracker, a camera or '
@@ -86,9 +160,10 @@ List<PermissionStep> defaultPermissionSteps() => [
 /// The walkthrough runs before the app proper, so it carries its own
 /// MaterialApp — there is no router or shell around it yet.
 class PermissionsOnboardingApp extends ConsumerWidget {
-  const PermissionsOnboardingApp({super.key, required this.onDone});
+  const PermissionsOnboardingApp({super.key, required this.onDone, this.steps});
 
   final VoidCallback onDone;
+  final List<PermissionStep>? steps;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -102,7 +177,7 @@ class PermissionsOnboardingApp extends ConsumerWidget {
         AppTheme.syncBrightness(context);
         return child ?? const SizedBox.shrink();
       },
-      home: PermissionsScreen(onDone: onDone),
+      home: PermissionsScreen(onDone: onDone, steps: steps),
     );
   }
 }
@@ -156,7 +231,7 @@ class _PermissionsScreenState extends ConsumerState<PermissionsScreen> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
-                'OUI-SNITCH needs ${_steps.length} permissions to work. '
+                'OUI-SNITCH needs ${_steps.length == 1 ? 'one permission' : '${_steps.length} permissions'} to work. '
                 'Step ${_index + 1} of ${_steps.length}.',
                 style: TextStyle(color: t.textDim, fontSize: 13),
               ),
